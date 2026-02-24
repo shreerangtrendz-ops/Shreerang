@@ -1,0 +1,193 @@
+{
+  "name": "WhatsApp Commerce Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        100,
+        300
+      ],
+      "webhookId": "whatsapp-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract key details from WhatsApp Payload\nconst body = items[0].json.body;\nconst message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\nconst contact = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];\n\nif (!message) return [];\n\nreturn [{\n  json: {\n    from: message.from,\n    name: contact?.profile?.name,\n    type: message.type,\n    text: message.text?.body || '',\n    timestamp: message.timestamp,\n    message_id: message.id\n  }\n}];"
+      },
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$node[\"Parse Message\"].json[\"text\"].toLowerCase()}}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "contains",
+              "value2": "show",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value2": "order",
+              "output": 1
+            },
+            {
+              "operation": "contains",
+              "value2": "yes",
+              "output": 2
+            },
+            {
+              "operation": "contains",
+              "value2": "status",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 4
+      },
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM finish_fabric_designs WHERE status = 'active' LIMIT 5;"
+      },
+      "name": "Get Designs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        750,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CREDENTIALS",
+          "name": "Supabase DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "@your_admin_channel",
+        "text": "=New Order Request!\n\nCustomer: {{$node[\"Parse Message\"].json[\"from\"]}}\nRequest: {{$node[\"Parse Message\"].json[\"text\"]}}",
+        "additionalFields": {
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Approve Order",
+                  "callback_data": "approve"
+                },
+                {
+                  "text": "Reject",
+                  "callback_data": "reject"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "name": "Notify Admin (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        750,
+        250
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_CREDS",
+          "name": "Admin Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://graph.facebook.com/v17.0/{{YOUR_PHONE_ID}}/messages",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{$node[\"Parse Message\"].json[\"from\"]}}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"We have received your order request. Waiting for admin approval.\" }\n}"
+      },
+      "name": "Ack Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WHATSAPP_API_CREDS",
+          "name": "Meta API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Get Designs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Admin (Telegram)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Ack Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

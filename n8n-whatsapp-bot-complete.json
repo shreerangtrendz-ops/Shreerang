@@ -1,0 +1,235 @@
+{
+  "name": "WhatsApp Commerce Bot (Complete)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-webhook",
+        "options": {}
+      },
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "webhookId": "whatsapp-webhook"
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = items[0].json.body;\nconst message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];\nconst contact = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];\n\nif (!message) return [];\n\nreturn [{\n  json: {\n    from: message.from,\n    name: contact?.profile?.name || 'Customer',\n    type: message.type,\n    text: message.text?.body || '',\n    timestamp: message.timestamp,\n    message_id: message.id\n  }\n}];"
+      },
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$node[\"Parse Message\"].json[\"text\"].toLowerCase()}}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "contains",
+              "value2": "show",
+              "output": 0
+            },
+            {
+              "operation": "contains",
+              "value2": "order",
+              "output": 1
+            },
+            {
+              "operation": "contains",
+              "value2": "yes",
+              "output": 2
+            },
+            {
+              "operation": "contains",
+              "value2": "status",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 4
+      },
+      "name": "Detect Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM finish_fabric_designs WHERE status = 'active' ORDER BY created_at DESC LIMIT 5;"
+      },
+      "name": "Get Designs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [750, 100],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CREDENTIALS",
+          "name": "Supabase DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://graph.facebook.com/v17.0/{{$env[\"WHATSAPP_PHONE_ID\"]}}/messages",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{$node[\"Parse Message\"].json[\"from\"]}}\",\n  \"type\": \"image\",\n  \"image\": { \"link\": \"{{$json[\"design_photo_url\"]}}\", \"caption\": \"Design: {{$json[\"design_number\"]}}\\nPrice: ₹{{$json[\"price\"] || 'TBD'}}\" }\n}"
+      },
+      "name": "Send Design Images",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [950, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WHATSAPP_API_CREDS",
+          "name": "Meta API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "{{$env[\"TELEGRAM_ADMIN_CHAT_ID\"]}}",
+        "text": "=📦 *New Order Request*\n\nCustomer: `{{$node[\"Parse Message\"].json[\"from\"]}}`\nRequest: {{$node[\"Parse Message\"].json[\"text\"]}}\n\nPlease confirm availability and price.",
+        "additionalFields": {
+          "reply_markup": {
+            "inline_keyboard": [
+              [
+                {
+                  "text": "Approve",
+                  "callback_data": "approve_order"
+                },
+                {
+                  "text": "Reject",
+                  "callback_data": "reject_order"
+                }
+              ]
+            ]
+          },
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Notify Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [750, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_CREDS",
+          "name": "Admin Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "https://graph.facebook.com/v17.0/{{$env[\"WHATSAPP_PHONE_ID\"]}}/messages",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": \"{{$node[\"Parse Message\"].json[\"from\"]}}\",\n  \"type\": \"text\",\n  \"text\": { \"body\": \"✅ Order created! Your Order ID is: {{$json[\"order_no\"]}}. View details here: https://your-site.com/order-summary/{{$json[\"id\"]}}\" }\n}"
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1150, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "WHATSAPP_API_CREDS",
+          "name": "Meta API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO sales_orders (order_no, customer_phone, items_json, status, total_amount) VALUES ('ORD-' || floor(random() * 10000 + 1)::text, '{{$node[\"Parse Message\"].json[\"from\"]}}', '[{\"item\": \"Pending Analysis\"}]', 'Pending', 0) RETURNING id, order_no;"
+      },
+      "name": "Create DB Order",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [950, 500],
+      "credentials": {
+        "postgres": {
+          "id": "SUPABASE_CREDENTIALS",
+          "name": "Supabase DB"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent": {
+      "main": [
+        [
+          {
+            "node": "Get Designs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create DB Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Designs": {
+      "main": [
+        [
+          {
+            "node": "Send Design Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create DB Order": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

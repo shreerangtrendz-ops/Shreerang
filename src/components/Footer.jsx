@@ -68,10 +68,13 @@ const Footer = () => {
           <div>
             <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 700, color: '#C8E8E4', marginBottom: 16 }}>Contact Us</h3>
             {[
-              { Icon: MapPin, text: '4081-4084, Millennium 4 Textile Market, Surat, India — 395002' },
-              { Icon: Phone, text: '+91 75678 60000 / +91 75678 70000' },
+              { Icon: MapPin, text: 'Corporate: 4081-4084, 4th Floor, Millennium-4 Textile Market, Near Siddhi Vinayak Temple, Bhathena, Udhna, Surat-395002' },
+              { Icon: MapPin, text: 'Sales: A-1070-1071, Global Textile Market, Opp. New Bombay Market, Sahara Darwaja, Surat-395002' },
+              { Icon: Phone, text: 'Shrinandan Maru: +91 75678 60000' },
+              { Icon: Phone, text: 'Shrikumar Maru: +91 75678 70000' },
+              { Icon: Phone, text: 'Accounts: 78742 00066 | Despatch: 78742 20000' },
               { Icon: Mail, text: 'shreerangtrendz@gmail.com' },
-              { Icon: Clock, text: 'Mon – Sat: 10:00 AM – 7:00 PM' },
+              { Icon: Clock, text: 'Mon – Sat: 10:00 AM – 7:00 PM (IST)' },
             ].map(({ Icon, text }, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
                 <Icon style={{ width: 14, height: 14, color: 'var(--teal-bright)', flexShrink: 0, marginTop: 2 }} />

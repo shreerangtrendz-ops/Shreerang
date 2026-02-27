@@ -1,149 +1,174 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { motion } from 'framer-motion';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Download, FileText, TrendingUp, Truck, Users, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const WholesalePortalPage = () => {
-  return (
-    <>
-      <Helmet>
-        <title>Wholesale Partner Program | Shreerang Trendz</title>
-        <meta name="description" content="Join our wholesale program for exclusive pricing, bulk discounts, and premium fabric supply for retailers and designers." />
-      </Helmet>
+const inputStyle = {
+  width: '100%', background: 'var(--surface)', border: '1px solid var(--border-teal)',
+  borderRadius: 'var(--r-sm)', padding: '10px 12px',
+  fontFamily: 'var(--font)', fontSize: 13, color: 'var(--text)', outline: 'none'
+};
 
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
+const benefits = [
+  { icon: '📦', title: 'Bulk Pricing', desc: 'Wholesale rates from 50m+ per colour. Flat tiered pricing with no hidden charges.' },
+  { icon: '🎨', title: '1,000+ SKUs', desc: 'Mill Print, Digital, Schiffli Embroidery, Solid Dyed, Hakoba — all in one source.' },
+  { icon: '✂️', title: 'Custom Orders', desc: 'Custom colour, width, print, embroidery. MTO orders accepted with 15–30 day lead time.' },
+  { icon: '🚚', title: 'Pan-India Despatch', desc: 'Surat → Mumbai, Delhi, Jaipur, Ahmedabad, Kolkata. Road + Courier options.' },
+];
 
-        {/* Hero Section */}
-        <section className="bg-gray-900 text-white py-20">
-          <div className="container text-center max-w-4xl">
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-4xl md:text-6xl font-bold mb-6" 
-              style={{ fontFamily: 'Playfair Display, serif' }}
-            >
-              Partner With Us
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-xl text-gray-300 mb-8"
-            >
-              Get direct access to premium fabrics at factory prices. Tailored solutions for retailers, boutiques, and garment manufacturers.
-            </motion.p>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="flex justify-center gap-4"
-            >
-              <Link to="/bulk-enquiry">
-                <Button size="lg" className="bg-white text-black hover:bg-gray-100">Request Wholesale Quote</Button>
-              </Link>
-              <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-                <Download className="mr-2 h-4 w-4" /> Download Catalog
-              </Button>
-            </motion.div>
+const WholesalePortalPage = () => (
+  <>
+    <Helmet><title>Wholesale Portal — Shreerang Trendz</title></Helmet>
+
+    {/* Hero */}
+    <section style={{
+      background: 'var(--sidebar-bg)', padding: '80px 24px', position: 'relative', overflow: 'hidden'
+    }}>
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'radial-gradient(ellipse 50% 60% at 80% 50%, rgba(212,146,10,0.08) 0%, transparent 65%)' }} />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.05, backgroundImage: 'linear-gradient(var(--teal-bright) 1px, transparent 1px), linear-gradient(90deg, var(--teal-bright) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+      <div style={{ maxWidth: 1100, margin: '0 auto', position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48, alignItems: 'center' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--gold-dim)', border: '1px solid var(--border-gold)', borderRadius: 99, padding: '4px 12px', marginBottom: 20 }}>
+            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--gold-light)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Wholesale Trade Portal</span>
           </div>
-        </section>
-
-        {/* Benefits Grid */}
-        <section className="py-16 container">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Why Choose Shreerang Trendz?</h2>
-            <p className="text-muted-foreground">We provide end-to-end support for your textile business.</p>
+          <h1 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(28px,4vw,44px)', fontWeight: 800, color: '#C8E8E4', lineHeight: 1.15, marginBottom: 16 }}>
+            Shreerang B2B <span style={{ color: 'var(--gold-light)' }}>Wholesale</span> Network
+          </h1>
+          <p style={{ fontSize: 13, color: '#6A9B95', lineHeight: 1.8, marginBottom: 28, maxWidth: 440 }}>
+            For garment manufacturers, fabric traders, and retail shop owners. Get access to wholesale pricing, the full digital catalogue, and dedicated sales support.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <a href="#enquiry" style={{ padding: '11px 22px', background: 'var(--gold)', color: '#fff', borderRadius: 8, fontFamily: 'var(--font)', fontSize: 13, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
+              Apply for Wholesale Account →
+            </a>
+            <a href="https://wa.me/917567860000?text=Hi%20Shreerang%2C%20I%20am%20interested%20in%20wholesale%20fabric%20pricing." target="_blank" rel="noopener noreferrer"
+              style={{ padding: '11px 20px', background: '#25D366', color: '#fff', borderRadius: 8, fontFamily: 'var(--font)', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+              📲 WhatsApp Enquiry
+            </a>
           </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card>
-              <CardHeader>
-                <TrendingUp className="h-10 w-10 text-primary mb-4" />
-                <CardTitle>Tiered Pricing</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">Unlock deeper discounts as your volume increases. Our transparent 3-tier pricing structure ensures you always get the best value.</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <Truck className="h-10 w-10 text-primary mb-4" />
-                <CardTitle>Priority Logistics</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">Fast-tracked shipping for wholesale orders. We partner with top logistics providers to ensure on-time delivery across India.</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <Users className="h-10 w-10 text-primary mb-4" />
-                <CardTitle>Dedicated Support</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600">A dedicated account manager will assist you with order planning, sample requests, and custom requirements.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* MOQ & Policy Section */}
-        <section className="py-16 bg-white">
-          <div className="container">
-            <div className="grid md:grid-cols-2 gap-16 items-center">
-              <div>
-                <h2 className="text-3xl font-bold mb-6">Ordering Policy</h2>
-                <div className="space-y-6">
-                  <div className="flex gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full h-fit">
-                      <CheckCircle className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">Minimum Order Quantity (MOQ)</h3>
-                      <p className="text-gray-600">Standard MOQ is 5 units/meters per SKU. For custom prints or dyes, MOQ starts at 100 meters.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full h-fit">
-                      <FileText className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">Sample Policy</h3>
-                      <p className="text-gray-600">We offer paid sample kits (swatches) deductible from your first bulk order above ₹50,000.</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full h-fit">
-                      <Clock className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">Lead Times</h3>
-                      <p className="text-gray-600">Ready stock ships in 24-48 hours. Custom production orders typically take 7-14 business days.</p>
-                    </div>
-                  </div>
-                </div>
+        </div>
+        {/* Stats card */}
+        <div style={{ background: 'rgba(14,56,53,0.8)', border: '1px solid var(--sidebar-border)', borderRadius: 12, padding: 28 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            {[
+              { val: '1,000+', label: 'SKUs Available' },
+              { val: '247+', label: 'Live Designs' },
+              { val: '15+', label: 'Years in Trade' },
+              { val: 'Pan-India', label: 'Delivery Reach' },
+            ].map((s, i) => (
+              <div key={i} style={{ textAlign: 'center', padding: 16, background: 'rgba(43,168,152,0.06)', borderRadius: 8, border: '1px solid rgba(61,191,174,0.1)' }}>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 800, color: 'var(--gold-light)', marginBottom: 4 }}>{s.val}</div>
+                <div style={{ fontSize: 10, color: '#6A9B95', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.label}</div>
               </div>
-              <div className="bg-gray-100 p-8 rounded-xl border text-center">
-                <h3 className="text-2xl font-bold mb-6">Ready to start?</h3>
-                <p className="text-gray-600 mb-8">Create a wholesale account today to view restricted pricing and place orders directly.</p>
-                <Link to="/register?type=wholesaler">
-                  <Button size="lg" className="w-full mb-4">Create Wholesale Account</Button>
-                </Link>
-                <p className="text-sm text-muted-foreground">Already registered? <Link to="/login" className="text-primary underline">Login here</Link></p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Benefits */}
+    <section style={{ padding: '72px 24px', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 44 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 10 }}>Why Work With Us</div>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 700, color: 'var(--text)' }}>Built for B2B Trade</h2>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+          {benefits.map((b, i) => (
+            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-teal)', borderRadius: 'var(--r)', padding: 22 }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>{b.icon}</div>
+              <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>{b.title}</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7 }}>{b.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    {/* Product categories */}
+    <section style={{ padding: '64px 24px', background: 'var(--surface2)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <h2 style={{ fontFamily: 'var(--serif)', fontSize: 24, fontWeight: 700, color: 'var(--text)', marginBottom: 28, textAlign: 'center' }}>What We Stock</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+          {[
+            { category: 'Mill Print Fabrics', items: ['Rotary Print on PC', 'Crepe', 'Chiffon', 'Georgette', 'Voile'], gsm: '60–120 GSM', widths: '44", 58", 60"' },
+            { category: 'Digital Print Fabrics', items: ['Super Poly Digital', 'Pure Poly Digital', 'Satin Digital', 'Organza Digital'], gsm: '60–180 GSM', widths: '58", 60"' },
+            { category: 'Schiffli Embroidery', items: ['PC Grey Schiffli', 'Net Schiffli', 'Organza Schiffli', 'Chiffon Schiffli'], gsm: 'Varies', widths: '42", 54", 58"' },
+            { category: 'Value-Added Fabrics', items: ['Solid Dyed', 'Hakoba', 'Kantha Work', 'Heavy Embroidery (Handwork)'], gsm: '80–200 GSM', widths: 'Custom' },
+          ].map((cat, i) => (
+            <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border-teal)', borderRadius: 'var(--r)', padding: 18 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10, fontFamily: 'var(--serif)' }}>{cat.category}</h3>
+              <ul style={{ paddingLeft: 14, margin: '0 0 10px', color: 'var(--text-muted)' }}>
+                {cat.items.map(item => <li key={item} style={{ fontSize: 11, marginBottom: 3 }}>{item}</li>)}
+              </ul>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 9, background: 'var(--teal-dim)', color: 'var(--teal)', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>GSM: {cat.gsm}</span>
+                <span style={{ fontSize: 9, background: 'var(--gold-dim)', color: 'var(--gold)', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>Width: {cat.widths}</span>
               </div>
             </div>
-          </div>
-        </section>
-
-        <Footer />
+          ))}
+        </div>
       </div>
-    </>
-  );
-};
+    </section>
+
+    {/* Enquiry Form */}
+    <section id="enquiry" style={{ padding: '72px 24px', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>Apply for Wholesale Account</h2>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Fill the form below. Our team will contact you within 24 hours with wholesale rate cards.</p>
+        </div>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border-teal)', borderRadius: 'var(--r)', padding: 28 }}>
+          <form onSubmit={e => { e.preventDefault(); alert('Thank you! Our sales team will contact you within 24 hours.'); }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              {[['Firm / Company Name *', 'text', 'Your firm name'], ['Owner / Contact Person *', 'text', 'Your name']].map(([label, type, ph], i) => (
+                <div key={i}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>{label}</label>
+                  <input type={type} placeholder={ph} required={label.includes('*')} style={inputStyle}
+                    onFocus={e => { e.target.style.borderColor = 'var(--teal)'; e.target.style.boxShadow = '0 0 0 3px var(--teal-dim)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'var(--border-teal)'; e.target.style.boxShadow = 'none'; }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              {[['WhatsApp Number *', 'tel', '+91 98765 43210'], ['City / Area', 'text', 'Mumbai, Delhi, Surat…']].map(([label, type, ph], i) => (
+                <div key={i}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>{label}</label>
+                  <input type={type} placeholder={ph} required={label.includes('*')} style={inputStyle}
+                    onFocus={e => { e.target.style.borderColor = 'var(--teal)'; e.target.style.boxShadow = '0 0 0 3px var(--teal-dim)'; }}
+                    onBlur={e => { e.target.style.borderColor = 'var(--border-teal)'; e.target.style.boxShadow = 'none'; }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Nature of Business</label>
+              <select style={inputStyle}>
+                {['Garment Manufacturer', 'Fabric Trader / Retailer', 'Wholesaler', 'Export House', 'Boutique Owner', 'Other'].map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Interested In</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['Mill Print', 'Digital Print', 'Schiffli', 'Solid Dyed', 'Hakoba', 'Readymade'].map(cat => (
+                  <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                    <input type="checkbox" /> {cat}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Requirements / Monthly Volume</label>
+              <textarea rows={3} placeholder="e.g. 500m/month of Schiffli embroidery fabric, 58 inch, light colours for suits…" style={{ ...inputStyle, resize: 'vertical' }}
+                onFocus={e => { e.target.style.borderColor = 'var(--teal)'; e.target.style.boxShadow = '0 0 0 3px var(--teal-dim)'; }}
+                onBlur={e => { e.target.style.borderColor = 'var(--border-teal)'; e.target.style.boxShadow = 'none'; }} />
+            </div>
+            <button type="submit" style={{ width: '100%', padding: '12px', background: 'var(--gold)', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'var(--font)', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              Submit Wholesale Enquiry →
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </>
+);
 
 export default WholesalePortalPage;

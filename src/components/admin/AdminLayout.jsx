@@ -1,27 +1,37 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import AdminSidebar from './AdminSidebar';
-import WhatsAppWidget from '@/components/common/WhatsAppWidget';
+import PageErrorBoundary from '@/components/common/PageErrorBoundary';
+import '@/styles/admin.css';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex bg-[var(--bg)] text-[var(--text)] font-sans antialiased min-h-screen relative w-full overflow-hidden">
-      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <div className="admin-root">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(11,46,43,0.5)',
+            zIndex: 190,
+            backdropFilter: 'blur(2px)'
+          }}
+        />
+      )}
 
-      {/* Main Content Area */}
-      <main className="main flex-1 w-full lg:ml-[252px] h-screen overflow-y-auto">
+      <AdminSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      <main className="admin-main">
         <PageErrorBoundary>
-          <Outlet context={{ setSidebarOpen, sidebarOpen }} />
+          <Outlet context={{ setSidebarOpen }} />
         </PageErrorBoundary>
       </main>
-
-      {/* WhatsApp Widget - Global for Admin */}
-      <div className="hidden lg:block">
-        <WhatsAppWidget />
-      </div>
     </div>
   );
 };

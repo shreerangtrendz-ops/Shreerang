@@ -1,3 +1,6 @@
+/* index.css — Shreerang Horizon Code
+   Admin-specific styles are in src/styles/admin.css (imported by AdminLayout)
+   This file only sets up Tailwind for the public-facing storefront pages. */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400;1,600&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
@@ -6,70 +9,22 @@
 
 @layer base {
   :root {
-    /* ── Page backgrounds (WHITE) ── */
-    --bg: #F4FBFA;
-    --surface: #FFFFFF;
-    --surface2: #EEF8F6;
-    --surface3: #E4F4F2;
-    --surface4: #D6EEE9;
-
-    /* ── Sidebar stays DARK TEAL (brand identity) ── */
-    --sidebar-bg: #0B2E2B;
-    --sidebar-surface: #0E3835;
-    --sidebar-surface2: #143F3C;
-    --sidebar-border: rgba(61,191,174,0.22);
-    --sidebar-text: #C8E8E4;
-    --sidebar-text-muted: #6A9B95;
-    --sidebar-text-dim: #2E5550;
-
-    /* ── Brand borders (on white) ── */
-    --brder: rgba(43,168,152,0.18);
-    --border-teal: rgba(43,168,152,0.30);
-    --border-gold: rgba(232,168,0,0.35);
-
-    /* ── Brand accent colors ── */
-    --gold: #D4920A;
-    --gold-light: #E8A800;
-    --gold-dim: rgba(212,146,10,0.10);
-    --teal: #2BA898;
-    --teal-light: #1D8A7C;
-    --teal-bright: #3DBFAE;
-    --teal-dim: rgba(43,168,152,0.10);
-    --magenta: #C9106E;
-    --magenta-dim: rgba(201,16,110,0.10);
-    --amber: #D4780A;
-    --amber-dim: rgba(212,120,10,0.10);
-
-    /* ── Semantic colors (adjusted for light bg) ── */
-    --red: #D93A3A;
-    --green: #1E9E5A;
-    --blue: #2468C8;
-    --orange: #C86020;
-    --purple: #6E44C8;
-    --cyan: #0E96A0;
-
-    /* ── Text (dark on white) ── */
-    --text: #0D2E2B;
-    --text-muted: #4A7A74;
-    --text-dim: #8AAEAA;
-
-    --font: 'DM Sans', sans-serif;
-    --serif: 'Playfair Display', serif;
-    --mono: 'JetBrains Mono', monospace;
-
-    /* Shadcn defaults / existing */
-    --primary: 172 61% 42%;     /* Teal equivalent */
+    --background: 171 44% 97%;
+    --foreground: 171 56% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 171 56% 11%;
+    --primary: 172 61% 42%;
     --primary-foreground: 0 0% 100%;
     --secondary: 172 20% 96%;
     --secondary-foreground: 172 50% 10%;
-    --accent: 41 94% 44%;      /* Gold equivalent */
+    --muted: 172 20% 94%;
+    --muted-foreground: 172 30% 40%;
+    --accent: 41 94% 44%;
     --accent-foreground: 0 0% 100%;
-    --background: 171 44% 97%; /* #F4FBFA */
-    --foreground: 171 56% 11%; /* #0D2E2B */
-    --card: 0 0% 100%;
-    --card-foreground: 171 56% 11%;
-    --border: 172 61% 42% / 0.18; 
-    --input: 172 61% 42% / 0.30;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 172 30% 82%;
+    --input: 172 30% 82%;
     --ring: 172 61% 42%;
     --radius: 0.625rem;
   }
@@ -77,48 +32,15 @@
 
 body {
   @apply bg-[#F4FBFA] text-[#0D2E2B];
-  font-family: var(--font);
-  font-size: 13px;
-  overflow-x: hidden;
-  min-height: 100vh;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(ellipse 60% 40% at 85% 5%, rgba(43,168,152,0.04) 0%, transparent 60%),
-              radial-gradient(ellipse 40% 30% at 5% 90%, rgba(212,146,10,0.03) 0%, transparent 50%);
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Playfair Display', serif;
 }
-
-h1, h2, h3, h4, h5, h6, .page-title, .card-title, .kpi-value {
-  font-family: var(--serif);
-}
-
-.mono {
-  font-family: var(--mono);
-}
-
-.container {
-  @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
-}
-
-/* ─── V10 UTILITIES ─── */
-.badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:700; letter-spacing:0.02em; }
-.bg-teal-badge { background:rgba(43,168,152,0.12); color:#1D7A6F; border:1px solid rgba(43,168,152,0.25); }
-.bgreen { background:rgba(30,158,90,0.10); color:#176640; border:1px solid rgba(30,158,90,0.2); }
-.bred { background:rgba(217,58,58,0.10); color:#A82020; border:1px solid rgba(217,58,58,0.2); }
-.bblue { background:rgba(36,104,200,0.10); color:#1A4E98; border:1px solid rgba(36,104,200,0.2); }
-.borg { background:rgba(200,96,32,0.10); color:#8B4010; border:1px solid rgba(200,96,32,0.2); }
-.bpurp { background:rgba(110,68,200,0.10); color:#4A2898; border:1px solid rgba(110,68,200,0.2); }
-.bteal { background:rgba(43,168,152,0.10); color:#1D7A6F; border:1px solid rgba(43,168,152,0.25); }
-.bcyan { background:rgba(14,150,160,0.10); color:#0A6870; border:1px solid rgba(14,150,160,0.2); }
-.bgold { background:rgba(212,146,10,0.10); color:#8A5E00; border:1px solid rgba(212,146,10,0.2); }
-
-.alert { display:flex; align-items:flex-start; gap:9px; padding:10px 14px; border-radius:6px; font-size:12px; margin-bottom:12px; }
-.a-warn { background:rgba(212,120,10,0.08); border:1px solid rgba(212,120,10,0.25); color:#A05800; }
-.a-ok { background:rgba(30,158,90,0.08); border:1px solid rgba(30,158,90,0.25); color:#176640; }
-.a-info { background:rgba(36,104,200,0.08); border:1px solid rgba(36,104,200,0.25); color:#1A4E98; }
-.a-gold { background:rgba(43,168,152,0.07); border:1px solid var(--border-teal); color:var(--teal); }

@@ -1,154 +1,206 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+
+const TALLY_URL = 'https://yvone-unincreased-wilford.ngrok-free.dev/';
+
+const navGroups = [
+  {
+    label: 'Overview',
+    items: [
+      { icon: '⬡', label: 'Dashboard', to: '/admin/dashboard' }
+    ]
+  },
+  {
+    label: 'Fabric Master',
+    items: [
+      { icon: '🧵', label: 'Base Fabric', to: '/admin/fabric/base-fabric-form' },
+      { icon: '🔄', label: 'Finish Fabric', to: '/admin/fabric/finish-fabric-form' },
+      { icon: '✨', label: 'Fancy Finish', to: '/admin/fabric/fancy-finish-fabric-form' },
+    ]
+  },
+  {
+    label: 'Design Catalogue',
+    items: [
+      { icon: '🎨', label: 'Design Upload', to: '/admin/images/upload', nb: '14', nbClass: 'warn' },
+      { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity', nb: 'NEW', nbClass: 'gold' },
+      { icon: '📦', label: 'Bulk Upload', to: '/admin/fabric-master/bulk-import', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🗂', label: 'Product Master', to: '/admin/products' },
+    ]
+  },
+  {
+    label: 'Cost Engine',
+    items: [
+      { icon: '🧮', label: 'Cost Sheet Builder', to: '/admin/cost/cost-sheet' },
+      { icon: '📥', label: 'Purchase Fabric', to: '/admin/cost/purchase-entry' },
+      { icon: '⚙️', label: 'Process Charges', to: '/admin/cost/process-entry' },
+      { icon: '💎', label: 'Value Addition', to: '/admin/cost/value-addition-entry' },
+      { icon: '💰', label: 'Price Database', to: '/admin/price-database' },
+    ]
+  },
+  {
+    label: 'Store',
+    items: [
+      { icon: '🛒', label: 'Store Sync', to: '/admin/store-sync', nb: 'LIVE', nbClass: 'gold' },
+    ]
+  },
+  {
+    label: 'Operations',
+    items: [
+      { icon: '📋', label: 'Orders', to: '/admin/order-database/sales', nb: '3' },
+      { icon: '📄', label: 'Challans', to: '/admin/challans' },
+      { icon: '🏭', label: 'Vendor Master', to: '/admin/settings/suppliers' },
+      { icon: '👥', label: 'Customers', to: '/admin/customers' },
+      { icon: '📡', label: 'Market Intelligence', to: '/admin/market-intel', nb: 'NEW', nbClass: '' },
+      { icon: '🎯', label: 'Make-to-Order', to: '/admin/mto-orders', nb: 'NEW', nbClass: 'gold' },
+    ]
+  },
+  {
+    label: 'Smart Features',
+    items: [
+      { icon: '📅', label: 'Calendar & Visits', to: '/admin/calendar', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🔔', label: 'WA Price Alerts', to: '/admin/supplier-price-ai', nb: '4', nbClass: 'warn' },
+      { icon: '🌐', label: 'Multilingual Comms', to: '/admin/multilingual', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🏦', label: 'Customer 360°', to: '/admin/customer-360' },
+      { icon: '⏰', label: 'Payment Reminders', to: '/admin/payment-reminders', nb: '7' },
+    ]
+  },
+  {
+    label: 'CRM & Access',
+    items: [
+      { icon: '📍', label: 'Field Visit Tracker', to: '/admin/field-visits', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🗺', label: 'Sales Team Map', to: '/admin/team-tracker', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🔐', label: 'Customer Portal Access', to: '/admin/customer-portal', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🛡', label: 'Access Control', to: '/admin/access-control', nb: 'NEW', nbClass: 'gold' },
+    ]
+  },
+  {
+    label: 'Integrations',
+    items: [
+      { icon: '💬', label: 'WhatsApp Bot', to: '/admin/whatsapp', nb: 'ON', nbClass: 'ok' },
+      { icon: '📊', label: 'Tally Prime', href: TALLY_URL, nb: 'SYNC', nbClass: 'ok' },
+      { icon: '☁️', label: 'Cloud Storage', to: '/admin/cloud-sync' },
+      { icon: '🤖', label: 'AI Price Sync', to: '/admin/ai-pricing' },
+    ]
+  },
+  {
+    label: 'Settings',
+    items: [
+      { icon: '🔧', label: 'Field Configurator', to: '/admin/settings/dropdown-manager', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🏷', label: 'SKU Formula Builder', to: '/admin/settings/rate-card', nb: 'NEW', nbClass: 'gold' },
+      { icon: '🔢', label: 'HSN Code Master', to: '/admin/settings/hsn-codes' },
+      { icon: '🏭', label: 'Job Work Units', to: '/admin/settings/job-units' },
+    ]
+  }
+];
+
+const integrations = [
+  { label: 'n8n Workflows', status: 'on', text: 'Active' },
+  { label: 'Tally Prime', status: 'on', text: 'Synced' },
+  { label: 'Google Drive', status: 'on', text: 'Online' },
+  { label: 'Bunny.net CDN', status: 'on', text: 'Serving' },
+  { label: 'WhatsApp Meta', status: 'warn', text: 'Quota 82%' },
+  { label: 'KVM-1 Server', status: 'on', text: 'Online' },
+  { label: 'Appsmith', status: 'warn', text: 'Deploying' },
+  { label: 'AI Translate', status: 'on', text: 'Active' },
+  { label: 'WA Price AI', status: 'warn', text: '4 Pending' },
+];
 
 const AdminSidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
-  const [lastSync, setLastSync] = useState(format(new Date(), 'hh:mm a'));
+  const [syncTime, setSyncTime] = useState('just now');
 
-  // Define nav groups based on the HTML template
-  const navGroups = [
-    {
-      label: 'Overview',
-      items: [
-        { label: 'Dashboard', href: '/admin/dashboard', icon: '⬡' }
-      ]
-    },
-    {
-      label: 'Fabric Master',
-      items: [
-        { label: 'Base Fabric', href: '/admin/fabric/base-fabric-form', icon: '🧵' },
-        { label: 'Finish Fabric', href: '/admin/fabric/finish-fabric-form', icon: '🔄' },
-        { label: 'Fancy Finish', href: '/admin/fabric/fancy-finish-fabric-form', icon: '✨' },
-        { label: 'Bulk Import', href: '/admin/fabric-master/bulk-import', icon: '📦', badge: 'NEW', badgeColor: 'gold' }
-      ]
-    },
-    {
-      label: 'Design Catalogue',
-      items: [
-        { label: 'Design Upload', href: '/admin/images/upload', icon: '🎨' },
-        { label: 'Product Master', href: '/admin/products', icon: '🗂' }
-      ]
-    },
-    {
-      label: 'Cost Engine',
-      items: [
-        { label: 'Cost Sheet Builder', href: '/admin/cost/cost-sheet', icon: '🧮' },
-        { label: 'Purchase Fabric', href: '/admin/cost/purchase-entry', icon: '📥' },
-        { label: 'Process Charges', href: '/admin/cost/process-entry', icon: '⚙️' },
-        { label: 'Value Addition', href: '/admin/cost/value-addition-entry', icon: '💎' },
-        { label: 'Price Database', href: '/admin/price-database', icon: '💰' }
-      ]
-    },
-    {
-      label: 'Operations',
-      items: [
-        { label: 'Orders', href: '/admin/order-database/sales', icon: '📋' },
-        { label: 'Challans', href: '/admin/challans', icon: '📄' },
-        { label: 'Vendor Master', href: '/admin/settings/suppliers', icon: '🏭' },
-        { label: 'Job Worker Units', href: '/admin/settings/job-units', icon: '🏭' }
-      ]
-    },
-    {
-      label: 'Store & Sales',
-      items: [
-        { label: 'Store Sync', href: '/admin/store-sync', icon: '🛒', badge: 'LIVE', badgeColor: 'gold' },
-        { label: 'Quick Price Check', href: '/admin/sales/quick-price', icon: '🏷' },
-        { label: 'Store Dispatch', href: '/admin/orders/store-dispatch', icon: '🚚' }
-      ]
-    },
-    {
-      label: 'Settings/Integrations',
-      items: [
-        { label: 'Rate Card', href: '/admin/settings/rate-card', icon: '💵' },
-        { label: 'Dropdown Manager', href: '/admin/settings/dropdown-manager', icon: '🔧' },
-        { label: 'HSN Code Master', href: '/admin/settings/hsn-codes', icon: '🔢' }
-      ]
-    }
-  ];
+  useEffect(() => {
+    const now = new Date();
+    setSyncTime(now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
+  }, []);
+
+  const isActive = (to) => {
+    if (!to) return false;
+    return location.pathname === to || location.pathname.startsWith(to + '/');
+  };
 
   return (
-    <>
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-slate-900/50 z-40"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Sidebar sidebar */}
-      <aside
-        className={cn(
-          "sidebar fixed lg:static top-0 left-0 bottom-0 z-50 h-screen transition-transform duration-300",
-          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        )}
-      >
-        <div className="s-logo">
-          <div className="brand-wrap">
-            <div className="sr-icon">SR</div>
-            <div>
-              <div className="brand">Shreerang</div>
-              <div className="trendz-pill">Trendz Pvt Ltd</div>
-            </div>
+    <aside className={`sidebar${isOpen ? '' : ' sidebar-mobile-hidden'}`}>
+      {/* 1. Logo */}
+      <div className="s-logo">
+        <div className="brand-wrap">
+          <div className="sr-icon">SR</div>
+          <div>
+            <div className="brand">Shreerang</div>
+            <div className="trendz-pill">Trendz Pvt Ltd</div>
           </div>
-          <div className="tagline">Where Tradition Weaves its Magic</div>
-          <div className="gstin">GSTIN: 24AAUCS2915F1Z8</div>
         </div>
+        <div className="tagline">Where Tradition Weaves its Magic</div>
+        <div className="gstin">GSTIN: 24AAUCS2915F1Z8</div>
+      </div>
 
-        <div className="s-sync-bar">
-          <div className="sync-dot"></div>
-          <span>All systems syncing · Last: <span id="last-sync">{lastSync}</span></span>
-        </div>
+      {/* 2. Sync status */}
+      <div className="s-sync-bar">
+        <div className="sync-dot"></div>
+        <span>All systems syncing · Last: <span>{syncTime}</span></span>
+      </div>
 
-        <nav>
-          {navGroups.map((group, gIdx) => (
-            <div key={gIdx} className="nav-group">
-              <div className="nav-label">{group.label}</div>
-              {group.items.map((item, iIdx) => (
+      {/* 3. Navigation */}
+      <nav>
+        {navGroups.map((group, gi) => (
+          <div className="nav-group" key={gi}>
+            <div className="nav-label">{group.label}</div>
+            {group.items.map((item, ii) => {
+              // External link (e.g. Tally)
+              if (item.href) {
+                return (
+                  <a
+                    key={ii}
+                    className="nav-item"
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => window.innerWidth < 1024 && onClose()}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    {item.label}
+                    {item.nb && <span className={`nb${item.nbClass ? ` ${item.nbClass}` : ''}`}>{item.nb}</span>}
+                  </a>
+                );
+              }
+              return (
                 <NavLink
-                  key={iIdx}
-                  to={item.href}
-                  className={({ isActive }) => cn(
-                    "nav-item",
-                    (isActive || location.pathname.includes(item.href)) && "active"
-                  )}
+                  key={ii}
+                  to={item.to}
+                  className={() => `nav-item${isActive(item.to) ? ' active' : ''}`}
                   onClick={() => window.innerWidth < 1024 && onClose()}
                 >
                   <span className="nav-icon">{item.icon}</span>
                   {item.label}
-                  {item.badge && (
-                    <span className={cn("nb", item.badgeColor === 'gold' && "gold")}>
-                      {item.badge}
-                    </span>
-                  )}
+                  {item.nb && <span className={`nb${item.nbClass ? ` ${item.nbClass}` : ''}`}>{item.nb}</span>}
                 </NavLink>
-              ))}
-            </div>
-          ))}
-
-          {/* INTEGRATION STATUS */}
-          <div className="int-bar mt-4 mb-4">
-            <div className="int-bar-title">Integration Status</div>
-            <div className="int-item"><div className="int-dot on"></div><span className="int-label">n8n Workflows</span><span className="int-status on">Active</span></div>
-            <div className="int-item"><div className="int-dot on"></div><span className="int-label">Tally Prime</span><span className="int-status on">Synced</span></div>
-            <div className="int-item"><div className="int-dot on"></div><span className="int-label">Google Drive</span><span className="int-status on">Online</span></div>
-            <div className="int-item"><div className="int-dot on"></div><span className="int-label">Bunny.net CDN</span><span className="int-status on">Serving</span></div>
-            <div className="int-item"><div className="int-dot warn"></div><span className="int-label">WhatsApp Meta</span><span className="int-status warn">Quota 82%</span></div>
+              );
+            })}
           </div>
-        </nav>
+        ))}
+      </nav>
 
-        {/* Brand leaf signature */}
-        <div className="sidebar-brand-strip mt-auto mb-4">
-          <div className="leaf-dot leaf-teal"></div>
-          <div className="leaf-dot leaf-gold"></div>
-          <div className="leaf-dot leaf-magenta"></div>
-          <div className="leaf-dot leaf-amber"></div>
-          <span>Where Tradition Weaves its Magic</span>
-        </div>
-      </aside>
-    </>
+      {/* 4. Integration status */}
+      <div className="int-bar">
+        <div className="int-bar-title">Integration Status</div>
+        {integrations.map((int, i) => (
+          <div className="int-item" key={i}>
+            <div className={`int-dot ${int.status}`}></div>
+            <span className="int-label">{int.label}</span>
+            <span className={`int-status ${int.status}`}>{int.text}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 5. Brand leaf signature */}
+      <div className="sidebar-brand-strip">
+        <div className="leaf-dot leaf-teal"></div>
+        <div className="leaf-dot leaf-gold"></div>
+        <div className="leaf-dot leaf-magenta"></div>
+        <div className="leaf-dot leaf-amber"></div>
+        <span>Where Tradition Weaves its Magic</span>
+      </div>
+    </aside>
   );
 };
 

@@ -48,6 +48,8 @@ import JobUnitsPage from '@/pages/admin/unit-management/JobUnitsPage';
 import SuppliersManager from '@/pages/admin/settings/SuppliersManager';
 import HSNCodeMaster from '@/pages/admin/settings/HSNCodeMaster';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
+import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
+import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
 
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 
@@ -85,7 +87,7 @@ const App = () => {
                   }>
                     <Route index element={<Navigate to="/admin/dashboard" replace />} />
                     <Route path="dashboard" element={<AdminDashboard />} />
-                    
+
                     {/* New Fabric Master Forms Routes */}
                     <Route path="fabric/base-fabric-form" element={<BaseFabricForm />} />
                     <Route path="fabric/finish-fabric-form" element={<FinishFabricForm />} />
@@ -102,18 +104,20 @@ const App = () => {
 
                     <Route path="settings/rate-card" element={<RateCardPage />} />
                     <Route path="settings/dropdown-manager" element={<DropdownManager />} />
-                    
+
                     <Route path="price-database" element={<PriceDatabasePage />} />
                     <Route path="garment-cost" element={<ReadymadeGarmentCostSheet />} />
                     <Route path="settings/job-units" element={<JobUnitsPage />} />
                     <Route path="settings/suppliers" element={<SuppliersManager />} />
                     <Route path="settings/hsn-codes" element={<HSNCodeMaster />} />
                     <Route path="fabric-master/bulk-import" element={<BulkImportPage />} />
+                    <Route path="sales/quick-price" element={<QuickPriceCheckPage />} />
+                    <Route path="orders/store-dispatch" element={<StoreManagerOrders />} />
                   </Route>
 
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
-                
+
                 <CartDrawer />
                 <Toaster />
                 <div className="block md:hidden"></div>

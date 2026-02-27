@@ -19,6 +19,7 @@ const CostingCalculatorPage = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     path: '',
+    design_number: '',
     grey_qty: '',
     rate: '',
     brokerage_percentage: '',
@@ -108,22 +109,35 @@ const CostingCalculatorPage = () => {
     setIsSubmitting(true);
     try {
       const calcData = calculateResults();
+      const perMeterCost = Number(calcData.totalCost) / Number(formData.grey_qty);
       const payload = {
         calculation_data: { ...formData, ...calcData },
         total_cost: Number(calcData.totalCost),
         created_by: user?.id,
         base_fabric_cost: Number(calcData.greyCost), 
         transport_cost: Number(calcData.transportCost),
-        notes: `Path: ${formData.path} | Qty: ${formData.grey_qty}`
+        notes: `Design: ${formData.design_number || 'N/A'} | Path: ${formData.path} | Qty: ${formData.grey_qty}`
       };
 
       const { error } = await supabase.from('cost_sheets').insert([payload]);
       if (error) throw error;
       
+      if (formData.design_number) {
+          const salesPrice = perMeterCost * 1.20; // Default 20% margin
+          try {
+              await supabase.from('finish_fabric_designs').update({
+                  base_cost_per_meter: perMeterCost,
+                  sales_price_per_meter: salesPrice
+              }).eq('design_number', formData.design_number);
+          } catch(e) {
+              console.error("Could not update finish_fabric_designs:", e);
+          }
+      }
+      
       toast({ title: "Saved", description: "Calculation saved successfully." });
       fetchCostSheets();
       setStep(1);
-      setFormData({ path: '', grey_qty: '', rate: '', brokerage_percentage: '', transport: '', process_shortages: '' });
+      setFormData({ path: '', design_number: '', grey_qty: '', rate: '', brokerage_percentage: '', transport: '', process_shortages: '' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Save Failed', description: error.message });
     } finally {
@@ -201,6 +215,11 @@ const CostingCalculatorPage = () => {
 
             {step === 2 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 max-w-3xl mx-auto">
+                    <div className="space-y-2 md:col-span-2 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                        <Label className="text-indigo-900 font-semibold">Link to Design Number (Optional)</Label>
+                        <Input type="text" name="design_number" value={formData.design_number} onChange={handleInputChange} placeholder="e.g. D-1001" className="bg-white" />
+                        <p className="text-xs text-indigo-700 mt-1">If provided, this cost and a 20% sales margin will be linked to the design.</p>
+                    </div>
                     <div className="space-y-2">
                         <Label>Grey Quantity (Mtrs) *</Label>
                         <Input type="number" name="grey_qty" value={formData.grey_qty} onChange={handleInputChange} className={formErrors.grey_qty ? "border-red-500 focus:ring-red-200" : ""} placeholder="e.g. 1000" />

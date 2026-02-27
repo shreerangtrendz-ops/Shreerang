@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
-import { Plus, Search, Edit2, Trash2, Filter, UploadCloud } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Filter, UploadCloud, Calculator } from 'lucide-react';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 
@@ -29,7 +30,7 @@ const DesignManagementPage = () => {
             .from('finish_fabric_designs')
             .select(`*, finish_fabrics(finish_fabric_name)`)
             .order('created_at', { ascending: false });
-        
+
         if (error) {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to load designs' });
         } else {
@@ -38,25 +39,25 @@ const DesignManagementPage = () => {
         setLoading(false);
     };
 
-    const filteredDesigns = designs.filter(d => 
-        d.design_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const filteredDesigns = designs.filter(d =>
+        d.design_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.finish_fabrics?.finish_fabric_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
         <div className="space-y-6 pb-20">
             <Helmet><title>Design Management</title></Helmet>
-            <AdminPageHeader 
-                title="Design Management" 
+            <AdminPageHeader
+                title="Design Management"
                 description="Central library for all fabric designs and photos."
-                breadcrumbs={[{label: 'Dashboard', href: '/admin'}, {label: 'Designs'}]}
+                breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Designs' }]}
             />
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input 
-                        placeholder="Search designs..." 
+                    <Input
+                        placeholder="Search designs..."
                         className="pl-9"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
@@ -83,13 +84,44 @@ const DesignManagementPage = () => {
                                     <div className="w-full h-full flex items-center justify-center text-slate-300">No Image</div>
                                 )}
                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                    <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full"><Edit2 className="h-4 w-4"/></Button>
-                                    <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full"><Trash2 className="h-4 w-4"/></Button>
+                                    <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full"><Edit2 className="h-4 w-4" /></Button>
+                                    <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full"><Trash2 className="h-4 w-4" /></Button>
                                 </div>
                             </div>
                             <div className="p-3">
-                                <h3 className="font-bold text-sm truncate">{design.design_number}</h3>
-                                <p className="text-xs text-muted-foreground truncate">{design.finish_fabrics?.finish_fabric_name || 'Unassigned'}</p>
+                                <div className="flex justify-between items-start">
+                                    <div className="min-w-0 pr-2">
+                                        <h3 className="font-bold text-sm truncate">{design.design_number}</h3>
+                                        <p className="text-xs text-muted-foreground truncate">{design.finish_fabrics?.finish_fabric_name || 'Unassigned'}</p>
+                                    </div>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-full flex-shrink-0" title="View Job Card">
+                                                <Calculator className="h-3 w-3" />
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>Cost Job Card - {design.design_number}</DialogTitle>
+                                            </DialogHeader>
+                                            <div className="space-y-4 pt-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-center">
+                                                        <p className="text-xs text-slate-500 mb-1">Base Cost / Mtr</p>
+                                                        <p className="text-lg font-bold">₹{design.base_cost_per_meter ? Number(design.base_cost_per_meter).toFixed(2) : 'N/A'}</p>
+                                                    </div>
+                                                    <div className="bg-green-50 p-3 rounded-lg border border-green-100 text-center">
+                                                        <p className="text-xs text-green-700 mb-1">Sales Price / Mtr</p>
+                                                        <p className="text-lg font-bold text-green-800">₹{design.sales_price_per_meter ? Number(design.sales_price_per_meter).toFixed(2) : 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                                <Button className="w-full" onClick={() => navigate('/admin/cost-sheet-generator')}>
+                                                    Create / Update Cost Sheet
+                                                </Button>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
                                 <div className="mt-2 flex justify-between items-center">
                                     <Badge variant="outline" className="text-[10px] h-5">{design.status}</Badge>
                                 </div>

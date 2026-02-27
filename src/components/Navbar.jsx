@@ -1,178 +1,176 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X, User, LogOut, Search, ShoppingBag, Heart, Moon, Sun } from 'lucide-react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Menu, X, User, LogOut, Search, ShoppingBag, Heart } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useTheme } from '@/lib/theme';
 import NotificationCenter from '@/components/admin/NotificationCenter';
+
+const navLinks = [
+  { name: 'Shop', path: '/shop' },
+  { name: 'Wholesale', path: '/wholesale' },
+  { name: 'About', path: '/about' },
+  { name: 'Contact', path: '/contact' },
+];
+
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const {
-    user,
-    signOut
-  } = useAuth();
-  const {
-    profile
-  } = useUserProfile();
-  const {
-    cartCount,
-    setIsCartOpen
-  } = useCart();
+  const { user, signOut } = useAuth();
+  const { profile } = useUserProfile();
+  const { cartCount, setIsCartOpen } = useCart();
   const navigate = useNavigate();
-  const {
-    theme,
-    toggleTheme
-  } = useTheme();
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
-  };
-  const navLinks = [{
-    name: 'Shop',
-    path: '/shop'
-  }, {
-    name: 'Wholesale',
-    path: '/wholesale'
-  }, {
-    name: 'About',
-    path: '/about'
-  }, {
-    name: 'Contact',
-    path: '/contact'
-  }];
-  return <nav className="bg-background/95 backdrop-blur-sm shadow-sm sticky top-0 z-50 border-b border-border">
-      <div className="container">
-        <div className="flex justify-between items-center h-20 gap-4">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2 flex-shrink-0">
-            <img src="https://horizons-cdn.hostinger.com/3e6f7609-d358-45de-baf5-ac38cd562a97/fa8a0574656b2e3126d8a09ae725c5e4.png" alt="Shree Rang Trendz" className="h-10 w-auto md:h-12" />
-            <span className="text-xl font-bold text-primary tracking-tight hidden md:block" style={{
-            fontFamily: 'Playfair Display, serif'
-          }}>Shree Rang Trendz Pvt Ltd</span>
+
+  const handleSignOut = async () => { await signOut(); navigate('/'); };
+
+  return (
+    <nav style={{
+      background: 'var(--sidebar-bg)',
+      borderBottom: '1px solid var(--sidebar-border)',
+      position: 'sticky', top: 0, zIndex: 200,
+      boxShadow: '0 2px 20px rgba(0,0,0,0.25)',
+      fontFamily: 'var(--font)'
+    }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 68 }}>
+
+          {/* Logo / Brand */}
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+            <div style={{
+              width: 40, height: 40, background: 'var(--teal-bright)',
+              borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 800, color: '#071E1C',
+              boxShadow: '0 2px 12px rgba(61,191,174,0.4)', flexShrink: 0
+            }}>SR</div>
+            <div className="hidden md:block">
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 700, color: '#C8E8E4', lineHeight: 1.1 }}>Shreerang</div>
+              <div style={{ background: 'var(--gold-light)', color: '#0B2E2B', fontSize: 8, fontWeight: 700, letterSpacing: '0.15em', padding: '1px 7px', borderRadius: 99, display: 'inline-block', textTransform: 'uppercase' }}>Trendz Pvt Ltd</div>
+            </div>
           </Link>
 
-          {/* Center Search - Desktop */}
-          <div className="hidden lg:flex flex-1 max-w-lg mx-4">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search products, fabrics, SKU..." className="pl-10 bg-secondary/50 border-transparent focus:bg-background transition-all" />
-            </div>
+          {/* Desktop Nav Links */}
+          <div className="hidden lg:flex" style={{ alignItems: 'center', gap: 4 }}>
+            {navLinks.map(link => (
+              <NavLink
+                key={link.path}
+                to={link.path}
+                style={({ isActive }) => ({
+                  padding: '6px 14px', borderRadius: 6,
+                  fontSize: 13, fontWeight: 500, textDecoration: 'none',
+                  color: isActive ? 'var(--teal-bright)' : '#6A9B95',
+                  background: isActive ? 'rgba(61,191,174,0.12)' : 'transparent',
+                  borderBottom: isActive ? '2px solid var(--teal-bright)' : '2px solid transparent',
+                  transition: 'all 0.15s'
+                })}
+              >
+                {link.name}
+              </NavLink>
+            ))}
           </div>
 
-          {/* Desktop Nav & Actions */}
-          <div className="hidden lg:flex items-center gap-6">
-            <div className="flex items-center space-x-6">
-              {navLinks.map(link => <Link key={link.path} to={link.path} className="text-sm font-medium text-foreground hover:text-primary transition-colors">
-                  {link.name}
-                </Link>)}
+          {/* Desktop Actions */}
+          <div className="hidden lg:flex" style={{ alignItems: 'center', gap: 8 }}>
+            {/* Search */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'rgba(14,56,53,0.8)', border: '1px solid var(--sidebar-border)',
+              borderRadius: 6, padding: '6px 12px', width: 200
+            }}>
+              <Search style={{ width: 14, height: 14, color: '#6A9B95', flexShrink: 0 }} />
+              <input
+                placeholder="Search fabrics, SKU..."
+                style={{ background: 'none', border: 'none', outline: 'none', fontFamily: 'var(--font)', fontSize: 12, color: '#C8E8E4', width: '100%' }}
+              />
             </div>
 
-            <div className="flex items-center space-x-2 pl-6 border-l border-border">
-              <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Toggle Theme</TooltipContent>
-                </Tooltip>
-              
-                {user && <NotificationCenter />}
-              
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950">
-                      <Heart className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Wishlist</TooltipContent>
-                </Tooltip>
+            {/* Wishlist */}
+            <button style={{ ...iconBtn }}>
+              <Heart style={{ width: 16, height: 16, color: '#6A9B95' }} />
+            </button>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="relative hover:text-primary hover:bg-primary/10" onClick={() => setIsCartOpen(true)}>
-                      <ShoppingBag className="h-5 w-5" />
-                      {cartCount > 0 && <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-[10px] text-white flex items-center justify-center rounded-full font-bold">
-                          {cartCount}
-                        </span>}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Cart</TooltipContent>
-                </Tooltip>
+            {/* Cart */}
+            <button style={{ ...iconBtn, position: 'relative' }} onClick={() => setIsCartOpen(true)}>
+              <ShoppingBag style={{ width: 16, height: 16, color: '#6A9B95' }} />
+              {cartCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -4,
+                  background: 'var(--teal-bright)', color: '#071E1C',
+                  fontSize: 9, fontWeight: 800, width: 16, height: 16,
+                  borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>{cartCount}</span>
+              )}
+            </button>
 
-                {user ? <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Link to={profile?.role === 'admin' ? '/admin' : '/my-account'}>
-                          <Button variant="ghost" size="icon" className="hover:text-primary hover:bg-primary/10">
-                            <User className="h-5 w-5" />
-                          </Button>
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent>{profile?.role === 'admin' ? 'Admin Panel' : 'My Account'}</TooltipContent>
-                    </Tooltip>
-                    
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={handleSignOut} className="text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
-                          <LogOut className="h-5 w-5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Sign Out</TooltipContent>
-                    </Tooltip>
-                  </> : <Link to="/login">
-                    <Button variant="ghost" size="sm">Login</Button>
-                  </Link>}
-              </TooltipProvider>
-            </div>
+            {user && <NotificationCenter />}
+
+            {/* User / Login */}
+            {user ? (
+              <>
+                <Link to={profile?.role === 'admin' ? '/admin' : '/my-account'} style={{ ...iconBtn }}>
+                  <User style={{ width: 16, height: 16, color: '#6A9B95' }} />
+                </Link>
+                <button onClick={handleSignOut} style={{ ...iconBtn }}>
+                  <LogOut style={{ width: 16, height: 16, color: '#D93A3A' }} />
+                </button>
+              </>
+            ) : (
+              <Link to="/login" style={{
+                padding: '7px 16px', background: 'var(--teal)', color: '#fff',
+                borderRadius: 6, fontSize: 12, fontWeight: 600, textDecoration: 'none',
+                transition: 'all 0.13s'
+              }}>Login</Link>
+            )}
           </div>
 
           {/* Mobile Toggle */}
-          <div className="flex items-center gap-2 lg:hidden">
-            <Button variant="ghost" size="icon" onClick={() => setIsCartOpen(true)}>
-              <ShoppingBag className="h-5 w-5" />
-              {cartCount > 0 && <span className="absolute top-1 right-1 h-2 w-2 bg-primary rounded-full"></span>}
-            </Button>
-            <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-foreground">
-              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          <div className="lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button style={{ ...iconBtn }} onClick={() => setIsCartOpen(true)}>
+              <ShoppingBag style={{ width: 18, height: 18, color: '#6A9B95' }} />
+            </button>
+            <button
+              style={{ ...iconBtn }}
+              onClick={() => setIsOpen(!isOpen)}
+            >
+              {isOpen ? <X style={{ width: 18, height: 18, color: '#C8E8E4' }} /> : <Menu style={{ width: 18, height: 18, color: '#C8E8E4' }} />}
             </button>
           </div>
         </div>
 
         {/* Mobile Menu */}
-        {isOpen && <div className="lg:hidden py-4 border-t border-border animate-in slide-in-from-top-2 bg-background">
-            <div className="mb-4 relative px-4">
-               <Search className="absolute left-7 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-               <Input placeholder="Search..." className="pl-10" />
-            </div>
-            <div className="space-y-2">
-              {navLinks.map(link => <Link key={link.path} to={link.path} className="block py-2 px-4 text-sm font-medium hover:bg-secondary rounded-md" onClick={() => setIsOpen(false)}>
-                  {link.name}
-                </Link>)}
-              <div className="px-4 py-2">
-                <Button variant="outline" size="sm" onClick={toggleTheme} className="w-full justify-start gap-2">
-                    {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                    {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                </Button>
-              </div>
-              {user ? <>
-                  <Link to={profile?.role === 'admin' ? '/admin' : '/my-account'} className="block py-2 px-4 text-sm font-medium hover:bg-secondary rounded-md" onClick={() => setIsOpen(false)}>
-                    {profile?.role === 'admin' ? 'Admin Dashboard' : 'My Account'}
-                  </Link>
-                  <button onClick={handleSignOut} className="w-full text-left py-2 px-4 text-sm font-medium text-red-500 hover:bg-red-50 rounded-md flex items-center gap-2">
-                    <LogOut className="h-4 w-4" /> Sign Out
-                  </button>
-                </> : <Link to="/login" className="block py-2 px-4 text-sm font-medium hover:bg-secondary rounded-md" onClick={() => setIsOpen(false)}>
+        {isOpen && (
+          <div style={{
+            borderTop: '1px solid var(--sidebar-border)',
+            padding: '12px 0 16px',
+            background: 'var(--sidebar-surface)'
+          }}>
+            {navLinks.map(link => (
+              <Link
+                key={link.path} to={link.path}
+                onClick={() => setIsOpen(false)}
+                style={{ display: 'block', padding: '10px 16px', fontSize: 13, color: '#6A9B95', textDecoration: 'none', transition: 'all 0.13s' }}
+              >{link.name}</Link>
+            ))}
+            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--sidebar-border)', marginTop: 8 }}>
+              {user ? (
+                <button onClick={handleSignOut} style={{ color: 'var(--red)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  Sign Out
+                </button>
+              ) : (
+                <Link to="/login" onClick={() => setIsOpen(false)} style={{ color: 'var(--teal-bright)', fontSize: 13, textDecoration: 'none', fontWeight: 600 }}>
                   Login / Register
-                </Link>}
+                </Link>
+              )}
             </div>
-          </div>}
+          </div>
+        )}
       </div>
-    </nav>;
+    </nav>
+  );
 };
+
+const iconBtn = {
+  width: 34, height: 34, borderRadius: 6, border: '1px solid var(--sidebar-border)',
+  background: 'rgba(14,56,53,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  cursor: 'pointer', transition: 'all 0.13s'
+};
+
 export default Navbar;

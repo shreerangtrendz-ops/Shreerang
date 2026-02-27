@@ -1,86 +1,125 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
 const Footer = () => {
-  return <footer className="bg-gray-900 text-white border-t border-gray-800">
-      <div className="container py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          
-          {/* Brand Info */}
-          <div className="space-y-4">
-            <Link to="/" className="block">
-              <span className="text-2xl font-bold text-white" style={{
-              fontFamily: 'Playfair Display, serif'
-            }}>Shree Rang Trendz Pvt Ltd</span>
+  const linkStyle = {
+    color: '#6A9B95', fontSize: 13, textDecoration: 'none',
+    transition: 'color 0.13s', display: 'block', padding: '3px 0'
+  };
+
+  return (
+    <footer style={{
+      background: 'var(--sidebar-bg)',
+      borderTop: '1px solid var(--sidebar-border)',
+      fontFamily: 'var(--font)'
+    }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 24px 0' }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 48, paddingBottom: 48 }}>
+
+          {/* Brand */}
+          <div>
+            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', marginBottom: 16 }}>
+              <div style={{
+                width: 40, height: 40, background: 'var(--teal-bright)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--serif)', fontSize: 18, fontWeight: 800, color: '#071E1C',
+                boxShadow: '0 2px 12px rgba(61,191,174,0.4)'
+              }}>SR</div>
+              <div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 17, fontWeight: 700, color: '#C8E8E4' }}>Shreerang</div>
+                <div style={{ background: 'var(--gold-light)', color: '#0B2E2B', fontSize: 7.5, fontWeight: 700, letterSpacing: '0.15em', padding: '1px 6px', borderRadius: 99, display: 'inline-block', textTransform: 'uppercase' }}>Trendz Pvt Ltd</div>
+              </div>
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              Leading manufacturer and wholesaler of premium fabrics and garments. Committed to quality, innovation, and sustainable fashion since 2010.
+            <p style={{ color: '#2E5550', fontSize: 12, lineHeight: 1.7, marginBottom: 16 }}>
+              Leading manufacturer and wholesaler of premium fabrics. Schiffli, Digital Print, Mill Print. Where Tradition Weaves its Magic.
             </p>
-            <div className="flex space-x-4 pt-2">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors"><Facebook className="h-5 w-5" /></a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors"><Instagram className="h-5 w-5" /></a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors"><Twitter className="h-5 w-5" /></a>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[Facebook, Instagram, Twitter].map((Icon, i) => (
+                <a key={i} href="#" style={{
+                  width: 30, height: 30, borderRadius: 6,
+                  border: '1px solid var(--sidebar-border)',
+                  background: 'rgba(14,56,53,0.6)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <Icon style={{ width: 14, height: 14, color: '#6A9B95' }} />
+                </a>
+              ))}
             </div>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-lg font-semibold mb-6">Quick Links</h3>
-            <ul className="space-y-3 text-sm text-gray-400">
-              <li><Link to="/shop" className="hover:text-primary transition-colors">Shop Collection</Link></li>
-              <li><Link to="/wholesale" className="hover:text-primary transition-colors">Wholesale Portal</Link></li>
-              <li><Link to="/about" className="hover:text-primary transition-colors">Our Story</Link></li>
-              <li><Link to="/contact" className="hover:text-primary transition-colors">Contact Us</Link></li>
-              <li><Link to="#" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
-              <li><Link to="#" className="hover:text-primary transition-colors">Returns & Exchanges</Link></li>
-            </ul>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 700, color: '#C8E8E4', marginBottom: 16, letterSpacing: '0.02em' }}>Quick Links</h3>
+            {[
+              { label: 'Shop Collection', to: '/shop' },
+              { label: 'Wholesale Portal', to: '/wholesale' },
+              { label: 'Our Story', to: '/about' },
+              { label: 'Contact Us', to: '/contact' },
+              { label: 'Privacy Policy', to: '#' },
+              { label: 'Returns & Exchanges', to: '#' },
+            ].map((l, i) => (
+              <Link key={i} to={l.to} style={linkStyle}>{l.label}</Link>
+            ))}
           </div>
 
-          {/* Contact Info */}
+          {/* Contact */}
           <div>
-            <h3 className="text-lg font-semibold mb-6">Contact Us</h3>
-            <ul className="space-y-4 text-sm text-gray-400">
-              <li className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-primary shrink-0" />
-                <span>4081-4084, Millennium 4 Textile Market, Surat, India - 395002</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-primary shrink-0" />
-                <span>+91 75678 60000,                                                   +91 75678 70000</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-primary shrink-0" />
-                <span>shreerangtrendz@gmail.com</span>
-              </li>
-              <li className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-primary shrink-0" />
-                <span>Mon - Sat: 10:00 AM - 7:00 PM</span>
-              </li>
-            </ul>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 700, color: '#C8E8E4', marginBottom: 16 }}>Contact Us</h3>
+            {[
+              { Icon: MapPin, text: '4081-4084, Millennium 4 Textile Market, Surat, India — 395002' },
+              { Icon: Phone, text: '+91 75678 60000 / +91 75678 70000' },
+              { Icon: Mail, text: 'shreerangtrendz@gmail.com' },
+              { Icon: Clock, text: 'Mon – Sat: 10:00 AM – 7:00 PM' },
+            ].map(({ Icon, text }, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
+                <Icon style={{ width: 14, height: 14, color: 'var(--teal-bright)', flexShrink: 0, marginTop: 2 }} />
+                <span style={{ color: '#6A9B95', fontSize: 12, lineHeight: 1.6 }}>{text}</span>
+              </div>
+            ))}
           </div>
 
           {/* Newsletter */}
           <div>
-            <h3 className="text-lg font-semibold mb-6">Stay Updated</h3>
-            <p className="text-gray-400 text-sm mb-4">Subscribe to our newsletter for new arrivals and exclusive wholesale offers.</p>
-            <form className="space-y-3" onSubmit={e => e.preventDefault()}>
-              <Input type="email" placeholder="Your email address" className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:ring-primary" />
-              <Button className="w-full">Subscribe</Button>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 14, fontWeight: 700, color: '#C8E8E4', marginBottom: 8 }}>Stay Updated</h3>
+            <p style={{ color: '#2E5550', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
+              New arrivals, exclusive wholesale offers, and textile trends.
+            </p>
+            <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                type="email" placeholder="Your email address"
+                style={{
+                  background: 'rgba(14,56,53,0.8)',
+                  border: '1px solid var(--sidebar-border)',
+                  borderRadius: 6, padding: '8px 12px',
+                  fontFamily: 'var(--font)', fontSize: 12, color: '#C8E8E4', outline: 'none'
+                }}
+              />
+              <button type="submit" style={{
+                background: 'var(--teal)', color: '#fff',
+                border: 'none', borderRadius: 6, padding: '8px 14px',
+                fontFamily: 'var(--font)', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+              }}>Subscribe</button>
             </form>
           </div>
         </div>
 
-        {/* Bottom Bar */}
-        <div className="border-t border-gray-800 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-gray-500">
-          <p>&copy; 2025 Shree Rang Trendz Pvt. Ltd. All rights reserved.</p>
-          <div className="flex gap-6">
-            <span>GST: 24AAUCS2915F1Z8</span>
-            <span>CIN: U17299GJ2021PTC123456</span>
+        {/* Bottom bar */}
+        <div style={{
+          borderTop: '1px solid var(--sidebar-border)',
+          padding: '16px 0',
+          display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8
+        }}>
+          <p style={{ color: '#2E5550', fontSize: 11 }}>© 2026 Shreerang Trendz Pvt. Ltd. All rights reserved.</p>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <span style={{ color: '#2E5550', fontSize: 11 }}>GST: 24AAUCS2915F1Z8</span>
+            <span style={{ color: '#2E5550', fontSize: 11 }}>Made with ♥ in Surat, India</span>
           </div>
         </div>
       </div>
-    </footer>;
+    </footer>
+  );
 };
+
 export default Footer;

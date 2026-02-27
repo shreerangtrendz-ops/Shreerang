@@ -3,12 +3,13 @@ import { Outlet } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import PageErrorBoundary from '@/components/common/PageErrorBoundary';
+import '@/styles/admin.css';
 
 const CustomerLayout = () => {
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50/50">
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg)', fontFamily: 'var(--font)' }}>
       <Navbar />
-      <main className="flex-1">
+      <main style={{ flex: 1 }}>
         <PageErrorBoundary>
           <Outlet />
         </PageErrorBoundary>

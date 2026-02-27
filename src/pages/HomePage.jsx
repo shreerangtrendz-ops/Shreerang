@@ -1,14 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, Truck, ShieldCheck, Headphones, Layers, Scissors, Droplets } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowRight, Check, Truck, ShieldCheck, Headphones } from 'lucide-react';
 import ProductCard from '@/components/customer/ProductCard';
 import DesignCard from '@/components/customer/DesignCard';
 import { CustomerProductService } from '@/services/CustomerProductService';
 import { CustomerDesignService } from '@/services/CustomerDesignService';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ensureArray } from '@/lib/arrayValidation';
 import { logError } from '@/lib/debugHelpers';
+
+const categories = [
+  { name: 'Mill Print', icon: '🖨️', count: '500+', slug: 'mill-print', accent: 'var(--teal)' },
+  { name: 'Digital Poly', icon: '💻', count: '300+', slug: 'digital-poly', accent: 'var(--blue)' },
+  { name: 'Digital Pure', icon: '🎨', count: '150+', slug: 'digital-pure', accent: 'var(--purple)' },
+  { name: 'Solid Dyed', icon: '🌊', count: '200+', slug: 'solid-dyed', accent: 'var(--cyan)' },
+  { name: 'Schiffli', icon: '✨', count: '100+', slug: 'schiffli', accent: 'var(--gold)' },
+  { name: 'Hakoba', icon: '🪡', count: '80+', slug: 'hakoba', accent: 'var(--magenta)' },
+];
+
+const benefits = [
+  { icon: Check, title: 'Premium Quality', desc: 'Finest base fabrics + top-tier printing technology. Every meter quality checked.' },
+  { icon: Truck, title: 'Pan-India Delivery', desc: 'Optimised logistics. Orders dispatched within 24 hrs of challan.' },
+  { icon: ShieldCheck, title: 'Direct Factory Price', desc: 'Wholesale pricing direct from the converter. No middleman mark-up.' },
+  { icon: Headphones, title: 'WhatsApp Support', desc: 'Our AI-powered bot + dedicated team available Mon–Sat, 10 AM–7 PM.' },
+];
 
 const HomePage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -16,7 +30,7 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
+    (async () => {
       try {
         const [products, designs] = await Promise.all([
           CustomerProductService.getFeaturedProducts(),
@@ -24,69 +38,149 @@ const HomePage = () => {
         ]);
         setFeaturedProducts(ensureArray(products, 'HomePage products'));
         setFeaturedDesigns(ensureArray(designs, 'HomePage designs'));
-      } catch (error) {
-        logError(error, 'HomePage fetch');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+      } catch (e) { logError(e, 'HomePage fetch'); }
+      finally { setLoading(false); }
+    })();
   }, []);
 
-  const categories = [
-    { name: 'Mill Print', icon: Layers, count: '500+', slug: 'mill-print' },
-    { name: 'Digital Poly', icon: Droplets, count: '300+', slug: 'digital-poly' },
-    { name: 'Digital Pure', icon: Droplets, count: '150+', slug: 'digital-pure' },
-    { name: 'Solid Dyed', icon: Layers, count: '200+', slug: 'solid-dyed' },
-    { name: 'Schiffli', icon: Scissors, count: '100+', slug: 'schiffli' },
-    { name: 'Hakoba', icon: Scissors, count: '80+', slug: 'hakoba' },
-  ];
-
   return (
-    <div className="flex flex-col min-h-screen">
-      <section className="relative bg-slate-900 text-white py-24 lg:py-32 overflow-hidden">
-         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1585337871471-fbe1b55b0a99?q=80&w=2074&auto=format&fit=crop')] bg-cover bg-center opacity-30"></div>
-         <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/80 to-transparent"></div>
-         <div className="container relative z-10 px-4 md:px-6">
-            <div className="max-w-3xl space-y-6 animate-in slide-in-from-bottom-10 fade-in duration-700">
-               <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-7xl">
-                 <span className="block text-primary">Shreerang Trendz</span>
-                 Premium Fabrics & Designs
-               </h1>
-               <p className="text-lg text-slate-300 md:text-xl max-w-2xl leading-relaxed">
-                 Experience the finest collection of textile mastery. From traditional Mill Prints to avant-garde Digital Art, we define the fabric of fashion.
-               </p>
-               <div className="flex flex-wrap gap-4 pt-4">
-                  <Link to="/shop">
-                    <Button size="lg" className="bg-primary hover:bg-primary/90 text-white border-none h-12 px-8 text-lg">
-                       Explore Products <ArrowRight className="ml-2 h-5 w-5" />
-                    </Button>
-                  </Link>
-                  <Link to="/designs">
-                    <Button size="lg" variant="outline" className="bg-white/5 backdrop-blur-sm hover:bg-white/20 text-white border-white/40 h-12 px-8 text-lg">
-                       View Design Gallery
-                    </Button>
-                  </Link>
-               </div>
+    <div>
+
+      {/* ══ HERO ══ */}
+      <section style={{
+        background: 'var(--sidebar-bg)',
+        position: 'relative', overflow: 'hidden',
+        padding: '80px 24px 96px'
+      }}>
+        {/* Decorative glow */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none',
+          background: `
+            radial-gradient(ellipse 60% 50% at 80% 20%, rgba(43,168,152,0.15) 0%, transparent 60%),
+            radial-gradient(ellipse 40% 30% at 5% 90%, rgba(212,146,10,0.10) 0%, transparent 50%),
+            radial-gradient(ellipse 30% 40% at 50% 50%, rgba(43,168,152,0.05) 0%, transparent 70%)
+          `
+        }} />
+        {/* Animated teal grid lines */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.05,
+          backgroundImage: 'linear-gradient(var(--teal-bright) 1px, transparent 1px), linear-gradient(90deg, var(--teal-bright) 1px, transparent 1px)',
+          backgroundSize: '60px 60px'
+        }} />
+
+        <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 40 }}>
+            <div style={{ maxWidth: 640 }}>
+              {/* Pre-label */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--teal-bright)', animation: 'pulse 2s infinite' }} />
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--teal-bright)' }}>
+                  Premium Fabric Converter — Surat
+                </span>
+              </div>
+
+              <h1 style={{ fontFamily: 'var(--serif)', fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 800, color: '#C8E8E4', lineHeight: 1.1, marginBottom: 20 }}>
+                Shreerang<br />
+                <span style={{ color: 'var(--gold-light)' }}>Trendz</span>
+              </h1>
+              <p style={{ fontSize: 15, color: '#6A9B95', lineHeight: 1.8, marginBottom: 8, fontStyle: 'italic' }}>
+                Where Tradition Weaves its Magic
+              </p>
+              <p style={{ fontSize: 13, color: '#4A7A74', lineHeight: 1.7, marginBottom: 32, maxWidth: 520 }}>
+                Leading manufacturer and wholesaler of premium fabrics — Schiffli, Digital Print, Mill Print, Hakoba and more. Direct from factory to your door across India.
+              </p>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <Link to="/shop" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '12px 24px', background: 'var(--teal)', color: '#fff',
+                  borderRadius: 8, fontFamily: 'var(--font)', fontSize: 13, fontWeight: 600,
+                  textDecoration: 'none', transition: 'all 0.15s',
+                  boxShadow: '0 4px 20px rgba(43,168,152,0.3)'
+                }}>
+                  Explore Collection <ArrowRight style={{ width: 16, height: 16 }} />
+                </Link>
+                <Link to="/wholesale" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '12px 24px', background: 'transparent',
+                  border: '1px solid var(--border-gold)', color: 'var(--gold-light)',
+                  borderRadius: 8, fontFamily: 'var(--font)', fontSize: 13, fontWeight: 600,
+                  textDecoration: 'none', transition: 'all 0.15s'
+                }}>
+                  Wholesale Portal →
+                </Link>
+              </div>
+
+              {/* Trust stats */}
+              <div style={{ display: 'flex', gap: 32, marginTop: 40, flexWrap: 'wrap' }}>
+                {[['1,084+', 'Active SKUs'], ['247+', 'Designs'], ['15+ yrs', 'Experience'], ['Pan-India', 'Delivery']].map(([v, l], i) => (
+                  <div key={i}>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 700, color: 'var(--teal-bright)' }}>{v}</div>
+                    <div style={{ fontSize: 10, color: '#2E5550', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>{l}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-         </div>
+
+            {/* Hero side card — fabric types */}
+            <div className="hidden lg:block" style={{
+              background: 'rgba(14,56,53,0.8)',
+              border: '1px solid var(--sidebar-border)',
+              borderRadius: 12, padding: '24px 20px', minWidth: 200
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#2E5550', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 14 }}>Our Verticals</div>
+              {[
+                { label: 'Schiffli', color: 'var(--gold)' },
+                { label: 'Mill Print', color: 'var(--teal)' },
+                { label: 'Digital Print', color: 'var(--blue)' },
+                { label: 'Solid Dyed', color: 'var(--cyan)' },
+                { label: 'Hakoba', color: 'var(--magenta)' },
+                { label: 'Readymade', color: 'var(--purple)' },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0',
+                  borderBottom: i < 5 ? '1px solid rgba(61,191,174,0.10)' : 'none'
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: '#6A9B95' }}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section className="py-20 bg-slate-50">
-        <div className="container px-4 md:px-6">
-          <div className="text-center mb-12">
-             <h2 className="text-3xl font-bold tracking-tight mb-4">Browse by Category</h2>
-             <p className="text-muted-foreground max-w-2xl mx-auto">Explore our extensive range of specialized fabric processing techniques.</p>
+      {/* ══ CATEGORIES ══ */}
+      <section style={{ padding: '72px 24px', background: 'var(--bg)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 44 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 10 }}>What We Make</div>
+            <h2 style={{ fontFamily: 'var(--serif)', fontSize: 32, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>Browse by Category</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 460, margin: '0 auto', lineHeight: 1.7 }}>
+              Explore our extensive range of specialised fabric processing techniques.
+            </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
             {categories.map((cat, idx) => (
-              <Link key={idx} to={`/shop?category=${cat.slug}`} className="group">
-                <div className="bg-white rounded-xl p-6 shadow-sm border hover:shadow-md transition-all text-center h-full flex flex-col items-center justify-center gap-3 group-hover:-translate-y-1">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                    <cat.icon className="h-6 w-6" />
+              <Link key={idx} to={`/shop?category=${cat.slug}`}
+                style={{ textDecoration: 'none' }}
+              >
+                <div style={{
+                  background: 'var(--surface)', border: '1px solid var(--border-teal)',
+                  borderRadius: 10, padding: '24px 16px', textAlign: 'center',
+                  transition: 'all 0.2s', cursor: 'pointer',
+                  boxShadow: '0 1px 4px rgba(43,168,152,0.06)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.borderColor = cat.accent; e.currentTarget.style.boxShadow = `0 8px 24px rgba(43,168,152,0.12)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = 'var(--border-teal)'; e.currentTarget.style.boxShadow = '0 1px 4px rgba(43,168,152,0.06)'; }}
+                >
+                  <div style={{ fontSize: 32 }}>{cat.icon}</div>
+                  <div>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>{cat.name}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface2)', padding: '2px 8px', borderRadius: 99 }}>{cat.count} SKUs</div>
                   </div>
-                  <h3 className="font-semibold text-slate-900">{cat.name}</h3>
-                  <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">{cat.count} Products</span>
                 </div>
               </Link>
             ))}
@@ -94,122 +188,121 @@ const HomePage = () => {
         </div>
       </section>
 
-      <section className="py-20 bg-background">
-        <div className="container px-4 md:px-6">
-           <div className="flex justify-between items-end mb-10">
-              <div>
-                <h2 className="text-3xl font-bold tracking-tight">Featured Products</h2>
-                <p className="text-muted-foreground mt-2">Hand-picked selections just for you.</p>
-              </div>
-              <Link to="/shop" className="text-primary font-medium hover:underline hidden sm:block">View All Products</Link>
-           </div>
-
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {loading ? (
-                Array(4).fill(0).map((_, i) => (
-                  <div key={i} className="space-y-4">
-                     <Skeleton className="aspect-[3/4] w-full rounded-lg" />
-                     <Skeleton className="h-4 w-2/3" />
-                     <Skeleton className="h-4 w-1/3" />
-                  </div>
-                ))
-              ) : (
-                featuredProducts.map(product => (
-                  <ProductCard key={product.id} product={product} />
-                ))
-              )}
-           </div>
-           
-           {!loading && featuredProducts.length === 0 && (
-             <div className="text-center py-10 text-slate-500 bg-slate-50 rounded-lg">
-               No featured products available at the moment.
-             </div>
-           )}
-
-           <div className="mt-10 text-center sm:hidden">
-              <Link to="/shop"><Button variant="outline" size="lg" className="w-full">View All Products</Button></Link>
-           </div>
-        </div>
-      </section>
-
-      <section className="py-20 bg-slate-900 text-white">
-         <div className="container px-4 md:px-6">
-            <h2 className="text-3xl font-bold text-center mb-16">Why Choose Shree Rang Trendz?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-               <BenefitCard 
-                 icon={CheckCircle2} 
-                 title="Premium Quality" 
-                 desc="We source only the finest base fabrics and use top-tier printing technology."
-               />
-               <BenefitCard 
-                 icon={Truck} 
-                 title="Fast Delivery" 
-                 desc="Optimized logistics ensure your orders reach you on time, every time."
-               />
-               <BenefitCard 
-                 icon={ShieldCheck} 
-                 title="Best Prices" 
-                 desc="Competitive wholesale pricing directly from the manufacturer."
-               />
-               <BenefitCard 
-                 icon={Headphones} 
-                 title="Expert Support" 
-                 desc="Our dedicated team is here to assist with all your textile needs."
-               />
+      {/* ══ FEATURED PRODUCTS ══ */}
+      <section style={{ padding: '72px 24px', background: 'var(--surface)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 36 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 8 }}>Hand-Picked</div>
+              <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Featured Products</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Curated selections from our premium catalogue.</p>
             </div>
-         </div>
-      </section>
+            <Link to="/shop" style={{ fontSize: 12, color: 'var(--teal)', fontWeight: 600, textDecoration: 'none' }}>View All →</Link>
+          </div>
 
-      <section className="py-20 bg-background">
-        <div className="container px-4 md:px-6">
-           <div className="flex justify-between items-end mb-10">
-              <div>
-                <h2 className="text-3xl font-bold tracking-tight">Trending Designs</h2>
-                <p className="text-muted-foreground mt-2">Latest patterns and artworks from our studio.</p>
-              </div>
-              <Link to="/designs" className="text-primary font-medium hover:underline hidden sm:block">View Design Gallery</Link>
-           </div>
-
-           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {loading ? (
-                Array(6).fill(0).map((_, i) => <Skeleton key={i} className="aspect-square rounded-lg" />)
-              ) : (
-                featuredDesigns.map(design => (
-                  <DesignCard key={design.id} design={design} />
-                ))
-              )}
-           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
+            {loading ? (
+              Array(4).fill(0).map((_, i) => (
+                <div key={i} style={{ background: 'var(--surface2)', borderRadius: 10, height: 280, animation: 'pulse 1.5s infinite' }} />
+              ))
+            ) : (
+              featuredProducts.map(p => <ProductCard key={p.id} product={p} />)
+            )}
+          </div>
+          {!loading && featuredProducts.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', background: 'var(--surface2)', borderRadius: 10 }}>
+              Products coming soon. Check back shortly.
+            </div>
+          )}
         </div>
       </section>
 
-      <section className="py-20 bg-primary/5 border-t">
-         <div className="container px-4 md:px-6 text-center">
-            <h2 className="text-3xl font-bold mb-4 text-slate-900">Stay Updated</h2>
-            <p className="text-slate-600 mb-8 max-w-xl mx-auto">
-              Subscribe to our newsletter for the latest design drops, exclusive wholesale offers, and textile trends.
-            </p>
-            <form className="max-w-md mx-auto flex gap-2" onSubmit={(e) => e.preventDefault()}>
-               <input 
-                 type="email" 
-                 placeholder="Enter your email" 
-                 className="flex-1 px-4 py-3 rounded-md border text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
-               />
-               <Button size="lg" className="font-semibold">Subscribe</Button>
-            </form>
-         </div>
+      {/* ══ WHY CHOOSE US ══ */}
+      <section style={{ padding: '72px 24px', background: 'var(--sidebar-bg)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.05,
+          backgroundImage: 'linear-gradient(var(--teal-bright) 1px, transparent 1px), linear-gradient(90deg, var(--teal-bright) 1px, transparent 1px)',
+          backgroundSize: '80px 80px'
+        }} />
+        <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 30, fontWeight: 700, color: '#C8E8E4', textAlign: 'center', marginBottom: 50 }}>
+            Why Choose <span style={{ color: 'var(--gold-light)' }}>Shreerang Trendz</span>?
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
+            {benefits.map(({ icon: Icon, title, desc }, i) => (
+              <div key={i} style={{
+                background: 'rgba(14,56,53,0.7)',
+                border: '1px solid var(--sidebar-border)',
+                borderRadius: 10, padding: '28px 22px',
+                transition: 'all 0.2s'
+              }}>
+                <div style={{ width: 44, height: 44, background: 'rgba(61,191,174,0.10)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <Icon style={{ width: 20, height: 20, color: 'var(--teal-bright)' }} />
+                </div>
+                <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 700, color: '#C8E8E4', marginBottom: 8 }}>{title}</h3>
+                <p style={{ fontSize: 12, color: '#6A9B95', lineHeight: 1.7 }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
+
+      {/* ══ TRENDING DESIGNS ══ */}
+      <section style={{ padding: '72px 24px', background: 'var(--bg)' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 36 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: 8 }}>Latest Drops</div>
+              <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>Trending Designs</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Latest patterns and artworks from our design studio.</p>
+            </div>
+            <Link to="/designs" style={{ fontSize: 12, color: 'var(--teal)', fontWeight: 600, textDecoration: 'none' }}>View Gallery →</Link>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
+            {loading ? (
+              Array(6).fill(0).map((_, i) => (
+                <div key={i} style={{ background: 'var(--surface2)', borderRadius: 10, aspectRatio: '1', animation: 'pulse 1.5s infinite' }} />
+              ))
+            ) : (
+              featuredDesigns.map(d => <DesignCard key={d.id} design={d} />)
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ══ NEWSLETTER ══ */}
+      <section style={{
+        padding: '72px 24px',
+        background: 'linear-gradient(135deg, var(--sidebar-surface2), var(--sidebar-bg))',
+        borderTop: '1px solid var(--sidebar-border)'
+      }}>
+        <div style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
+          <div style={{ width: 50, height: 50, background: 'rgba(61,191,174,0.15)', border: '1px solid var(--sidebar-border)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: 22 }}>📬</div>
+          <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 700, color: '#C8E8E4', marginBottom: 10 }}>Stay Updated</h2>
+          <p style={{ fontSize: 13, color: '#6A9B95', lineHeight: 1.7, marginBottom: 28 }}>
+            Subscribe for the latest design drops, exclusive wholesale offers, and textile industry trends.
+          </p>
+          <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', gap: 10, maxWidth: 420, margin: '0 auto' }}>
+            <input
+              type="email" placeholder="Your email address"
+              style={{
+                flex: 1, background: 'rgba(14,56,53,0.8)',
+                border: '1px solid var(--sidebar-border)', borderRadius: 6,
+                padding: '10px 14px', fontFamily: 'var(--font)', fontSize: 13,
+                color: '#C8E8E4', outline: 'none'
+              }}
+            />
+            <button type="submit" style={{
+              padding: '10px 20px', background: 'var(--teal)', color: '#fff',
+              border: 'none', borderRadius: 6, fontFamily: 'var(--font)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap'
+            }}>Subscribe</button>
+          </form>
+        </div>
+      </section>
+
     </div>
   );
 };
-
-const BenefitCard = ({ icon: Icon, title, desc }) => (
-  <div className="flex flex-col items-center text-center p-8 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 hover:bg-white/10 transition-colors">
-     <div className="h-14 w-14 rounded-full bg-primary/20 flex items-center justify-center mb-6 text-primary">
-        <Icon className="h-7 w-7" />
-     </div>
-     <h3 className="font-semibold text-xl mb-3">{title}</h3>
-     <p className="text-slate-400 leading-relaxed">{desc}</p>
-  </div>
-);
 
 export default HomePage;

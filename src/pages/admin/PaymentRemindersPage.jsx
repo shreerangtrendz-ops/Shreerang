@@ -3,7 +3,9 @@ import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/lib/supabase';
 import { ensureArray } from '@/lib/arrayValidation';
 import { useToast } from '@/components/ui/use-toast';
-import { format, differenceInDays } from 'date-fns';
+
+const fmtDate = (d) => { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }); };
+const daysDiff = (d) => { if (!d) return 0; return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); };
 
 const PaymentRemindersPage = () => {
     const { toast } = useToast();
@@ -33,7 +35,7 @@ const PaymentRemindersPage = () => {
 
     const getDaysOverdue = (due) => {
         if (!due) return 0;
-        return differenceInDays(new Date(), new Date(due));
+        return daysDiff(due);
     };
 
     const sendReminder = async (order) => {
@@ -131,7 +133,7 @@ const PaymentRemindersPage = () => {
                                                     <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{o.phone}</div>
                                                 </td>
                                                 <td className="mono" style={{ fontWeight: 700, color: 'var(--red)' }}>₹{Number(o.outstanding_amount || o.final_amount || 0).toLocaleString()}</td>
-                                                <td className="mono">{o.due_date ? format(new Date(o.due_date), 'dd-MMM-yy') : '—'}</td>
+                                                <td className="mono">{fmtDate(o.due_date)}</td>
                                                 <td>
                                                     {days > 0 ? (
                                                         <span style={{ color: days > 30 ? 'var(--red)' : 'var(--orange)', fontWeight: 700, fontSize: 13 }}>{days}d</span>

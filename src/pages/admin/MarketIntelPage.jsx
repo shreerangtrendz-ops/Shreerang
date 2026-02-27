@@ -3,10 +3,13 @@ import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/lib/supabase';
 import { ensureArray } from '@/lib/arrayValidation';
 import { useToast } from '@/components/ui/use-toast';
-import { format } from 'date-fns';
+
+const todayStr = () => new Date().toISOString().split('T')[0];
+const fmtDate = (d) => { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }); };
+const monthStartStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-01`; };
 
 const inp = { background: 'var(--surface)', border: '1px solid var(--border-teal)', borderRadius: 'var(--r-sm)', padding: '8px 10px', fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', width: '100%', outline: 'none' };
-const empty = { date: format(new Date(), 'yyyy-MM-dd'), source: 'WhatsApp', category: '', supplier_party: '', product: '', old_price: '', new_price: '', unit: 'per meter', notes: '', status: 'pending' };
+const empty = { date: todayStr(), source: 'WhatsApp', category: '', supplier_party: '', product: '', old_price: '', new_price: '', unit: 'per meter', notes: '', status: 'pending' };
 
 const MarketIntelPage = () => {
     const { toast } = useToast();
@@ -87,7 +90,7 @@ const MarketIntelPage = () => {
                         { label: 'Total Entries', value: entries.length, color: 'var(--text)' },
                         { label: 'Price Increases', value: entries.filter(e => (e.price_change || 0) > 0).length, color: 'var(--red)' },
                         { label: 'Price Drops', value: entries.filter(e => (e.price_change || 0) < 0).length, color: 'var(--green)' },
-                        { label: 'This Month', value: entries.filter(e => e.date >= format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd')).length, color: 'var(--teal)' },
+                        { label: 'This Month', value: entries.filter(e => e.date >= monthStartStr()).length, color: 'var(--teal)' },
                     ].map((k, i) => (
                         <div className="kpi-card" key={i}>
                             <div className="kpi-label">{k.label}</div>
@@ -125,7 +128,7 @@ const MarketIntelPage = () => {
                                         const chg = e.price_change || 0;
                                         return (
                                             <tr key={e.id || i}>
-                                                <td className="mono">{e.date ? format(new Date(e.date), 'dd-MMM-yy') : '—'}</td>
+                                                <td className="mono">{fmtDate(e.date)}</td>
                                                 <td><span className="badge bblue">{e.category || '—'}</span></td>
                                                 <td style={{ fontSize: 11 }}>{e.product || '—'}</td>
                                                 <td style={{ fontSize: 11, fontWeight: 500 }}>{e.supplier_party || '—'}</td>

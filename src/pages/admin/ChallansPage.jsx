@@ -3,7 +3,9 @@ import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/lib/supabase';
 import { ensureArray } from '@/lib/arrayValidation';
 import { useToast } from '@/components/ui/use-toast';
-import { format } from 'date-fns';
+
+const fmtDate = (d) => { if (!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }); };
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 const STATUS_COLORS = {
     'open': { bg: 'var(--teal-dim)', color: 'var(--teal)', label: 'Open' },
@@ -12,7 +14,7 @@ const STATUS_COLORS = {
     'partial': { bg: 'var(--amber-dim)', color: 'var(--amber)', label: 'Partial Rcvd' },
 };
 
-const empty = { challan_number: '', date: format(new Date(), 'yyyy-MM-dd'), party_name: '', process_type: '', fabric_description: '', quantity_sent: '', unit: 'meters', status: 'open', notes: '' };
+const empty = { challan_number: '', date: todayStr(), party_name: '', process_type: '', fabric_description: '', quantity_sent: '', unit: 'meters', status: 'open', notes: '' };
 const inp = { background: 'var(--surface)', border: '1px solid var(--border-teal)', borderRadius: 'var(--r-sm)', padding: '8px 10px', fontFamily: 'var(--font)', fontSize: 12, color: 'var(--text)', width: '100%', outline: 'none' };
 
 const ChallansPage = () => {
@@ -151,7 +153,7 @@ const ChallansPage = () => {
                                         return (
                                             <tr key={c.id || i}>
                                                 <td><span className="mono" style={{ color: 'var(--teal)', fontWeight: 600 }}>{c.challan_number}</span></td>
-                                                <td className="mono">{c.date ? format(new Date(c.date), 'dd-MMM-yy') : '—'}</td>
+                                                <td className="mono">{fmtDate(c.date)}</td>
                                                 <td style={{ fontWeight: 500 }}>{c.party_name}</td>
                                                 <td><span className="badge bblue">{c.process_type || '—'}</span></td>
                                                 <td style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 180 }}>{c.fabric_description || '—'}</td>

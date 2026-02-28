@@ -207,7 +207,7 @@ const ChallansPage = () => {
                                 </select>
                             </F>
                             <F label="Fabric Description" col="1 / -1">
-                                <textarea value={form.fabric_description} onChange={e => setForm({ ...form, fabric_description: e.target.value })} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. 58\" PC Dyed Schiffli Grey" />
+                                <textarea value={form.fabric_description} onChange={e => setForm({ ...form, fabric_description: e.target.value })} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="e.g. 58&quot; PC Dyed Schiffli Grey" />
                             </F>
                             <F label="Notes" col="1 / -1">
                                 <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inp, resize: 'vertical' }} />

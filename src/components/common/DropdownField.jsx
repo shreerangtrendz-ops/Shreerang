@@ -5,21 +5,21 @@ import { Plus, Check, X, ChevronDown } from 'lucide-react';
 import { DropdownService } from '@/services/DropdownService';
 import { useToast } from '@/components/ui/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { 
-  Command, 
-  CommandEmpty, 
-  CommandGroup, 
-  CommandInput, 
-  CommandItem 
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem
 } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 
-const DropdownField = ({ 
-  fieldName, 
-  value, 
-  onChange, 
-  fabricCategory, 
-  placeholder = "Select option", 
+const DropdownField = ({
+  fieldName,
+  value,
+  onChange,
+  fabricCategory,
+  placeholder = "Select option",
   disabled = false,
   className
 }) => {
@@ -27,7 +27,7 @@ const DropdownField = ({
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
-  
+
   // New Option State
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionSKU, setNewOptionSKU] = useState('');
@@ -62,19 +62,19 @@ const DropdownField = ({
 
     try {
       const newOption = await DropdownService.addDropdownOption(
-        fieldName, 
-        newOptionName, 
-        newOptionSKU, 
+        fieldName,
+        newOptionName,
+        newOptionSKU,
         fabricCategory
       );
-      
+
       setOptions([...options, newOption]);
       onChange(newOption);
       setIsAddingNew(false);
       setNewOptionName('');
       setNewOptionSKU('');
       setOpen(false);
-      
+
       toast({
         title: 'Success',
         description: 'New option added successfully.'
@@ -107,7 +107,7 @@ const DropdownField = ({
             <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
+        <PopoverContent className="w-[300px] p-0 bg-white shadow-md z-50">
           <Command>
             <CommandInput placeholder={`Search ${fieldName}...`} className="h-9" />
             <CommandEmpty>No option found.</CommandEmpty>
@@ -131,19 +131,19 @@ const DropdownField = ({
                 </CommandItem>
               ))}
             </CommandGroup>
-            
+
             {/* Add New Section */}
             <div className="p-2 border-t mt-1 bg-slate-50">
               {isAddingNew ? (
                 <div className="space-y-2 p-1">
-                  <Input 
-                    placeholder="New Option Name" 
+                  <Input
+                    placeholder="New Option Name"
                     value={newOptionName}
                     onChange={(e) => setNewOptionName(e.target.value)}
                     className="h-8 text-sm"
                   />
-                  <Input 
-                    placeholder="SKU Code (e.g. CTN)" 
+                  <Input
+                    placeholder="SKU Code (e.g. CTN)"
                     value={newOptionSKU}
                     onChange={(e) => setNewOptionSKU(e.target.value)}
                     className="h-8 text-sm"
@@ -158,9 +158,9 @@ const DropdownField = ({
                   </div>
                 </div>
               ) : (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   className="w-full justify-start text-blue-600 hover:text-blue-700"
                   onClick={() => setIsAddingNew(true)}
                 >

@@ -60,6 +60,9 @@ import HSNCodeMaster from '@/pages/admin/settings/HSNCodeMaster';
 import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
 import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
 
+// ── Admin: Integrations ──
+import CloudSyncPage from '@/pages/admin/integrations/CloudSyncPage';
+
 // ── Admin: New Functional Pages ──
 import CustomerMasterPage from '@/pages/admin/CustomerMasterPage';
 import ChallansPage from '@/pages/admin/ChallansPage';
@@ -157,7 +160,7 @@ const App = () => {
 
                     {/* Integrations */}
                     <Route path="whatsapp" element={<ComingSoonPage title="WhatsApp Bot" icon="💬" desc="Manage AI WhatsApp sales bot — conversation logs, auto-reply config, design sharing flow, and pricing escalation timers." breadcrumb="Integrations → WhatsApp Bot" />} />
-                    <Route path="cloud-sync" element={<ComingSoonPage title="Cloud Storage" icon="☁️" desc="Google Drive and Bunny.net CDN sync. View storage usage, sync status, and resolve failed uploads." breadcrumb="Integrations → Cloud Storage" />} />
+                    <Route path="cloud-sync" element={<CloudSyncPage />} />
                     <Route path="ai-pricing" element={<ComingSoonPage title="AI Price Sync" icon="🤖" desc="AI-powered pricing suggestions based on market data and cost trends. One-click approve to update price database." breadcrumb="Integrations → AI Price Sync" />} />
 
                     {/* Settings */}

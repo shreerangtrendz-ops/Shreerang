@@ -69,6 +69,7 @@ import ChallansPage from '@/pages/admin/ChallansPage';
 import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
 import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
 import MarketIntelPage from '@/pages/admin/MarketIntelPage';
+import FieldVisitTrackerPage from '@/pages/admin/FieldVisitTrackerPage';
 
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 
@@ -153,7 +154,7 @@ const App = () => {
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
 
                     {/* CRM & Access */}
-                    <Route path="field-visits" element={<ComingSoonPage title="Field Visit Tracker" icon="📍" desc="Sales executive GPS check-in with visit purpose, notes, follow-up date, and photo proof-of-visit." breadcrumb="CRM → Field Visits" />} />
+                    <Route path="field-visits" element={<FieldVisitTrackerPage />} />
                     <Route path="team-tracker" element={<ComingSoonPage title="Sales Team Map" icon="🗺" desc="Real-time location of your sales team on Google Maps. See who's online, last check-in, and visit count." breadcrumb="CRM → Sales Team Map" />} />
                     <Route path="customer-portal" element={<ComingSoonPage title="Customer Portal Access" icon="🔐" desc="Control which design categories each customer can view on their private portal — category toggles and individual overrides." breadcrumb="CRM → Customer Portal" />} />
                     <Route path="access-control" element={<ComingSoonPage title="Access Control" icon="🛡" desc="Manage role permissions for Sales Executive, Manager, and Admin. Area-based CRM restrictions and module-level controls." breadcrumb="CRM → Access Control" />} />

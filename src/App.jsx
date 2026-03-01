@@ -10,7 +10,6 @@ import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorLogger from '@/lib/errorLogger';
 import ComingSoonPage from '@/components/admin/ComingSoonPage';
-
 // ── Public Pages ──
 import HomePage from '@/pages/HomePage';
 import ShopPage from '@/pages/ShopPage';
@@ -22,24 +21,19 @@ import ContactPage from '@/pages/ContactPage';
 import WholesalePortalPage from '@/pages/WholesalePortalPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
-
 // ── Admin Core ──
 import AdminLayout from '@/components/admin/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
-
 // ── Admin: Dashboard ──
 import AdminDashboard from '@/pages/admin/AdminDashboard';
-
 // ── Admin: Fabric Master ──
 import BaseFabricForm from '@/pages/admin/fabric/BaseFabricForm';
 import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
 import FancyFinishFabricForm from '@/pages/admin/fabric/FancyFinishFabricForm';
 import FancyBaseFabricForm from '@/pages/admin/fabric/FancyBaseFabricForm';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
-
 // ── Admin: Images ──
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
-
 // ── Admin: Cost Engine ──
 import PurchaseEntryPage from '@/pages/admin/cost/PurchaseEntryPage';
 import ProcessEntryPage from '@/pages/admin/cost/ProcessEntryPage';
@@ -48,21 +42,20 @@ import CostSheetPage from '@/pages/admin/cost/CostSheetPage';
 import HakobaBatchCalculator from '@/pages/admin/cost/HakobaBatchCalculator';
 import PriceDatabasePage from '@/pages/admin/pricing/PriceDatabasePage';
 import ReadymadeGarmentCostSheet from '@/pages/admin/costing/ReadymadeGarmentCostSheet';
-
 // ── Admin: Settings ──
 import RateCardPage from '@/pages/admin/settings/RateCardPage';
 import DropdownManager from '@/pages/admin/settings/DropdownManager';
 import JobUnitsPage from '@/pages/admin/unit-management/JobUnitsPage';
 import SuppliersManager from '@/pages/admin/settings/SuppliersManager';
 import HSNCodeMaster from '@/pages/admin/settings/HSNCodeMaster';
-
 // ── Admin: Sales & Orders ──
 import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
 import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
-
 // ── Admin: Integrations ──
 import CloudSyncPage from '@/pages/admin/integrations/CloudSyncPage';
-
+import TallyPrimePage from '@/pages/admin/integrations/TallyPrimePage';
+import GoogleDrivePage from '@/pages/admin/integrations/GoogleDrivePage';
+import BunnyNetPage from '@/pages/admin/integrations/BunnyNetPage';
 // ── Admin: New Functional Pages ──
 import CustomerMasterPage from '@/pages/admin/CustomerMasterPage';
 import ChallansPage from '@/pages/admin/ChallansPage';
@@ -70,7 +63,14 @@ import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
 import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
 import MarketIntelPage from '@/pages/admin/MarketIntelPage';
 import FieldVisitTrackerPage from '@/pages/admin/FieldVisitTrackerPage';
-
+import Customer360Page from '@/pages/admin/Customer360Page';
+import CalendarVisitsPage from '@/pages/admin/CalendarVisitsPage';
+import WhatsAppBotPage from '@/pages/admin/WhatsAppBotPage';
+import AIPriceSyncPage from '@/pages/admin/AIPriceSyncPage';
+import SalesTeamMapPage from '@/pages/admin/SalesTeamMapPage';
+import MakeToOrderPage from '@/pages/admin/MakeToOrderPage';
+import CustomerPortalAccessPage from '@/pages/admin/CustomerPortalAccessPage';
+import AccessControlPage from '@/pages/admin/AccessControlPage';
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 
 const App = () => {
@@ -90,7 +90,6 @@ const App = () => {
             <CartProvider>
               <React.Suspense fallback={<div className="h-screen w-full flex items-center justify-center"><LoadingSpinner /></div>}>
                 <Routes>
-
                   {/* ═══════════════════ PUBLIC ROUTES ═══════════════════ */}
                   <Route element={<CustomerLayout />}>
                     <Route path="/" element={<HomePage />} />
@@ -124,7 +123,7 @@ const App = () => {
                     {/* Design Catalogue */}
                     <Route path="images/upload" element={<ImageUploadPage />} />
                     <Route path="design-velocity" element={<DesignVelocityPage />} />
-                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="🗂" desc="Master catalogue of all finished products across Mill Print, Digital Print, Schiffli, and Readymade Garment verticals." breadcrumb="Design Catalogue → Product Master" />} />
+                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="🗂" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue → Product Master" />} />
 
                     {/* Cost Engine */}
                     <Route path="cost/purchase-entry" element={<PurchaseEntryPage />} />
@@ -136,7 +135,7 @@ const App = () => {
                     <Route path="garment-cost" element={<ReadymadeGarmentCostSheet />} />
 
                     {/* Store */}
-                    <Route path="store-sync" element={<ComingSoonPage title="Store Sync" icon="🛒" desc="Sync approved designs directly to the Shreerangtrendz.com storefront. Control visibility, pricing, and stock levels." breadcrumb="Store → Store Sync" />} />
+                    <Route path="store-sync" element={<ComingSoonPage title="Store Sync" icon="🛒" desc="Sync approved designs directly to the storefront." breadcrumb="Store → Store Sync" />} />
 
                     {/* Operations */}
                     <Route path="order-database/sales" element={<StoreManagerOrders />} />
@@ -144,25 +143,28 @@ const App = () => {
                     <Route path="challans" element={<ChallansPage />} />
                     <Route path="customers" element={<CustomerMasterPage />} />
                     <Route path="market-intel" element={<MarketIntelPage />} />
-                    <Route path="mto-orders" element={<ComingSoonPage title="Make-to-Order Pipeline" icon="🎯" desc="Track MTO enquiries from Enquiry → Quoted → Confirmed → In Production → Dispatched → Delivered, linked to Cost Sheet and Challans." breadcrumb="Operations → Make-to-Order" />} />
+                    <Route path="mto-orders" element={<MakeToOrderPage />} />
 
                     {/* Smart Features */}
-                    <Route path="calendar" element={<ComingSoonPage title="Calendar & Visits" icon="📅" desc="Schedule field visits, customer appointments, follow-ups, and team check-ins in a unified calendar." breadcrumb="Smart Features → Calendar" />} />
-                    <Route path="supplier-price-ai" element={<ComingSoonPage title="WA Price Alerts" icon="🔔" desc="AI-detected price changes from supplier WhatsApp messages. Review and approve before updating cost database." breadcrumb="Smart Features → WA Price Alerts" />} />
-                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="🌐" desc="Send WhatsApp messages and catalogue PDFs in Hindi, Gujarati, and other regional languages." breadcrumb="Smart Features → Multilingual" />} />
-                    <Route path="customer-360" element={<ComingSoonPage title="Customer 360°" icon="🏦" desc="Full customer view — order history, outstanding balance, design access, visit log, WhatsApp summary, and payment reminders." breadcrumb="Smart Features → Customer 360°" />} />
+                    <Route path="calendar" element={<CalendarVisitsPage />} />
+                    <Route path="supplier-price-ai" element={<AIPriceSyncPage />} />
+                    <Route path="ai-pricing" element={<AIPriceSyncPage />} />
+                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="🌐" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features → Multilingual" />} />
+                    <Route path="customer-360" element={<Customer360Page />} />
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
 
                     {/* CRM & Access */}
                     <Route path="field-visits" element={<FieldVisitTrackerPage />} />
-                    <Route path="team-tracker" element={<ComingSoonPage title="Sales Team Map" icon="🗺" desc="Real-time location of your sales team on Google Maps. See who's online, last check-in, and visit count." breadcrumb="CRM → Sales Team Map" />} />
-                    <Route path="customer-portal" element={<ComingSoonPage title="Customer Portal Access" icon="🔐" desc="Control which design categories each customer can view on their private portal — category toggles and individual overrides." breadcrumb="CRM → Customer Portal" />} />
-                    <Route path="access-control" element={<ComingSoonPage title="Access Control" icon="🛡" desc="Manage role permissions for Sales Executive, Manager, and Admin. Area-based CRM restrictions and module-level controls." breadcrumb="CRM → Access Control" />} />
+                    <Route path="team-tracker" element={<SalesTeamMapPage />} />
+                    <Route path="customer-portal" element={<CustomerPortalAccessPage />} />
+                    <Route path="access-control" element={<AccessControlPage />} />
 
                     {/* Integrations */}
-                    <Route path="whatsapp" element={<ComingSoonPage title="WhatsApp Bot" icon="💬" desc="Manage AI WhatsApp sales bot — conversation logs, auto-reply config, design sharing flow, and pricing escalation timers." breadcrumb="Integrations → WhatsApp Bot" />} />
+                    <Route path="whatsapp" element={<WhatsAppBotPage />} />
                     <Route path="cloud-sync" element={<CloudSyncPage />} />
-                    <Route path="ai-pricing" element={<ComingSoonPage title="AI Price Sync" icon="🤖" desc="AI-powered pricing suggestions based on market data and cost trends. One-click approve to update price database." breadcrumb="Integrations → AI Price Sync" />} />
+                    <Route path="tally-sync" element={<TallyPrimePage />} />
+                    <Route path="google-drive" element={<GoogleDrivePage />} />
+                    <Route path="bunny-cdn" element={<BunnyNetPage />} />
 
                     {/* Settings */}
                     <Route path="settings/rate-card" element={<RateCardPage />} />
@@ -178,7 +180,6 @@ const App = () => {
 
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
-
                 <CartDrawer />
                 <Toaster />
                 {!window.location.pathname.startsWith('/admin') && <WhatsAppWidget />}

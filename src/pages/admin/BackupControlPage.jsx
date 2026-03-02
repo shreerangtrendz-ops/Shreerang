@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase';
 // Add route in App.jsx: /admin/backup-control
 // ============================================================
 
-const BACKUP_PIN = '786786'; // 🔐 Change this to your secret PIN
+const BACKUP_PIN = '925937'; // 🔐 Change this to your secret PIN
 
 export default function BackupControlPage() {
   const [pinVerified, setPinVerified] = useState(false);
@@ -47,7 +47,7 @@ export default function BackupControlPage() {
 
   // ── FETCH GIT COMMITS ─────────────────────────────────────
   // Replace GITHUB_OWNER and GITHUB_REPO with your values
-  const GITHUB_OWNER = 'shreerangtrendz';
+  const GITHUB_OWNER = 'shreerangtrendz-ops';
   const GITHUB_REPO = 'Shreerang';
 
   const fetchCommits = async () => {

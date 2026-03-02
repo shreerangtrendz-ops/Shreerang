@@ -72,7 +72,7 @@ import MakeToOrderPage from '@/pages/admin/MakeToOrderPage';
 import CustomerPortalAccessPage from '@/pages/admin/CustomerPortalAccessPage';
 import AccessControlPage from '@/pages/admin/AccessControlPage';
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
-
+import BackupControlPage from '@/pages/admin/BackupControlPage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -165,7 +165,8 @@ const App = () => {
                     <Route path="tally-sync" element={<TallyPrimePage />} />
                     <Route path="google-drive" element={<GoogleDrivePage />} />
                     <Route path="bunny-cdn" element={<BunnyNetPage />} />
-
+                    {/* Backup Control */}
+                    <Route path="backup-control" element={<BackupControlPage />} />
                     {/* Settings */}
                     <Route path="settings/rate-card" element={<RateCardPage />} />
                     <Route path="settings/dropdown-manager" element={<DropdownManager />} />
@@ -173,7 +174,6 @@ const App = () => {
                     <Route path="settings/suppliers" element={<SuppliersManager />} />
                     <Route path="settings/hsn-codes" element={<HSNCodeMaster />} />
                     <Route path="sales/quick-price" element={<QuickPriceCheckPage />} />
-
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Route>

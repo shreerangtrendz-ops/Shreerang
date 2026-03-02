@@ -130,7 +130,7 @@ const Navbar = () => {
               style={{ ...iconBtn }}
               onClick={() => setIsOpen(!isOpen)}
             >
-              {isOpen ? <X style={{ width: 18, height: 18, color: '#C8E8E4' }} /> : <Menu style={{ width: 18, height: 18, color: '#C8E8E4' }} />}
+              {isOpen ? <X style={{ width: 18, height: 18, color: '#FFFFFF' }} /> : <Menu style={{ width: 18, height: 18, color: '#C8E8E4' }} />}
             </button>
           </div>
         </div>
@@ -150,11 +150,21 @@ const Navbar = () => {
               >{link.name}</Link>
             ))}
             <div style={{ padding: '10px 16px', borderTop: '1px solid var(--sidebar-border)', marginTop: 8 }}>
-              {user ? (
-                <button onClick={handleSignOut} style={{ color: 'var(--red)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  Sign Out
-                </button>
-              ) : (
+            {user ? (
+  <>
+    {profile?.role === 'admin' && (
+      <Link
+        to="/admin"
+        onClick={() => setIsOpen(false)}
+        style={{ display: 'block', padding: '10px 16px', fontSize: 13, color: 'var(--teal-bright)', textDecoration: 'none', fontWeight: 600 }}
+      >
+        🛡️ Dashboard
+      </Link>
+    )}
+    <button onClick={handleSignOut} style={{ color: 'var(--red)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 16px', display: 'block' }}>
+      Sign Out
+    </button>
+  </>              ) : (
                 <Link to="/login" onClick={() => setIsOpen(false)} style={{ color: 'var(--teal-bright)', fontSize: 13, textDecoration: 'none', fontWeight: 600 }}>
                   Login / Register
                 </Link>

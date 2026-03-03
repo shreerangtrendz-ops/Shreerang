@@ -77,30 +77,103 @@ export default function TallyPrimePage() {
       outstanding: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Bills Receivable</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
       vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
     };
+
+    // Helper: extract single XML tag value
+    const xml = (tag, text) => { const m = text.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 's')); return m ? m[1].trim() : ''; };
+    // Helper: extract all blocks of a repeated XML tag
+    const xmlAll = (tag, text) => [...text.matchAll(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, 'gs'))].map(m => m[1].trim());
+    // Helper: parse YYYYMMDD → ISO date
+    const tallyDate = (d) => (d && d.length >= 8) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : null;
+
     try {
       const res = await fetch(TALLY_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
         body: xmlRequests[type] || xmlRequests.ledgers
       });
-      if (res.ok) {
-        const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        // Define regex for counting records based on sync type
-        const countRegex = {
-          ledgers: /<\/LEDGER>/g,
-          vouchers: /<\/VOUCHER>/g,
-          stock: /<\/STOCKITEM>/g,
-          outstanding: /<\/BILLFIXED>/g
-        };
-        const recordCount = (text.match(countRegex[type] || countRegex.ledgers) || []).length;
+      const text = await res.text();
+      let recordCount = 0;
+      let saveError = null;
 
-        await supabase.from('tally_sync_log').insert([{
-          sync_type: type, status: 'success', records_synced: recordCount,
-          raw_response: text.slice(0, 500)
-        }]);
-        fetchSyncLog();
+      // ── VOUCHERS → orders table ──────────────────────────────────────
+      if (type === 'vouchers') {
+        const blocks = xmlAll('VOUCHER', text);
+        const rows = blocks.map(v => ({
+          order_number: xml('VOUCHERNUMBER', v) || xml('GUID', v),
+          customer_name: xml('PARTYLEDGERNAME', v),
+          final_amount: Math.abs(parseFloat(xml('AMOUNT', v)) || 0),
+          status: xml('VOUCHERTYPE', v) === 'Sales' ? 'pending' : (xml('VOUCHERTYPE', v).toLowerCase() || 'pending'),
+          tally_voucher_type: xml('VOUCHERTYPE', v),
+          created_at: tallyDate(xml('DATE', v)) || new Date().toISOString(),
+          source: 'tally',
+        })).filter(r => r.order_number && r.customer_name);
+
+        if (rows.length > 0) {
+          const { error } = await supabase.from('orders')
+            .upsert(rows, { onConflict: 'order_number', ignoreDuplicates: false });
+          if (error) saveError = error.message;
+          else recordCount = rows.length;
+        }
       }
+
+      // ── LEDGERS → user_profiles as customers ─────────────────────────
+      else if (type === 'ledgers') {
+        const blocks = xmlAll('LEDGER', text);
+        const rows = blocks.map(v => ({
+          full_name: xml('NAME', v) || xml('LEDGERNAME', v),
+          firm_name: xml('NAME', v),
+          address: xml('ADDRESS', v),
+          gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v),
+          role: 'customer',
+          source: 'tally',
+          is_approved: true,
+        })).filter(r => r.full_name && r.full_name.length > 1 && (r.gst_number || '').length > 0);
+
+        if (rows.length > 0) {
+          const { error } = await supabase.from('user_profiles')
+            .upsert(rows, { onConflict: 'gst_number', ignoreDuplicates: true });
+          if (error) saveError = error.message;
+          else recordCount = rows.length;
+        }
+      }
+
+      // ── STOCK ITEMS → fabric_master table ────────────────────────────
+      else if (type === 'stock') {
+        const blocks = xmlAll('STOCKITEM', text);
+        const rows = blocks.map(v => ({
+          name: xml('NAME', v),
+          type: 'Tally Stock',
+          unit: xml('BASEUNITS', v) || 'Mtr',
+          stock_quantity: parseFloat(xml('OPENINGBALANCE', v)) || 0,
+          source: 'tally',
+        })).filter(r => r.name && r.name.length > 1);
+
+        if (rows.length > 0) {
+          const { error } = await supabase.from('fabric_master')
+            .upsert(rows, { onConflict: 'name', ignoreDuplicates: false });
+          if (error) saveError = error.message;
+          else recordCount = rows.length;
+        }
+      }
+
+      // ── OUTSTANDING → count only (Bills Receivable is a report view) ─
+      else if (type === 'outstanding') {
+        recordCount = (text.match(/<\/BILLFIXED>/g) || []).length ||
+          (text.match(/<\/BILL>/g) || []).length;
+      }
+
+      // Save to sync log
+      await supabase.from('tally_sync_log').insert([{
+        sync_type: type,
+        status: saveError ? 'partial' : 'success',
+        records_synced: recordCount,
+        error_message: saveError,
+        raw_response: text.slice(0, 500)
+      }]);
+      fetchSyncLog();
+
     } catch (e) {
       await supabase.from('tally_sync_log').insert([{ sync_type: type, status: 'failed', error_message: e.message }]);
       fetchSyncLog();

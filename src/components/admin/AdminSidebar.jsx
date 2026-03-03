@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
-const TALLY_URL = 'https://yvone-unincreased-wilford.ngrok-free.dev/';
+const TALLY_URL = 'https://tally.shreerangtrendz.com/';
 
 const navGroups = [
   {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const TALLY_NGROK = import.meta.env.VITE_TALLY_NGROK_URL || 'https://yvone-unincreased-wilford.ngrok-free.dev';
+const TALLY_NGROK = import.meta.env.VITE_TALLY_NGROK_URL || 'https://tally.shreerangtrendz.com';
 
 export default function TallyPrimePage() {
   const [tab, setTab] = useState('status');
@@ -30,7 +30,7 @@ export default function TallyPrimePage() {
         if (match) setTallyCompany(match[1]);
         setConnected(true);
       }
-    } catch(e) { setConnected(false); }
+    } catch (e) { setConnected(false); }
     setLoading(false);
   }
 
@@ -44,7 +44,7 @@ export default function TallyPrimePage() {
     setLoading(true);
     const xmlRequests = {
       ledgers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Ledgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g,'').slice(0,8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+      vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
     };
     try {
       const res = await fetch(`${TALLY_NGROK}/`, {
@@ -60,7 +60,7 @@ export default function TallyPrimePage() {
         }]);
         fetchSyncLog();
       }
-    } catch(e) {
+    } catch (e) {
       await supabase.from('tally_sync_log').insert([{ sync_type: type, status: 'failed', error_message: e.message }]);
       fetchSyncLog();
     }
@@ -207,7 +207,7 @@ export default function TallyPrimePage() {
             {[
               { step: 1, title: 'Install ngrok on your Tally PC', desc: 'Download ngrok from ngrok.com and install it on the computer running Tally Prime.' },
               { step: 2, title: 'Enable Tally XML Server', desc: 'In Tally Prime → F12 → Advanced Configuration → Enable ODBC/XML Port. Set port to 9000.' },
-              { step: 3, title: 'Start ngrok tunnel', desc: 'Run: ngrok http 9000 --domain=yvone-unincreased-wilford.ngrok-free.app in terminal.' },
+              { step: 3, title: 'Start ngrok tunnel', desc: 'Run: ngrok http 9000 --domain=tally.shreerangtrendz.com in terminal.' },
               { step: 4, title: 'Test connection', desc: 'Click "Test Connection" above. You should see Connected status and your company name.' },
               { step: 5, title: 'Start syncing data', desc: 'Use the Data Sync tab to pull ledgers, vouchers, and outstanding data from Tally.' },
             ].map(s => (

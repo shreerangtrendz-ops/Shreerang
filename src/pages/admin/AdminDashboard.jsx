@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { DashboardService } from '@/services/DashboardService';
 import { ensureArray } from '@/lib/arrayValidation';
 
-const TALLY_URL = 'https://yvone-unincreased-wilford.ngrok-free.dev/';
+const TALLY_URL = 'https://tally.shreerangtrendz.com/';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();

@@ -118,21 +118,21 @@ export default function TallyPrimePage() {
         }
       }
 
-      // ── LEDGERS → user_profiles as customers ─────────────────────────
+      // ── LEDGERS → customers table ─────────────────────────────────────
       else if (type === 'ledgers') {
         const blocks = xmlAll('LEDGER', text);
         const rows = blocks.map(v => ({
-          full_name: xml('NAME', v) || xml('LEDGERNAME', v),
-          firm_name: xml('NAME', v),
-          address: xml('ADDRESS', v),
-          gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v),
-          role: 'customer',
+          name: xml('NAME', v) || xml('LEDGERNAME', v),
+          company_name: xml('NAME', v),
+          address: xml('ADDRESS', v) || null,
+          gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
+          city: xml('LEDGERCITY', v) || null,
           source: 'tally',
-          is_approved: true,
-        })).filter(r => r.full_name && r.full_name.length > 1 && (r.gst_number || '').length > 0);
+          status: 'active',
+        })).filter(r => r.name && r.name.length > 1);
 
         if (rows.length > 0) {
-          const { error } = await supabase.from('user_profiles')
+          const { error } = await supabase.from('customers')
             .upsert(rows, { onConflict: 'gst_number', ignoreDuplicates: true });
           if (error) saveError = error.message;
           else recordCount = rows.length;

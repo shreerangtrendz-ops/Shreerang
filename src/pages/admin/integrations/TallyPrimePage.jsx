@@ -173,7 +173,7 @@ export default function TallyPrimePage() {
             <h3 className="font-semibold text-gray-900 mb-3">Connection Details</h3>
             <div className="space-y-2 text-sm">
               {[
-                { label: 'Tally FRP Tunnel', value: 'tally.shreerangtrendz.com (via proxy)' },
+                { label: 'FRP Tunnel', value: 'tally.shreerangtrendz.com' },
                 { label: 'Status', value: connected ? '✅ Connected' : '❌ Disconnected' },
                 { label: 'Company', value: tallyCompany || 'Not detected' },
                 { label: 'Last Sync', value: lastSync ? new Date(lastSync).toLocaleString('en-IN') : 'Never' },

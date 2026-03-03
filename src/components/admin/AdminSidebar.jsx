@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
-const TALLY_URL = 'https://tally.shreerangtrendz.com/';
 
 const navGroups = [
   {
@@ -77,7 +76,7 @@ const navGroups = [
     label: 'Integrations',
     items: [
       { icon: '💬', label: 'WhatsApp Bot', to: '/admin/whatsapp', nb: 'ON', nbClass: 'ok' },
-      { icon: '📊', label: 'Tally Prime', href: TALLY_URL, nb: 'SYNC', nbClass: 'ok' },
+      { icon: '📊', label: 'Tally Prime', to: '/admin/tally-prime', nb: 'SYNC', nbClass: 'ok' },
       { icon: '☁️', label: 'Cloud Storage', to: '/admin/cloud-sync' },
       { icon: '🤖', label: 'AI Price Sync', to: '/admin/ai-pricing' },
     ]

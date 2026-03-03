@@ -162,6 +162,7 @@ const App = () => {
                     {/* Integrations */}
                     <Route path="whatsapp" element={<WhatsAppBotPage />} />
                     <Route path="cloud-sync" element={<CloudSyncPage />} />
+                    <Route path="tally-prime" element={<TallyPrimePage />} />
                     <Route path="tally-sync" element={<TallyPrimePage />} />
                     <Route path="google-drive" element={<GoogleDrivePage />} />
                     <Route path="bunny-cdn" element={<BunnyNetPage />} />

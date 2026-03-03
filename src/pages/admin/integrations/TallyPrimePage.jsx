@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const TALLY_NGROK = import.meta.env.VITE_TALLY_NGROK_URL || 'https://tally.shreerangtrendz.com';
+const TALLY_PROXY = '/api/tally-proxy';
 
 export default function TallyPrimePage() {
   const [tab, setTab] = useState('status');
@@ -19,7 +19,7 @@ export default function TallyPrimePage() {
   async function checkConnection() {
     setLoading(true);
     try {
-      const res = await fetch(`${TALLY_NGROK}/`, {
+      const res = await fetch(TALLY_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
         body: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC></DESC></BODY></ENVELOPE>`
@@ -47,7 +47,7 @@ export default function TallyPrimePage() {
       vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
     };
     try {
-      const res = await fetch(`${TALLY_NGROK}/`, {
+      const res = await fetch(TALLY_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
         body: xmlRequests[type] || xmlRequests.ledgers
@@ -78,7 +78,7 @@ export default function TallyPrimePage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Tally Prime Integration</h1>
-        <p className="text-gray-500 text-sm mt-1">Sync accounting data between Shreerang and Tally Prime via ngrok</p>
+        <p className="text-gray-500 text-sm mt-1">Sync accounting data between Shreerang and Tally Prime via FRP Tunnel</p>
       </div>
 
       <div className={`flex items-center gap-3 p-4 rounded-xl border mb-6 ${connected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
@@ -88,7 +88,7 @@ export default function TallyPrimePage() {
             {connected ? `Connected to Tally Prime${tallyCompany ? ` — ${tallyCompany}` : ''}` : 'Tally Prime Not Connected'}
           </p>
           <p className={`text-xs ${connected ? 'text-green-600' : 'text-red-600'}`}>
-            {connected ? 'Tally ngrok tunnel is active and responsive' : `Cannot reach ${TALLY_NGROK}. Ensure Tally is running and ngrok is active.`}
+            {connected ? 'Tally FRP Tunnel is active and responsive' : 'Cannot reach Tally. Ensure Tally is running and FRP Tunnel is active.'}
           </p>
         </div>
         <button onClick={checkConnection} disabled={loading}
@@ -112,7 +112,7 @@ export default function TallyPrimePage() {
             <h3 className="font-semibold text-gray-900 mb-3">Connection Details</h3>
             <div className="space-y-2 text-sm">
               {[
-                { label: 'Tally ngrok URL', value: TALLY_NGROK },
+                { label: 'Tally FRP Tunnel', value: 'tally.shreerangtrendz.com (via proxy)' },
                 { label: 'Status', value: connected ? '✅ Connected' : '❌ Disconnected' },
                 { label: 'Company', value: tallyCompany || 'Not detected' },
                 { label: 'Last Sync', value: lastSync ? new Date(lastSync).toLocaleString('en-IN') : 'Never' },
@@ -205,9 +205,9 @@ export default function TallyPrimePage() {
           <h3 className="font-semibold text-gray-900 text-lg">Tally Prime Setup Guide</h3>
           <div className="space-y-4">
             {[
-              { step: 1, title: 'Install ngrok on your Tally PC', desc: 'Download ngrok from ngrok.com and install it on the computer running Tally Prime.' },
+              { step: 1, title: 'Install FRP on your Tally PC', desc: 'Set up FRP (Fast Reverse Proxy) on the computer running Tally Prime to expose it via tally.shreerangtrendz.com.' },
               { step: 2, title: 'Enable Tally XML Server', desc: 'In Tally Prime → F12 → Advanced Configuration → Enable ODBC/XML Port. Set port to 9000.' },
-              { step: 3, title: 'Start ngrok tunnel', desc: 'Run: ngrok http 9000 --domain=tally.shreerangtrendz.com in terminal.' },
+              { step: 3, title: 'Start FRP Tunnel', desc: 'Run your FRP client with server domain tally.shreerangtrendz.com pointing to localhost:9000.' },
               { step: 4, title: 'Test connection', desc: 'Click "Test Connection" above. You should see Connected status and your company name.' },
               { step: 5, title: 'Start syncing data', desc: 'Use the Data Sync tab to pull ledgers, vouchers, and outstanding data from Tally.' },
             ].map(s => (
@@ -223,9 +223,9 @@ export default function TallyPrimePage() {
             ))}
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-            <p className="text-xs text-blue-700 font-medium">Current ngrok URL configured:</p>
-            <p className="text-xs text-blue-600 font-mono mt-1 break-all">{TALLY_NGROK}</p>
-            <p className="text-xs text-blue-500 mt-1">Update VITE_TALLY_NGROK_URL in .env if your ngrok URL changes</p>
+            <p className="text-xs text-blue-700 font-medium">Current FRP Tunnel endpoint:</p>
+            <p className="text-xs text-blue-600 font-mono mt-1 break-all">tally.shreerangtrendz.com → routed via /api/tally-proxy</p>
+            <p className="text-xs text-blue-500 mt-1">All Tally API calls are proxied through Vercel to avoid CORS issues.</p>
           </div>
         </div>
       )}

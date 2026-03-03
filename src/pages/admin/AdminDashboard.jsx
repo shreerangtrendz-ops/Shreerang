@@ -15,8 +15,17 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalFabrics: 0, totalDesigns: 0, totalOrders: 0 });
   const [recentOrders, setRecentOrders] = useState([]);
+  const [tallyOnline, setTallyOnline] = useState(null); // null=checking, true=online, false=offline
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+    // Quick Tally ping on dashboard load
+    fetch('/api/tally-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml' },
+      body: '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC></DESC></BODY></ENVELOPE>'
+    }).then(r => setTallyOnline(r.ok)).catch(() => setTallyOnline(false));
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -76,7 +85,19 @@ const AdminDashboard = () => {
           <div className="wa-live">
             <div className="wa-dot"></div>WA Bot Live
           </div>
-          <span className="sync-pill sp-tally">🟡 Tally Synced</span>
+          <span
+            className="sync-pill sp-tally"
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => navigate('/admin/tally-prime')}
+            title={tallyOnline === true ? 'Tally Online' : tallyOnline === false ? 'Tally Offline — click for details' : 'Checking Tally…'}
+          >
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
+              background: tallyOnline === true ? '#22c55e' : tallyOnline === false ? '#ef4444' : '#d1d5db',
+              boxShadow: tallyOnline === true ? '0 0 6px #22c55e' : tallyOnline === false ? '0 0 6px #ef4444' : 'none'
+            }} />
+            {tallyOnline === true ? 'Tally Synced' : tallyOnline === false ? 'Tally Offline' : 'Tally…'}
+          </span>
           <span className="sync-pill sp-drive">🔵 Drive OK</span>
           <button className="btn btn-teal" onClick={() => navigate('/admin/cost/cost-sheet')}>
             + New Cost Sheet

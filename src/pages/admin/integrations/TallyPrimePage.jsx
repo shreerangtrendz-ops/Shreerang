@@ -5,16 +5,37 @@ const TALLY_PROXY = '/api/tally-proxy';
 
 export default function TallyPrimePage() {
   const [tab, setTab] = useState('status');
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(null); // null = initial/unknown
+  const [wasOffline, setWasOffline] = useState(false);
+  const [justReconnected, setJustReconnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [syncLog, setSyncLog] = useState([]);
-  const [ledgers, setLedgers] = useState([]);
-  const [vouchers, setVouchers] = useState([]);
   const [syncType, setSyncType] = useState('ledgers');
   const [lastSync, setLastSync] = useState(null);
+  const [lastConnected, setLastConnected] = useState(null);
+  const [retryCountdown, setRetryCountdown] = useState(null);
   const [tallyCompany, setTallyCompany] = useState('');
 
-  useEffect(() => { checkConnection(); fetchSyncLog(); }, []);
+  // Initial check + auto-retry every 60 seconds
+  useEffect(() => {
+    checkConnection();
+    fetchSyncLog();
+    const interval = setInterval(() => checkConnection(), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Countdown timer shown on the offline banner
+  useEffect(() => {
+    if (connected === false) {
+      setRetryCountdown(60);
+      const tick = setInterval(() => {
+        setRetryCountdown(prev => (prev <= 1 ? 60 : prev - 1));
+      }, 1000);
+      return () => clearInterval(tick);
+    } else {
+      setRetryCountdown(null);
+    }
+  }, [connected]);
 
   async function checkConnection() {
     setLoading(true);
@@ -28,9 +49,17 @@ export default function TallyPrimePage() {
         const text = await res.text();
         const match = text.match(/<NAME>(.*?)<\/NAME>/);
         if (match) setTallyCompany(match[1]);
-        setConnected(true);
+        setConnected(prev => {
+          if (prev === false) { setWasOffline(true); setJustReconnected(true); setTimeout(() => setJustReconnected(false), 8000); }
+          return true;
+        });
+        setLastConnected(new Date());
+      } else {
+        setConnected(false);
       }
-    } catch (e) { setConnected(false); }
+    } catch (e) {
+      setConnected(false);
+    }
     setLoading(false);
   }
 
@@ -76,26 +105,58 @@ export default function TallyPrimePage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Tally Prime Integration</h1>
         <p className="text-gray-500 text-sm mt-1">Sync accounting data between Shreerang and Tally Prime via FRP Tunnel</p>
       </div>
 
-      <div className={`flex items-center gap-3 p-4 rounded-xl border mb-6 ${connected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-        <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-400'} ${connected ? 'animate-pulse' : ''}`} />
-        <div className="flex-1">
-          <p className={`font-medium ${connected ? 'text-green-800' : 'text-red-800'}`}>
-            {connected ? `Connected to Tally Prime${tallyCompany ? ` — ${tallyCompany}` : ''}` : 'Tally Prime Not Connected'}
-          </p>
-          <p className={`text-xs ${connected ? 'text-green-600' : 'text-red-600'}`}>
-            {connected ? 'Tally FRP Tunnel is active and responsive' : 'Cannot reach Tally. Ensure Tally is running and FRP Tunnel is active.'}
-          </p>
+      {/* ── BIG OFFLINE BANNER ── */}
+      {connected === false && (
+        <div className="flex items-start gap-4 p-5 mb-4 rounded-2xl border-2 border-red-400 bg-red-50 shadow-md">
+          <span className="text-3xl mt-0.5">⚠️</span>
+          <div className="flex-1">
+            <p className="text-red-800 font-bold text-lg">Tally Offline — Please open TallyPrime on office PC</p>
+            <p className="text-red-600 text-sm mt-1">Cannot reach the Tally FRP Tunnel. Make sure Tally Prime is running and the FRP client is active on the office computer.</p>
+            {lastConnected && (
+              <p className="text-red-500 text-xs mt-2">Last connected: {lastConnected.toLocaleString('en-IN')}</p>
+            )}
+            <p className="text-red-400 text-xs mt-1">Auto-retrying in {retryCountdown}s…</p>
+          </div>
+          <button onClick={checkConnection} disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 shrink-0">
+            {loading ? 'Checking…' : 'Retry Now'}
+          </button>
         </div>
-        <button onClick={checkConnection} disabled={loading}
-          className={`px-4 py-2 rounded-lg text-sm font-medium ${connected ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-600 text-white hover:bg-red-700'} disabled:opacity-50`}>
-          {loading ? 'Checking...' : 'Test Connection'}
-        </button>
-      </div>
+      )}
+
+      {/* ── RECONNECTED FLASH BANNER ── */}
+      {justReconnected && (
+        <div className="flex items-center gap-3 p-4 mb-4 rounded-2xl border-2 border-green-400 bg-green-50 shadow-md animate-pulse">
+          <span className="text-2xl">✅</span>
+          <p className="text-green-800 font-bold">Tally Reconnected — Data sync resumed automatically</p>
+        </div>
+      )}
+
+      {/* ── NORMAL STATUS BAR (connected / initial) ── */}
+      {connected !== false && (
+        <div className={`flex items-center gap-3 p-4 rounded-xl border mb-4 ${connected === true ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+          <div className={`w-3 h-3 rounded-full ${connected === true ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+          <div className="flex-1">
+            <p className={`font-medium ${connected === true ? 'text-green-800' : 'text-gray-600'}`}>
+              {connected === true ? `Connected to Tally Prime${tallyCompany ? ` — ${tallyCompany}` : ''}` : 'Checking connection…'}
+            </p>
+            <p className={`text-xs ${connected === true ? 'text-green-600' : 'text-gray-400'}`}>
+              {connected === true
+                ? `Tally FRP Tunnel is active${lastConnected ? ` · Last verified: ${lastConnected.toLocaleTimeString('en-IN')}` : ''}`
+                : 'Please wait…'}
+            </p>
+          </div>
+          <button onClick={checkConnection} disabled={loading}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+            {loading ? 'Checking…' : 'Test Connection'}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
         {tabs.map(t => (

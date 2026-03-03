@@ -139,19 +139,18 @@ export default function TallyPrimePage() {
         }
       }
 
-      // ── STOCK ITEMS → fabric_master table ────────────────────────────
+      // ── STOCK ITEMS → fabric_masters table ───────────────────────────
       else if (type === 'stock') {
         const blocks = xmlAll('STOCKITEM', text);
         const rows = blocks.map(v => ({
           name: xml('NAME', v),
           type: 'Tally Stock',
-          unit: xml('BASEUNITS', v) || 'Mtr',
-          stock_quantity: parseFloat(xml('OPENINGBALANCE', v)) || 0,
-          source: 'tally',
+          sku: xml('NAME', v).replace(/\s+/g, '-').toUpperCase().slice(0, 30),
+          status: 'active',
         })).filter(r => r.name && r.name.length > 1);
 
         if (rows.length > 0) {
-          const { error } = await supabase.from('fabric_master')
+          const { error } = await supabase.from('fabric_masters')
             .upsert(rows, { onConflict: 'name', ignoreDuplicates: false });
           if (error) saveError = error.message;
           else recordCount = rows.length;

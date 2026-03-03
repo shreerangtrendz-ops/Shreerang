@@ -11,6 +11,7 @@ import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { CostingService } from '@/services/CostingService';
 import CostBreakdownTable from '@/components/CostBreakdownTable';
 import * as XLSX from 'xlsx';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const CostingCalculator = () => {
   const [path, setPath] = useState('');
@@ -31,6 +32,57 @@ const CostingCalculator = () => {
 
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [tallyRatesLoading, setTallyRatesLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadLatestRates() {
+      try {
+        setTallyRatesLoading(true);
+        // Fetch latest purchase rate for grey fabric
+        const { data: greyData } = await supabase
+          .from('purchase_fabric')
+          .select('price')
+          .order('date', { ascending: false })
+          .limit(1);
+
+        // Fetch latest process charges for different job works
+        const { data: processData } = await supabase
+          .from('process_charges')
+          .select('process_type, job_charge, shortage_pct')
+          .order('date', { ascending: false })
+          .limit(50); // Get enough to find the latest of each type
+
+        const latestRates = {};
+        const latestShortages = {};
+        if (processData) {
+          processData.forEach(p => {
+            const type = p.process_type?.toLowerCase() || '';
+            // Only keep the first (latest) occurrence we find
+            if (type.includes('mill') && !latestRates.mill_rate) latestRates.mill_rate = p.job_charge;
+            if (type.includes('schiffli') && !latestRates.schiffli_rate) latestRates.schiffli_rate = p.job_charge;
+            if (type.includes('dye') && !latestRates.dyeing_rate) {
+              latestRates.dyeing_rate = p.job_charge;
+              if (p.shortage_pct && !latestShortages.shortage_percent) latestShortages.shortage_percent = p.shortage_pct;
+            }
+          });
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          grey_rate: greyData?.[0]?.price?.toString() || prev.grey_rate,
+          mill_rate: latestRates.mill_rate?.toString() || prev.mill_rate,
+          schiffli_rate: latestRates.schiffli_rate?.toString() || prev.schiffli_rate,
+          dyeing_rate: latestRates.dyeing_rate?.toString() || prev.dyeing_rate,
+          shortage_percent: latestShortages.shortage_percent?.toString() || prev.shortage_percent
+        }));
+      } catch (e) {
+        console.error("Failed to load generic Tally rates:", e);
+      } finally {
+        setTallyRatesLoading(false);
+      }
+    }
+    loadLatestRates();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -69,7 +121,7 @@ const CostingCalculator = () => {
 
   const handleExportExcel = () => {
     if (!result) return;
-    
+
     const wsData = [
       ['Costing Sheet Export'],
       ['Calculation Path', CostingService.getPathDescription(path)],
@@ -111,11 +163,11 @@ const CostingCalculator = () => {
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-20">
       <Helmet><title>Shreerang Costing Calculator</title></Helmet>
-      
-      <AdminPageHeader 
-        title="Costing Engine" 
+
+      <AdminPageHeader
+        title="Costing Engine"
         description="Advanced textile costing calculator for various manufacturing paths."
-        breadcrumbs={[{label: 'Dashboard', href: '/admin'}, {label: 'Costing Calculator'}]}
+        breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Costing Calculator' }]}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -125,7 +177,10 @@ const CostingCalculator = () => {
             <CardTitle className="flex items-center gap-2">
               <Calculator className="h-5 w-5 text-blue-600" /> Parameters
             </CardTitle>
-            <CardDescription>Select path and enter rates</CardDescription>
+            <CardDescription>
+              Select path and enter rates.
+              {tallyRatesLoading ? ' Loading Tally rates...' : ' Live rates prefilled from Tally Data Sync.'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -156,37 +211,37 @@ const CostingCalculator = () => {
             </div>
 
             <div className="space-y-2">
-               <Label className="text-xs font-semibold text-slate-500 uppercase">Process Rates (Per Mtr)</Label>
-               <div className="grid grid-cols-2 gap-3">
-                 <Input type="number" name="mill_rate" value={formData.mill_rate} onChange={handleInputChange} placeholder="Mill Rate" />
-                 <Input type="number" name="schiffli_rate" value={formData.schiffli_rate} onChange={handleInputChange} placeholder="Schiffli Rate" />
-                 <Input type="number" name="deca_rate" value={formData.deca_rate} onChange={handleInputChange} placeholder="Deca Rate" />
-                 <Input type="number" name="rfd_rate" value={formData.rfd_rate} onChange={handleInputChange} placeholder="RFD Rate" />
-                 <Input type="number" name="digital_rate" value={formData.digital_rate} onChange={handleInputChange} placeholder="Digital Rate" />
-                 <Input type="number" name="dyeing_rate" value={formData.dyeing_rate} onChange={handleInputChange} placeholder="Dyeing Rate" />
-               </div>
+              <Label className="text-xs font-semibold text-slate-500 uppercase">Process Rates (Per Mtr)</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <Input type="number" name="mill_rate" value={formData.mill_rate} onChange={handleInputChange} placeholder="Mill Rate" />
+                <Input type="number" name="schiffli_rate" value={formData.schiffli_rate} onChange={handleInputChange} placeholder="Schiffli Rate" />
+                <Input type="number" name="deca_rate" value={formData.deca_rate} onChange={handleInputChange} placeholder="Deca Rate" />
+                <Input type="number" name="rfd_rate" value={formData.rfd_rate} onChange={handleInputChange} placeholder="RFD Rate" />
+                <Input type="number" name="digital_rate" value={formData.digital_rate} onChange={handleInputChange} placeholder="Digital Rate" />
+                <Input type="number" name="dyeing_rate" value={formData.dyeing_rate} onChange={handleInputChange} placeholder="Dyeing Rate" />
+              </div>
             </div>
 
             <div className="space-y-2">
-               <Label className="text-xs font-semibold text-slate-500 uppercase">Adjustments</Label>
-               <div className="grid grid-cols-2 gap-3">
-                 <div className="space-y-1">
-                    <Label className="text-xs">Shortage %</Label>
-                    <Input type="number" name="shortage_percent" value={formData.shortage_percent} onChange={handleInputChange} placeholder="0%" />
-                 </div>
-                 <div className="space-y-1">
-                    <Label className="text-xs">Dhara/Waste %</Label>
-                    <Input type="number" name="dhara_percent" value={formData.dhara_percent} onChange={handleInputChange} placeholder="0%" />
-                 </div>
-                 <div className="space-y-1">
-                    <Label className="text-xs">Transport (₹)</Label>
-                    <Input type="number" name="transport_cost" value={formData.transport_cost} onChange={handleInputChange} placeholder="0.00" />
-                 </div>
-                 <div className="space-y-1">
-                    <Label className="text-xs">Profit Margin %</Label>
-                    <Input type="number" name="profit_margin" value={formData.profit_margin} onChange={handleInputChange} placeholder="0%" />
-                 </div>
-               </div>
+              <Label className="text-xs font-semibold text-slate-500 uppercase">Adjustments</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Shortage %</Label>
+                  <Input type="number" name="shortage_percent" value={formData.shortage_percent} onChange={handleInputChange} placeholder="0%" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Dhara/Waste %</Label>
+                  <Input type="number" name="dhara_percent" value={formData.dhara_percent} onChange={handleInputChange} placeholder="0%" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Transport (₹)</Label>
+                  <Input type="number" name="transport_cost" value={formData.transport_cost} onChange={handleInputChange} placeholder="0.00" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Profit Margin %</Label>
+                  <Input type="number" name="profit_margin" value={formData.profit_margin} onChange={handleInputChange} placeholder="0%" />
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2 pt-4">
@@ -203,21 +258,21 @@ const CostingCalculator = () => {
               {error}
             </div>
           )}
-          
+
           {result ? (
             <Card className="border-green-100 bg-white shadow-md">
               <CardHeader className="bg-slate-50 border-b flex flex-row items-center justify-between">
                 <div>
-                    <CardTitle>Calculation Results</CardTitle>
-                    <CardDescription>{CostingService.getPathDescription(path)}</CardDescription>
+                  <CardTitle>Calculation Results</CardTitle>
+                  <CardDescription>{CostingService.getPathDescription(path)}</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                   <Button variant="outline" size="sm" onClick={handleExportExcel} className="gap-2">
-                      <FileSpreadsheet className="h-4 w-4 text-green-600" /> Export Excel
-                   </Button>
-                   <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
-                      <FileText className="h-4 w-4 text-red-600" /> PDF / Print
-                   </Button>
+                  <Button variant="outline" size="sm" onClick={handleExportExcel} className="gap-2">
+                    <FileSpreadsheet className="h-4 w-4 text-green-600" /> Export Excel
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={() => window.print()}>
+                    <FileText className="h-4 w-4 text-red-600" /> PDF / Print
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">

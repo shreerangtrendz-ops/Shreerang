@@ -74,6 +74,8 @@ export default function TallyPrimePage() {
     const xmlRequests = {
       ledgers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Ledger</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
       stock: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Stock Summary</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+      purchases: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE><VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+      job_bills: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
       outstanding: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Bills Receivable</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
       vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
     };
@@ -118,22 +120,102 @@ export default function TallyPrimePage() {
         }
       }
 
-      // ── LEDGERS → customers table ─────────────────────────────────────
+      // ── LEDGERS → customers & job_workers tables ─────────────────────
       else if (type === 'ledgers') {
         const blocks = xmlAll('LEDGER', text);
-        const rows = blocks.map(v => ({
-          name: xml('NAME', v) || xml('LEDGERNAME', v),
-          company_name: xml('NAME', v),
-          address: xml('ADDRESS', v) || null,
-          gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
-          city: xml('LEDGERCITY', v) || null,
-          source: 'tally',
-          status: 'active',
-        })).filter(r => r.name && r.name.length > 1);
+
+        // 1. Customers
+        const customerRows = blocks
+          .filter(v => ['Sundry Debtors', 'Customers'].includes(xml('PARENT', v) || ''))
+          .map(v => ({
+            name: xml('NAME', v) || xml('LEDGERNAME', v),
+            company_name: xml('NAME', v),
+            address: xml('ADDRESS', v) || null,
+            gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
+            city: xml('LEDGERCITY', v) || null,
+            source: 'tally',
+            status: 'active',
+          })).filter(r => r.name && r.name.length > 1);
+
+        if (customerRows.length > 0) {
+          const { error } = await supabase.from('customers')
+            .upsert(customerRows, { onConflict: 'gst_number', ignoreDuplicates: true });
+          if (error) saveError = error.message;
+          else recordCount += customerRows.length;
+        }
+
+        // 2. Job Workers / Processors
+        const workerRows = blocks
+          .filter(v => ['Sundry Creditors', 'Processors'].includes(xml('PARENT', v) || ''))
+          .map(v => ({
+            worker_name: xml('NAME', v) || xml('LEDGERNAME', v),
+            type: (xml('NAME', v) || '').toLowerCase().includes('mill') ? 'mill_print' : 'dyeing',
+            contact_number: 'Sync from Tally',
+            gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
+            address: xml('ADDRESS', v) || null,
+            status: 'active',
+          })).filter(r => r.worker_name && r.worker_name.length > 1);
+
+        if (workerRows.length > 0) {
+          const { error } = await supabase.from('job_workers')
+            .upsert(workerRows, { onConflict: 'worker_name', ignoreDuplicates: true });
+          if (error) saveError = (saveError || '') + error.message;
+          else recordCount += workerRows.length;
+        }
+      }
+
+      // ── PURCHASES → purchase_fabric table (Cost Database) ─────────────
+      else if (type === 'purchases') {
+        const blocks = xmlAll('VOUCHER', text);
+        const rows = blocks.map(v => {
+          const amount = Math.abs(parseFloat(xml('AMOUNT', v)) || 0);
+          // Rough estimation of parameters parsing first billed quantity if available
+          // Tally XML structural variations might output QTY deeper, checking primary strings
+          const qtyRaw = xml('BILLEDQTY', v).split(' ')[0];
+          const rateRaw = xml('RATE', v).split('/')[0];
+          const qty = parseFloat(qtyRaw) || 1;
+          const calcRate = parseFloat(rateRaw) || (amount / qty);
+
+          return {
+            supplier_name: xml('PARTYLEDGERNAME', v) || 'Unknown Tally Supplier',
+            fabric_type: xml('STOCKITEMNAME', v) || 'Grey Fabric from Tally',
+            quantity: qty,
+            price: calcRate,
+            date: tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10),
+          };
+        }).filter(r => r.price > 0 && r.supplier_name);
 
         if (rows.length > 0) {
-          const { error } = await supabase.from('customers')
-            .upsert(rows, { onConflict: 'gst_number', ignoreDuplicates: true });
+          const { error } = await supabase.from('purchase_fabric').insert(rows);
+          if (error) saveError = error.message;
+          else recordCount = rows.length;
+        }
+      }
+
+      // ── JOB BILLS → process_charges table (Cost Database) ──────────────
+      else if (type === 'job_bills') {
+        const blocks = xmlAll('VOUCHER', text);
+        const rows = blocks.map(v => {
+          const amount = Math.abs(parseFloat(xml('AMOUNT', v)) || 0);
+          const party = xml('PARTYLEDGERNAME', v) || '';
+          const typeStr = party.toLowerCase();
+
+          let pType = 'Dyeing';
+          if (typeStr.includes('surbhi') || typeStr.includes('schiffli')) pType = 'Schiffli';
+          else if (typeStr.includes('print') || typeStr.includes('mill')) pType = 'Mill Print';
+
+          return {
+            jobwork_unit_name: party || 'Tally Job Worker',
+            design_number: xml('VOUCHERNUMBER', v) || 'Sync',
+            process_type: pType,
+            date: tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10),
+            job_charge: (amount / 1000).toFixed(2), // Generic division for rate fallback to prevent bloat
+            shortage_pct: pType === 'Dyeing' ? 8.5 : (pType === 'Schiffli' ? 4.0 : 0) // Default logic from findings
+          };
+        }).filter(r => r.jobwork_unit_name && r.jobwork_unit_name.length > 1);
+
+        if (rows.length > 0) {
+          const { error } = await supabase.from('process_charges').insert(rows);
           if (error) saveError = error.message;
           else recordCount = rows.length;
         }
@@ -293,6 +375,8 @@ export default function TallyPrimePage() {
           {[
             { id: 'ledgers', label: 'Sync Ledgers', icon: '📒', desc: 'Import customer and vendor ledger data from Tally', color: 'blue' },
             { id: 'vouchers', label: 'Sync Vouchers', icon: '🧾', desc: 'Import sales and payment vouchers from Tally', color: 'green' },
+            { id: 'purchases', label: 'Sync Purchases', icon: '🛒', desc: 'Import grey fabric purchase bills into Cost Database', color: 'indigo' },
+            { id: 'job_bills', label: 'Sync Job Bills', icon: '🏭', desc: 'Import processor job bills into Cost Database', color: 'pink' },
             { id: 'stock', label: 'Sync Stock Items', icon: '📦', desc: 'Import stock items and inventory from Tally', color: 'purple' },
             { id: 'outstanding', label: 'Sync Outstanding', icon: '💳', desc: 'Import outstanding payables and receivables', color: 'orange' },
           ].map(item => (

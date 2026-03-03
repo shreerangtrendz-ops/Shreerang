@@ -85,8 +85,18 @@ export default function TallyPrimePage() {
       });
       if (res.ok) {
         const text = await res.text();
+
+        // Define regex for counting records based on sync type
+        const countRegex = {
+          ledgers: /<\/LEDGER>/g,
+          vouchers: /<\/VOUCHER>/g,
+          stock: /<\/STOCKITEM>/g,
+          outstanding: /<\/BILLFIXED>/g
+        };
+        const recordCount = (text.match(countRegex[type] || countRegex.ledgers) || []).length;
+
         await supabase.from('tally_sync_log').insert([{
-          sync_type: type, status: 'success', records_synced: (text.match(/<\/LEDGER>/g) || []).length,
+          sync_type: type, status: 'success', records_synced: recordCount,
           raw_response: text.slice(0, 500)
         }]);
         fetchSyncLog();

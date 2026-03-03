@@ -3,39 +3,87 @@ import { supabase } from '@/lib/supabase';
 
 const TALLY_PROXY = '/api/tally-proxy';
 
+// ─── Vendor → Process Type mapping (fallback if tally_ledger_name not set) ───
+// Edit this object to match your exact Tally ledger names
+const VENDOR_PROCESS_MAP = {
+  'SUDARSHAN TEXTILES': 'dyeing',
+  'V. RUNGTA': 'dyeing',
+  'RUNGTA': 'dyeing',
+  'GCG MILL': 'mill_print',
+  'GCG MILL PRINT': 'mill_print',
+  'SURBHI TEXTILES': 'schiffli',
+  'SURBHI': 'schiffli',
+};
+
+// ─── XML Helpers ──────────────────────────────────────────────────────────────
+const xml = (tag, text) => { const m = text.match(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, 's')); return m ? m[1].trim() : ''; };
+const xmlAll = (tag, text) => [...text.matchAll(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, 'gs'))].map(m => m[1].trim());
+const xmlAttr = (tag, attr, text) => { const m = text.match(new RegExp(`<${tag}[^>]*${attr}="([^"]*)"`, 's')); return m ? m[1].trim() : ''; };
+const tallyDate = d => (d && d.length >= 8) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : null;
+const safeNum = v => { const n = parseFloat(String(v).replace(/[^\d.-]/g, '')); return isNaN(n) ? 0 : Math.abs(n); };
+
+// ─── XML Request Templates ────────────────────────────────────────────────────
+const today = () => new Date().toISOString().replace(/-/g, '').slice(0, 8);
+const dateRange = from => `<SVFROMDATE>${from}</SVFROMDATE><SVTODATE>${today()}</SVTODATE>`;
+
+const XML_REQUESTS = {
+  ledgers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Ledger</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  purchases: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${dateRange('20250101')}<VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  job_bills: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${dateRange('20250101')}<VOUCHERTYPENAME>Journal</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  delivery_notes: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${dateRange('20250101')}<VOUCHERTYPENAME>Delivery Note</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${dateRange('20250101')}</STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  stock: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Stock Summary</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+
+  outstanding: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Bills Receivable</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
+};
+
 export default function TallyPrimePage() {
   const [tab, setTab] = useState('status');
-  const [connected, setConnected] = useState(null); // null = initial/unknown
-  const [wasOffline, setWasOffline] = useState(false);
+  const [connected, setConnected] = useState(null);
   const [justReconnected, setJustReconnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [syncLog, setSyncLog] = useState([]);
-  const [syncType, setSyncType] = useState('ledgers');
   const [lastSync, setLastSync] = useState(null);
   const [lastConnected, setLastConnected] = useState(null);
   const [retryCountdown, setRetryCountdown] = useState(null);
   const [tallyCompany, setTallyCompany] = useState('');
+  const [syncStatus, setSyncStatus] = useState(''); // live progress message
+  const [jobWorkerMap, setJobWorkerMap] = useState({}); // tally_ledger_name → {id, process_type}
 
-  // Initial check + auto-retry every 60 seconds
   useEffect(() => {
     checkConnection();
     fetchSyncLog();
-    const interval = setInterval(() => checkConnection(), 60000);
-    return () => clearInterval(interval);
+    loadJobWorkerMap();
+    const iv = setInterval(checkConnection, 60000);
+    return () => clearInterval(iv);
   }, []);
 
-  // Countdown timer shown on the offline banner
   useEffect(() => {
     if (connected === false) {
       setRetryCountdown(60);
-      const tick = setInterval(() => {
-        setRetryCountdown(prev => (prev <= 1 ? 60 : prev - 1));
-      }, 1000);
+      const tick = setInterval(() => setRetryCountdown(p => p <= 1 ? 60 : p - 1), 1000);
       return () => clearInterval(tick);
-    } else {
-      setRetryCountdown(null);
-    }
+    } else setRetryCountdown(null);
   }, [connected]);
+
+  // Pre-load job_workers lookup table so parsers can use it without extra queries
+  async function loadJobWorkerMap() {
+    const { data } = await supabase
+      .from('job_workers')
+      .select('id, worker_name, tally_ledger_name, process_type')
+      .eq('status', 'active');
+    if (!data) return;
+    const map = {};
+    data.forEach(w => {
+      if (w.tally_ledger_name) map[w.tally_ledger_name.toUpperCase()] = { id: w.id, process_type: w.process_type, name: w.worker_name };
+    });
+    setJobWorkerMap(map);
+  }
 
   async function checkConnection() {
     setLoading(true);
@@ -50,65 +98,370 @@ export default function TallyPrimePage() {
         const match = text.match(/<NAME>(.*?)<\/NAME>/);
         if (match) setTallyCompany(match[1]);
         setConnected(prev => {
-          if (prev === false) { setWasOffline(true); setJustReconnected(true); setTimeout(() => setJustReconnected(false), 8000); }
+          if (prev === false) { setJustReconnected(true); setTimeout(() => setJustReconnected(false), 8000); }
           return true;
         });
         setLastConnected(new Date());
-      } else {
-        setConnected(false);
-      }
-    } catch (e) {
-      setConnected(false);
-    }
+      } else setConnected(false);
+    } catch { setConnected(false); }
     setLoading(false);
   }
 
   async function fetchSyncLog() {
-    const { data } = await supabase.from('tally_sync_log').select('*').order('synced_at', { ascending: false }).limit(20);
+    const { data } = await supabase
+      .from('tally_sync_log')
+      .select('*')
+      .order('synced_at', { ascending: false })
+      .limit(30);
     setSyncLog(data || []);
-    if (data && data.length > 0) setLastSync(data[0].synced_at);
+    if (data?.length) setLastSync(data[0].synced_at);
   }
 
+  // ─── Resolve process_type from party name ─────────────────────────────────
+  function resolveProcessType(partyName) {
+    const upper = (partyName || '').toUpperCase();
+    // 1. Exact match from Supabase job_workers.tally_ledger_name
+    if (jobWorkerMap[upper]) return jobWorkerMap[upper].process_type;
+    // 2. Fallback to hardcoded map
+    for (const [key, val] of Object.entries(VENDOR_PROCESS_MAP)) {
+      if (upper.includes(key)) return val;
+    }
+    // 3. Last resort keyword sniff
+    if (upper.includes('SCHIFFLI') || upper.includes('SURBHI')) return 'schiffli';
+    if (upper.includes('MILL') || upper.includes('PRINT')) return 'mill_print';
+    if (upper.includes('EMBROID')) return 'embroidery';
+    return 'dyeing'; // default
+  }
+
+  // ─── Main Sync Function ───────────────────────────────────────────────────
   async function syncFromTally(type) {
     setLoading(true);
-    const xmlRequests = {
-      ledgers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Ledger</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      stock: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Stock Summary</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      purchases: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE><VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      job_bills: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      outstanding: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Bills Receivable</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-      vouchers: `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Daybook</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVFROMDATE>20250101</SVFROMDATE><SVTODATE>${new Date().toISOString().replace(/-/g, '').slice(0, 8)}</SVTODATE></STATICVARIABLES></DESC></BODY></ENVELOPE>`,
-    };
-
-    // Helper: extract single XML tag value
-    const xml = (tag, text) => { const m = text.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 's')); return m ? m[1].trim() : ''; };
-    // Helper: extract all blocks of a repeated XML tag
-    const xmlAll = (tag, text) => [...text.matchAll(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, 'gs'))].map(m => m[1].trim());
-    // Helper: parse YYYYMMDD → ISO date
-    const tallyDate = (d) => (d && d.length >= 8) ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` : null;
+    setSyncStatus(`Fetching ${type} from Tally…`);
+    let recordCount = 0, saveError = null;
 
     try {
       const res = await fetch(TALLY_PROXY, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
-        body: xmlRequests[type] || xmlRequests.ledgers
+        body: XML_REQUESTS[type] || XML_REQUESTS.ledgers
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
+      if (!res.ok) throw new Error(`Tally HTTP ${res.status}`);
       const text = await res.text();
-      let recordCount = 0;
-      let saveError = null;
+      setSyncStatus(`Parsing ${type} response…`);
 
-      // ── VOUCHERS → orders table ──────────────────────────────────────
-      if (type === 'vouchers') {
+      // ── 1. PURCHASES → purchase_fabric ──────────────────────────────────
+      if (type === 'purchases') {
+        const blocks = xmlAll('VOUCHER', text);
+        setSyncStatus(`Parsing ${blocks.length} purchase vouchers…`);
+
+        const rows = blocks.flatMap(v => {
+          const voucherNo = xml('VOUCHERNUMBER', v);
+          const date = tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10);
+          const party = xml('PARTYLEDGERNAME', v);
+          const narration = xml('NARRATION', v);
+          const dueDate = tallyDate(xml('BILLDATE', v)) || tallyDate(xml('DUEDATE', v));
+
+          // Parse all inventory entries within this voucher
+          const invBlocks = xmlAll('ALLINVENTORYENTRIES.LIST', v).length
+            ? xmlAll('ALLINVENTORYENTRIES.LIST', v)
+            : xmlAll('INVENTORYENTRIES.LIST', v);
+
+          if (invBlocks.length === 0) {
+            // Fallback: single-line voucher
+            const amount = safeNum(xml('AMOUNT', v));
+            const qtyRaw = xml('BILLEDQTY', v) || xml('ACTUALQTY', v);
+            const qty = safeNum(qtyRaw.split(' ')[0]) || 1;
+            const rateRaw = xml('RATE', v);
+            const rate = safeNum(rateRaw.split('/')[0]) || (amount / qty);
+            if (!party || rate === 0) return [];
+            return [{
+              invoice_no: voucherNo,
+              date,
+              supplier_name: party,
+              fabric_type: narration || 'Grey Fabric',
+              sku_id: narration || null,
+              quantity_mtrs: qty,
+              price: parseFloat(rate.toFixed(2)),
+              freight_amount: 0,
+              cash_discount: safeNum(xml('DISCOUNT', v)),
+              due_date: dueDate,
+              broker_name: xml('BROKERNAME', v) || null,
+              credit_days: parseInt(xml('CREDITDAYS', v) || xml('CREDITPERIOD', v)) || 0,
+              transport_details: xml('TRANSPORTDETAILS', v) || xml('VEHICLENO', v) || null,
+              payment_terms: xml('CREDITPERIOD', v) || null,
+            }];
+          }
+
+          // Multi-line voucher: one row per inventory entry
+          return invBlocks.map(inv => {
+            const itemName = xml('STOCKITEMNAME', inv) || narration || 'Grey Fabric';
+            const qtyRaw = xml('BILLEDQTY', inv) || xml('ACTUALQTY', inv);
+            const qty = safeNum(qtyRaw.split(' ')[0]) || 1;
+            const rateRaw = xml('RATE', inv);
+            const rate = safeNum(rateRaw.split('/')[0]);
+            const amount = safeNum(xml('AMOUNT', inv));
+            const finalRate = rate > 0 ? rate : (amount / qty);
+
+            // Freight: look for a ledger allocation named freight/transport
+            const ledgerBlocks = xmlAll('LEDGERENTRIES.LIST', v);
+            const freightLedger = ledgerBlocks.find(l =>
+              /freight|transport|lorry|carriage/i.test(xml('LEDGERNAME', l))
+            );
+            const freightAmt = freightLedger ? safeNum(xml('AMOUNT', freightLedger)) : 0;
+
+            if (!party || finalRate === 0) return null;
+            return {
+              invoice_no: voucherNo,
+              date,
+              supplier_name: party,
+              fabric_type: itemName,
+              sku_id: itemName,
+              quantity_mtrs: qty,
+              price: parseFloat(finalRate.toFixed(2)),
+              freight_amount: parseFloat(freightAmt.toFixed(2)),
+              cash_discount: safeNum(xml('DISCOUNT', inv) || xml('DISCOUNT', v)),
+              due_date: dueDate,
+              broker_name: xml('BROKERNAME', v) || null,
+              credit_days: parseInt(xml('CREDITDAYS', v) || xml('CREDITPERIOD', v)) || 0,
+              transport_details: xml('TRANSPORTDETAILS', v) || xml('VEHICLENO', v) || null,
+              payment_terms: xml('CREDITPERIOD', v) || null,
+            };
+          }).filter(Boolean);
+        });
+
+        if (rows.length > 0) {
+          setSyncStatus(`Saving ${rows.length} purchase records…`);
+          // Upsert on invoice_no to prevent duplicates
+          const { error } = await supabase
+            .from('purchase_fabric')
+            .upsert(rows, { onConflict: 'invoice_no', ignoreDuplicates: false });
+          if (error) saveError = error.message;
+          else {
+            recordCount = rows.length;
+            // Update supplier last_purchase_rate
+            const latestBySupplier = {};
+            rows.forEach(r => { if (!latestBySupplier[r.supplier_name] || r.date > latestBySupplier[r.supplier_name].date) latestBySupplier[r.supplier_name] = r; });
+            for (const [name, r] of Object.entries(latestBySupplier)) {
+              await supabase.from('suppliers')
+                .update({ last_purchase_rate: r.price })
+                .eq('tally_ledger_name', name.toUpperCase());
+            }
+          }
+        }
+      }
+
+      // ── 2. JOB BILLS → process_charges ──────────────────────────────────
+      else if (type === 'job_bills') {
+        const blocks = xmlAll('VOUCHER', text);
+        setSyncStatus(`Parsing ${blocks.length} job bill vouchers…`);
+
+        const rows = blocks.map(v => {
+          const party = xml('PARTYLEDGERNAME', v) || '';
+          const voucherNo = xml('VOUCHERNUMBER', v);
+          const date = tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10);
+          const narration = xml('NARRATION', v);
+          const processType = resolveProcessType(party);
+
+          // Parse ledger entries to extract job charge, TDS, premium
+          const ledgerBlocks = xmlAll('LEDGERENTRIES.LIST', v);
+          let jobCharge = 0, tdsAmt = 0, premiumCharge = 0, finishedMetres = 0;
+
+          ledgerBlocks.forEach(l => {
+            const lName = (xml('LEDGERNAME', l) || '').toUpperCase();
+            const lAmt = safeNum(xml('AMOUNT', l));
+            if (/TDS|TAX DEDUCTED/i.test(lName)) tdsAmt += lAmt;
+            else if (/FOIL|PREMIUM|SURCHARGE/i.test(lName)) premiumCharge += lAmt;
+            else if (lName === party.toUpperCase()) jobCharge = lAmt;
+          });
+
+          // Fallback: use total voucher amount as job charge
+          if (jobCharge === 0) jobCharge = safeNum(xml('AMOUNT', v));
+
+          // Finished metres: from inventory entries
+          const invBlocks = xmlAll('ALLINVENTORYENTRIES.LIST', v).length
+            ? xmlAll('ALLINVENTORYENTRIES.LIST', v)
+            : xmlAll('INVENTORYENTRIES.LIST', v);
+          if (invBlocks.length > 0) {
+            const qtyRaw = xml('BILLEDQTY', invBlocks[0]) || xml('ACTUALQTY', invBlocks[0]);
+            finishedMetres = safeNum(qtyRaw.split(' ')[0]);
+          }
+
+          // Calculate rate per metre if we have metres
+          const jobChargePerMtr = finishedMetres > 0
+            ? parseFloat((jobCharge / finishedMetres).toFixed(2))
+            : parseFloat(jobCharge.toFixed(2));
+
+          // Design number from narration or stock item name
+          const designNo = invBlocks.length > 0
+            ? xml('STOCKITEMNAME', invBlocks[0]) || narration || voucherNo
+            : narration || voucherNo;
+
+          if (!party) return null;
+          return {
+            invoice_no: voucherNo,
+            date,
+            jobwork_unit_name: party,
+            process_type: processType,
+            design_number: designNo,
+            job_charge: jobChargePerMtr,
+            finished_metres: finishedMetres,
+            tds_amount: parseFloat(tdsAmt.toFixed(2)),
+            premium_charges: parseFloat(premiumCharge.toFixed(2)),
+            // shortage_pct left as 0 — will be calculated by landed_cost_per_batch VIEW
+            // once linked_issue_challan is matched manually or via delivery note sync
+            shortage_pct: 0,
+          };
+        }).filter(Boolean);
+
+        if (rows.length > 0) {
+          setSyncStatus(`Saving ${rows.length} job bill records…`);
+          const { error } = await supabase
+            .from('process_charges')
+            .upsert(rows, { onConflict: 'invoice_no', ignoreDuplicates: false });
+          if (error) saveError = error.message;
+          else {
+            recordCount = rows.length;
+            // Update job_workers last_tally_rate
+            const latestByWorker = {};
+            rows.forEach(r => { if (!latestByWorker[r.jobwork_unit_name] || r.date > latestByWorker[r.jobwork_unit_name].date) latestByWorker[r.jobwork_unit_name] = r; });
+            for (const [name, r] of Object.entries(latestByWorker)) {
+              await supabase.from('job_workers')
+                .update({ last_tally_rate: r.job_charge })
+                .eq('tally_ledger_name', name.toUpperCase());
+            }
+          }
+        }
+      }
+
+      // ── 3. DELIVERY NOTES → process_issues (Challan Tracker) ────────────
+      else if (type === 'delivery_notes') {
+        const blocks = xmlAll('VOUCHER', text);
+        setSyncStatus(`Parsing ${blocks.length} delivery note challans…`);
+
+        const rows = blocks.map(v => {
+          const challanNo = xml('VOUCHERNUMBER', v);
+          const date = tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10);
+          const party = xml('PARTYLEDGERNAME', v) || '';
+          const narration = xml('NARRATION', v);
+          const processType = resolveProcessType(party);
+
+          const invBlocks = xmlAll('ALLINVENTORYENTRIES.LIST', v).length
+            ? xmlAll('ALLINVENTORYENTRIES.LIST', v)
+            : xmlAll('INVENTORYENTRIES.LIST', v);
+
+          let metresIssued = 0, fabricSku = narration || '';
+          if (invBlocks.length > 0) {
+            const qtyRaw = xml('BILLEDQTY', invBlocks[0]) || xml('ACTUALQTY', invBlocks[0]);
+            metresIssued = safeNum(qtyRaw.split(' ')[0]);
+            fabricSku = xml('STOCKITEMNAME', invBlocks[0]) || narration || '';
+          }
+
+          // Sum all inventory entries for total metres if multi-item
+          if (invBlocks.length > 1) {
+            metresIssued = invBlocks.reduce((sum, inv) => {
+              const q = safeNum((xml('BILLEDQTY', inv) || xml('ACTUALQTY', inv)).split(' ')[0]);
+              return sum + q;
+            }, 0);
+          }
+
+          if (!challanNo || metresIssued === 0) return null;
+          return {
+            challan_no: challanNo,
+            issue_date: date,
+            worker_name: party,
+            fabric_sku: fabricSku,
+            metres_issued: metresIssued,
+            process_type: processType,
+            status: 'pending',
+            lot_number: xml('ORDERNUMBER', v) || null,
+            expected_return_date: tallyDate(xml('DISPATCHEDTHROUGH', v)) || null,
+          };
+        }).filter(Boolean);
+
+        if (rows.length > 0) {
+          setSyncStatus(`Saving ${rows.length} delivery note records…`);
+          // Upsert on challan_no (UNIQUE constraint) to prevent duplicates
+          const { error } = await supabase
+            .from('process_issues')
+            .upsert(rows, { onConflict: 'challan_no', ignoreDuplicates: false });
+          if (error) saveError = error.message;
+          else recordCount = rows.length;
+        }
+      }
+
+      // ── 4. LEDGERS → customers + job_workers ────────────────────────────
+      else if (type === 'ledgers') {
+        const blocks = xmlAll('LEDGER', text);
+        setSyncStatus(`Parsing ${blocks.length} ledgers…`);
+
+        // Customers (Sundry Debtors)
+        const customerRows = blocks
+          .filter(v => ['Sundry Debtors', 'Customers'].includes(xml('PARENT', v)))
+          .map(v => ({
+            name: xml('NAME', v),
+            company_name: xml('NAME', v),
+            address: xml('ADDRESS', v) || null,
+            gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
+            city: xml('LEDGERCITY', v) || null,
+            state: xml('LEDGERSTATE', v) || null,
+            status: 'active',
+          })).filter(r => r.name?.length > 1);
+
+        if (customerRows.length > 0) {
+          const { error } = await supabase.from('customers')
+            .upsert(customerRows, { onConflict: 'name', ignoreDuplicates: true });
+          if (error) saveError = error.message;
+          else recordCount += customerRows.length;
+        }
+
+        // Job Workers / Suppliers (Sundry Creditors)
+        // Only UPSERT tally_ledger_name — don't overwrite process_type set manually
+        const creditorBlocks = blocks.filter(v =>
+          ['Sundry Creditors', 'Processors', 'Job Workers'].includes(xml('PARENT', v))
+        );
+
+        for (const v of creditorBlocks) {
+          const ledgerName = xml('NAME', v);
+          if (!ledgerName || ledgerName.length < 2) continue;
+          const upper = ledgerName.toUpperCase();
+
+          // Check if already in job_workers
+          const existing = jobWorkerMap[upper];
+          if (!existing) {
+            // New vendor — insert with process_type from map
+            const pType = VENDOR_PROCESS_MAP[upper] || 'dyeing';
+            await supabase.from('job_workers').upsert({
+              worker_name: ledgerName,
+              tally_ledger_name: upper,
+              process_type: pType,
+              status: 'active',
+            }, { onConflict: 'worker_name', ignoreDuplicates: false });
+
+            // Also upsert into suppliers for grey fabric vendors
+            await supabase.from('suppliers').upsert({
+              supplier_name: ledgerName,
+              tally_ledger_name: upper,
+              gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
+              address: xml('ADDRESS', v) || null,
+              status: 'active',
+            }, { onConflict: 'supplier_name', ignoreDuplicates: false });
+          }
+          recordCount++;
+        }
+      }
+
+      // ── 5. VOUCHERS → orders ─────────────────────────────────────────────
+      else if (type === 'vouchers') {
         const blocks = xmlAll('VOUCHER', text);
         const rows = blocks.map(v => ({
           order_number: xml('VOUCHERNUMBER', v) || xml('GUID', v),
           customer_name: xml('PARTYLEDGERNAME', v),
-          final_amount: Math.abs(parseFloat(xml('AMOUNT', v)) || 0),
-          status: xml('VOUCHERTYPE', v) === 'Sales' ? 'pending' : (xml('VOUCHERTYPE', v).toLowerCase() || 'pending'),
+          total_amount: safeNum(xml('AMOUNT', v)),
+          final_amount: safeNum(xml('AMOUNT', v)),
+          status: 'pending',
           tally_voucher_type: xml('VOUCHERTYPE', v),
-          created_at: tallyDate(xml('DATE', v)) || new Date().toISOString(),
+          packing_cost: 0,
+          transport_lr: xml('TRANSPORTDETAILS', v) || null,
           source: 'tally',
         })).filter(r => r.order_number && r.customer_name);
 
@@ -120,108 +473,7 @@ export default function TallyPrimePage() {
         }
       }
 
-      // ── LEDGERS → customers & job_workers tables ─────────────────────
-      else if (type === 'ledgers') {
-        const blocks = xmlAll('LEDGER', text);
-
-        // 1. Customers
-        const customerRows = blocks
-          .filter(v => ['Sundry Debtors', 'Customers'].includes(xml('PARENT', v) || ''))
-          .map(v => ({
-            name: xml('NAME', v) || xml('LEDGERNAME', v),
-            company_name: xml('NAME', v),
-            address: xml('ADDRESS', v) || null,
-            gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
-            city: xml('LEDGERCITY', v) || null,
-            source: 'tally',
-            status: 'active',
-          })).filter(r => r.name && r.name.length > 1);
-
-        if (customerRows.length > 0) {
-          const { error } = await supabase.from('customers')
-            .upsert(customerRows, { onConflict: 'gst_number', ignoreDuplicates: true });
-          if (error) saveError = error.message;
-          else recordCount += customerRows.length;
-        }
-
-        // 2. Job Workers / Processors
-        const workerRows = blocks
-          .filter(v => ['Sundry Creditors', 'Processors'].includes(xml('PARENT', v) || ''))
-          .map(v => ({
-            worker_name: xml('NAME', v) || xml('LEDGERNAME', v),
-            type: (xml('NAME', v) || '').toLowerCase().includes('mill') ? 'mill_print' : 'dyeing',
-            contact_number: 'Sync from Tally',
-            gst_number: xml('GSTIN', v) || xml('GSTREGISTRATIONNUMBER', v) || null,
-            address: xml('ADDRESS', v) || null,
-            status: 'active',
-          })).filter(r => r.worker_name && r.worker_name.length > 1);
-
-        if (workerRows.length > 0) {
-          const { error } = await supabase.from('job_workers')
-            .upsert(workerRows, { onConflict: 'worker_name', ignoreDuplicates: true });
-          if (error) saveError = (saveError || '') + error.message;
-          else recordCount += workerRows.length;
-        }
-      }
-
-      // ── PURCHASES → purchase_fabric table (Cost Database) ─────────────
-      else if (type === 'purchases') {
-        const blocks = xmlAll('VOUCHER', text);
-        const rows = blocks.map(v => {
-          const amount = Math.abs(parseFloat(xml('AMOUNT', v)) || 0);
-          // Rough estimation of parameters parsing first billed quantity if available
-          // Tally XML structural variations might output QTY deeper, checking primary strings
-          const qtyRaw = xml('BILLEDQTY', v).split(' ')[0];
-          const rateRaw = xml('RATE', v).split('/')[0];
-          const qty = parseFloat(qtyRaw) || 1;
-          const calcRate = parseFloat(rateRaw) || (amount / qty);
-
-          return {
-            supplier_name: xml('PARTYLEDGERNAME', v) || 'Unknown Tally Supplier',
-            fabric_type: xml('STOCKITEMNAME', v) || 'Grey Fabric from Tally',
-            quantity: qty,
-            price: calcRate,
-            date: tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10),
-          };
-        }).filter(r => r.price > 0 && r.supplier_name);
-
-        if (rows.length > 0) {
-          const { error } = await supabase.from('purchase_fabric').insert(rows);
-          if (error) saveError = error.message;
-          else recordCount = rows.length;
-        }
-      }
-
-      // ── JOB BILLS → process_charges table (Cost Database) ──────────────
-      else if (type === 'job_bills') {
-        const blocks = xmlAll('VOUCHER', text);
-        const rows = blocks.map(v => {
-          const amount = Math.abs(parseFloat(xml('AMOUNT', v)) || 0);
-          const party = xml('PARTYLEDGERNAME', v) || '';
-          const typeStr = party.toLowerCase();
-
-          let pType = 'Dyeing';
-          if (typeStr.includes('surbhi') || typeStr.includes('schiffli')) pType = 'Schiffli';
-          else if (typeStr.includes('print') || typeStr.includes('mill')) pType = 'Mill Print';
-
-          return {
-            jobwork_unit_name: party || 'Tally Job Worker',
-            design_number: xml('VOUCHERNUMBER', v) || 'Sync',
-            process_type: pType,
-            date: tallyDate(xml('DATE', v)) || new Date().toISOString().slice(0, 10),
-            job_charge: (amount / 1000).toFixed(2), // Generic division for rate fallback to prevent bloat
-            shortage_pct: pType === 'Dyeing' ? 8.5 : (pType === 'Schiffli' ? 4.0 : 0) // Default logic from findings
-          };
-        }).filter(r => r.jobwork_unit_name && r.jobwork_unit_name.length > 1);
-
-        if (rows.length > 0) {
-          const { error } = await supabase.from('process_charges').insert(rows);
-          if (error) saveError = error.message;
-          else recordCount = rows.length;
-        }
-      }
-
-      // ── STOCK ITEMS → fabric_masters table ───────────────────────────
+      // ── 6. STOCK ITEMS → fabric_masters ─────────────────────────────────
       else if (type === 'stock') {
         const blocks = xmlAll('STOCKITEM', text);
         const rows = blocks.map(v => ({
@@ -229,235 +481,56 @@ export default function TallyPrimePage() {
           type: 'Tally Stock',
           sku: xml('NAME', v).replace(/\s+/g, '-').toUpperCase().slice(0, 30),
           status: 'active',
-        })).filter(r => r.name && r.name.length > 1);
+        })).filter(r => r.name?.length > 1);
 
         if (rows.length > 0) {
           const { error } = await supabase.from('fabric_masters')
-            .upsert(rows, { onConflict: 'name', ignoreDuplicates: false });
+            .upsert(rows, { onConflict: 'sku', ignoreDuplicates: false });
           if (error) saveError = error.message;
           else recordCount = rows.length;
         }
       }
 
-      // ── OUTSTANDING → count only (Bills Receivable is a report view) ─
+      // ── 7. OUTSTANDING ───────────────────────────────────────────────────
       else if (type === 'outstanding') {
-        recordCount = (text.match(/<\/BILLFIXED>/g) || []).length ||
-          (text.match(/<\/BILL>/g) || []).length;
+        recordCount = (text.match(/<\/BILLFIXED>/g) || []).length
+          || (text.match(/<\/BILL>/g) || []).length;
       }
 
-      // Save to sync log
+      // Log result
       await supabase.from('tally_sync_log').insert([{
         sync_type: type,
         status: saveError ? 'partial' : 'success',
         records_synced: recordCount,
         error_message: saveError,
-        raw_response: text.slice(0, 500)
+        raw_response: text.slice(0, 800),
       }]);
-      fetchSyncLog();
+      await fetchSyncLog();
+      setSyncStatus(saveError
+        ? `⚠️ ${recordCount} records saved with errors: ${saveError}`
+        : `✅ ${recordCount} records synced successfully`
+      );
 
     } catch (e) {
-      await supabase.from('tally_sync_log').insert([{ sync_type: type, status: 'failed', error_message: e.message }]);
-      fetchSyncLog();
+      await supabase.from('tally_sync_log').insert([{
+        sync_type: type, status: 'failed', error_message: e.message
+      }]);
+      await fetchSyncLog();
+      setSyncStatus(`❌ Sync failed: ${e.message}`);
     }
     setLoading(false);
+    setTimeout(() => setSyncStatus(''), 6000);
   }
 
-  const tabs = [
+  const TABS = [
     { id: 'status', label: 'Connection', icon: '🔌' },
     { id: 'sync', label: 'Data Sync', icon: '🔄' },
     { id: 'log', label: 'Sync Log', icon: '📋' },
     { id: 'guide', label: 'Setup Guide', icon: '📖' },
   ];
 
-  return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Tally Prime Integration</h1>
-        <p className="text-gray-500 text-sm mt-1">Sync accounting data between Shreerang and Tally Prime via FRP Tunnel</p>
-      </div>
-
-      {/* ── BIG OFFLINE BANNER ── */}
-      {connected === false && (
-        <div className="flex items-start gap-4 p-5 mb-4 rounded-2xl border-2 border-red-400 bg-red-50 shadow-md">
-          <span className="text-3xl mt-0.5">⚠️</span>
-          <div className="flex-1">
-            <p className="text-red-800 font-bold text-lg">Tally Offline — Please open TallyPrime on office PC</p>
-            <p className="text-red-600 text-sm mt-1">Cannot reach the Tally FRP Tunnel. Make sure Tally Prime is running and the FRP client is active on the office computer.</p>
-            {lastConnected && (
-              <p className="text-red-500 text-xs mt-2">Last connected: {lastConnected.toLocaleString('en-IN')}</p>
-            )}
-            <p className="text-red-400 text-xs mt-1">Auto-retrying in {retryCountdown}s…</p>
-          </div>
-          <button onClick={checkConnection} disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 shrink-0">
-            {loading ? 'Checking…' : 'Retry Now'}
-          </button>
-        </div>
-      )}
-
-      {/* ── RECONNECTED FLASH BANNER ── */}
-      {justReconnected && (
-        <div className="flex items-center gap-3 p-4 mb-4 rounded-2xl border-2 border-green-400 bg-green-50 shadow-md animate-pulse">
-          <span className="text-2xl">✅</span>
-          <p className="text-green-800 font-bold">Tally Reconnected — Data sync resumed automatically</p>
-        </div>
-      )}
-
-      {/* ── NORMAL STATUS BAR (connected / initial) ── */}
-      {connected !== false && (
-        <div className={`flex items-center gap-3 p-4 rounded-xl border mb-4 ${connected === true ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
-          <div className={`w-3 h-3 rounded-full ${connected === true ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-          <div className="flex-1">
-            <p className={`font-medium ${connected === true ? 'text-green-800' : 'text-gray-600'}`}>
-              {connected === true ? `Connected to Tally Prime${tallyCompany ? ` — ${tallyCompany}` : ''}` : 'Checking connection…'}
-            </p>
-            <p className={`text-xs ${connected === true ? 'text-green-600' : 'text-gray-400'}`}>
-              {connected === true
-                ? `Tally FRP Tunnel is active${lastConnected ? ` · Last verified: ${lastConnected.toLocaleTimeString('en-IN')}` : ''}`
-                : 'Please wait…'}
-            </p>
-          </div>
-          <button onClick={checkConnection} disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-            {loading ? 'Checking…' : 'Test Connection'}
-          </button>
-        </div>
-      )}
-
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${tab === t.id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'status' && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Connection Details</h3>
-            <div className="space-y-2 text-sm">
-              {[
-                { label: 'FRP Tunnel', value: 'tally.shreerangtrendz.com' },
-                { label: 'Status', value: connected ? '✅ Connected' : '❌ Disconnected' },
-                { label: 'Company', value: tallyCompany || 'Not detected' },
-                { label: 'Last Sync', value: lastSync ? new Date(lastSync).toLocaleString('en-IN') : 'Never' },
-                { label: 'Protocol', value: 'Tally XML Gateway' },
-              ].map((item, i) => (
-                <div key={i} className="flex justify-between py-2 border-b last:border-0">
-                  <span className="text-gray-500">{item.label}</span>
-                  <span className="font-medium text-gray-900 text-right max-w-48 truncate">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Sync Statistics</h3>
-            <div className="space-y-3">
-              {[
-                { label: 'Total Syncs', value: syncLog.length, color: 'bg-blue-50 text-blue-700' },
-                { label: 'Successful', value: syncLog.filter(l => l.status === 'success').length, color: 'bg-green-50 text-green-700' },
-                { label: 'Failed', value: syncLog.filter(l => l.status === 'failed').length, color: 'bg-red-50 text-red-700' },
-              ].map((s, i) => (
-                <div key={i} className={`flex justify-between items-center p-3 rounded-lg ${s.color}`}>
-                  <span className="text-sm">{s.label}</span>
-                  <span className="font-bold text-lg">{s.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'sync' && (
-        <div className="grid grid-cols-2 gap-4">
-          {[
-            { id: 'ledgers', label: 'Sync Ledgers', icon: '📒', desc: 'Import customer and vendor ledger data from Tally', color: 'blue' },
-            { id: 'vouchers', label: 'Sync Vouchers', icon: '🧾', desc: 'Import sales and payment vouchers from Tally', color: 'green' },
-            { id: 'purchases', label: 'Sync Purchases', icon: '🛒', desc: 'Import grey fabric purchase bills into Cost Database', color: 'indigo' },
-            { id: 'job_bills', label: 'Sync Job Bills', icon: '🏭', desc: 'Import processor job bills into Cost Database', color: 'pink' },
-            { id: 'stock', label: 'Sync Stock Items', icon: '📦', desc: 'Import stock items and inventory from Tally', color: 'purple' },
-            { id: 'outstanding', label: 'Sync Outstanding', icon: '💳', desc: 'Import outstanding payables and receivables', color: 'orange' },
-          ].map(item => (
-            <div key={item.id} className="bg-white rounded-xl border p-4">
-              <div className="flex items-start gap-3 mb-3">
-                <span className="text-2xl">{item.icon}</span>
-                <div>
-                  <h4 className="font-semibold text-gray-900">{item.label}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-                </div>
-              </div>
-              <button onClick={() => syncFromTally(item.id)} disabled={loading || !connected}
-                className={`w-full py-2 rounded-lg text-sm font-medium bg-${item.color}-600 text-white hover:bg-${item.color}-700 disabled:opacity-50 disabled:cursor-not-allowed`}>
-                {loading ? '⏳ Syncing...' : `Sync ${item.label.replace('Sync ', '')}`}
-              </button>
-              {!connected && <p className="text-xs text-red-500 mt-1 text-center">Connect Tally first</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {tab === 'log' && (
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {['Type', 'Status', 'Records', 'Time', 'Notes'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {syncLog.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No sync history yet. Run a sync to get started.</td></tr>
-              ) : syncLog.map(log => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900 capitalize">{log.sync_type}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {log.status === 'success' ? '✅' : '❌'} {log.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{log.records_synced || 0}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{log.synced_at ? new Date(log.synced_at).toLocaleString('en-IN') : '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{log.error_message || 'Success'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {tab === 'guide' && (
-        <div className="bg-white rounded-xl border p-6 space-y-4">
-          <h3 className="font-semibold text-gray-900 text-lg">Tally Prime Setup Guide</h3>
-          <div className="space-y-4">
-            {[
-              { step: 1, title: 'Install FRP on your Tally PC', desc: 'Set up FRP (Fast Reverse Proxy) on the computer running Tally Prime to expose it via tally.shreerangtrendz.com.' },
-              { step: 2, title: 'Enable Tally XML Server', desc: 'In Tally Prime → F12 → Advanced Configuration → Enable ODBC/XML Port. Set port to 9000.' },
-              { step: 3, title: 'Start FRP Tunnel', desc: 'Run your FRP client with server domain tally.shreerangtrendz.com pointing to localhost:9000.' },
-              { step: 4, title: 'Test connection', desc: 'Click "Test Connection" above. You should see Connected status and your company name.' },
-              { step: 5, title: 'Start syncing data', desc: 'Use the Data Sync tab to pull ledgers, vouchers, and outstanding data from Tally.' },
-            ].map(s => (
-              <div key={s.step} className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
-                  {s.step}
-                </div>
-                <div>
-                  <h4 className="font-medium text-gray-900">{s.title}</h4>
-                  <p className="text-sm text-gray-500 mt-0.5">{s.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-            <p className="text-xs text-blue-700 font-medium">Current FRP Tunnel endpoint:</p>
-            <p className="text-xs text-blue-600 font-mono mt-1 break-all">tally.shreerangtrendz.com → routed via /api/tally-proxy</p>
-            <p className="text-xs text-blue-500 mt-1">All Tally API calls are proxied through Vercel to avoid CORS issues.</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+  const SYNC_CARDS = [
+    { id: 'ledgers', label: 'Sync Ledgers', icon: '📒', desc: 'Import customers, vendors, job workers from Tally ledgers', color: 'blue' },
+    { id: 'purchases', label: 'Sync Purchases', icon: '🛒', desc: 'Grey fabric purchase bills → purchase_fabric (with freight, broker, credit days)', color: 'indigo' },
+    { id: 'delivery_notes', label: 'Sync Delivery Notes', icon: '📤', desc: 'Issue challans → process_issues (metres issued per vendor batch)', color: 'yellow' },
+    { id: 'job_bills', label: 'Sync Job Bills', icon: '🏭', desc: 'Processor job bills → process_charges (finished metres, TDS, premium charge

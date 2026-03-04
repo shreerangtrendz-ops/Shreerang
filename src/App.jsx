@@ -34,6 +34,7 @@ import FancyBaseFabricForm from '@/pages/admin/fabric/FancyBaseFabricForm';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
 // ── Admin: Images ──
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
+import DesignUploadPage from '@/pages/admin/design/DesignUploadPage';
 // ── Admin: Cost Engine ──
 import PurchaseEntryPage from '@/pages/admin/cost/PurchaseEntryPage';
 import ProcessEntryPage from '@/pages/admin/cost/ProcessEntryPage';
@@ -123,6 +124,7 @@ const App = () => {
 
                     {/* Design Catalogue */}
                     <Route path="images/upload" element={<ImageUploadPage />} />
+                    <Route path="design/upload" element={<DesignUploadPage />} />
                     <Route path="design-velocity" element={<DesignVelocityPage />} />
                     <Route path="products" element={<ComingSoonPage title="Product Master" icon="🗂" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue → Product Master" />} />
 

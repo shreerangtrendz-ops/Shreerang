@@ -20,7 +20,7 @@ const navGroups = [
   {
     label: 'Design Catalogue',
     items: [
-      { icon: '🎨', label: 'Design Upload', to: '/admin/images/upload', nb: '14', nbClass: 'warn' },
+      { icon: '🎨', label: 'Design Upload', to: '/admin/design/upload', nb: '14', nbClass: 'warn' },
       { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity', nb: 'NEW', nbClass: 'gold' },
       { icon: '📦', label: 'Bulk Upload', to: '/admin/fabric-master/bulk-import', nb: 'NEW', nbClass: 'gold' },
       { icon: '🗂', label: 'Product Master', to: '/admin/products' },

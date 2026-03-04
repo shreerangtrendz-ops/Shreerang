@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { DesignUploadService } from '@/services/DesignUploadService';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
@@ -13,6 +14,9 @@ import WhatsAppButton from '@/components/admin/whatsapp/WhatsAppButton';
 const DesignUploadPage = () => {
   const [file, setFile] = useState(null);
   const [designNumber, setDesignNumber] = useState('');
+  const [fabricType, setFabricType] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
+  const [gstRate, setGstRate] = useState('5');
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
@@ -32,18 +36,32 @@ const DesignUploadPage = () => {
 
   const handleUpload = async () => {
     if (!file || !designNumber) return;
-    
+
     setUploading(true);
     try {
+      // 1. Upload to CDN
       const url = await DesignUploadService.uploadToBunnyNet(file, designNumber);
+
+      // 2. Generate AI Description
       const aiDesc = await DesignUploadService.generateAIDescription(file);
-      
+
+      // 3. Save to design_batch_master
+      await DesignUploadService.saveToDesignMaster({
+        design_no: designNumber,
+        url,
+        fabric_type: fabricType,
+        hsn_code: hsnCode,
+        gst_rate: parseFloat(gstRate)
+      });
+
       const designData = { design_number: designNumber, url, description: aiDesc };
       setResult(designData);
-      
-      toast({ title: 'Success', description: 'Design uploaded successfully' });
+
+      toast({ title: 'Success', description: 'Design master record created and image uploaded!' });
       setFile(null);
       setDesignNumber('');
+      setFabricType('');
+      setHsnCode('');
     } catch (error) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
     } finally {
@@ -54,8 +72,8 @@ const DesignUploadPage = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-6 pb-24">
       <Helmet><title>Design Upload | Admin</title></Helmet>
-      <AdminPageHeader 
-        title="Upload Design" 
+      <AdminPageHeader
+        title="Upload Design"
         description="Upload new designs to Bunny.net CDN with AI analysis."
       />
 
@@ -68,46 +86,82 @@ const DesignUploadPage = () => {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="d_num">Design Number *</Label>
-              <Input 
-                id="d_num" 
-                placeholder="e.g. D-2024-001" 
+              <Input
+                id="d_num"
+                placeholder="e.g. D No. 5059"
                 value={designNumber}
                 onChange={e => setDesignNumber(e.target.value)}
               />
             </div>
 
-            <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
-               <input 
-                 type="file" 
-                 accept="image/png, image/jpeg, image/webp" 
-                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                 onChange={handleFileChange}
-               />
-               {preview ? (
-                 <div className="relative h-48 w-full">
-                   <img src={preview} alt="Preview" className="h-full mx-auto object-contain rounded-md shadow-sm" />
-                   <Button 
-                     variant="secondary" 
-                     size="sm" 
-                     className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm"
-                     onClick={(e) => { e.preventDefault(); setFile(null); setPreview(null); }}
-                   >
-                     Change
-                   </Button>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center justify-center space-y-2 text-slate-500">
-                    <div className="bg-slate-100 p-3 rounded-full">
-                      <UploadCloud className="h-8 w-8 text-slate-400" />
-                    </div>
-                    <p className="font-medium text-slate-700">Click or drag image here</p>
-                    <p className="text-xs">PNG, JPG, WebP (Max 10MB)</p>
-                 </div>
-               )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fabric_type">Fabric Type</Label>
+                <Input
+                  id="fabric_type"
+                  placeholder="e.g. 14 Kg Capsule Discharge"
+                  value={fabricType}
+                  onChange={e => setFabricType(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hsn_code">HSN Code</Label>
+                <Input
+                  id="hsn_code"
+                  placeholder="e.g. 540824"
+                  value={hsnCode}
+                  onChange={e => setHsnCode(e.target.value)}
+                />
+              </div>
             </div>
 
-            <Button 
-              className="w-full bg-slate-900 text-white" 
+            <div className="space-y-2">
+              <Label htmlFor="gst_rate">GST Rate (%)</Label>
+              <Select value={gstRate} onValueChange={setGstRate}>
+                <SelectTrigger id="gst_rate" className="bg-white">
+                  <SelectValue placeholder="Select GST Rate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0% (Nil)</SelectItem>
+                  <SelectItem value="5">5% (Textile)</SelectItem>
+                  <SelectItem value="12">12%</SelectItem>
+                  <SelectItem value="18">18%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">
+              <input
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={handleFileChange}
+              />
+              {preview ? (
+                <div className="relative h-48 w-full">
+                  <img src={preview} alt="Preview" className="h-full mx-auto object-contain rounded-md shadow-sm" />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm"
+                    onClick={(e) => { e.preventDefault(); setFile(null); setPreview(null); }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center space-y-2 text-slate-500">
+                  <div className="bg-slate-100 p-3 rounded-full">
+                    <UploadCloud className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <p className="font-medium text-slate-700">Click or drag image here</p>
+                  <p className="text-xs">PNG, JPG, WebP (Max 10MB)</p>
+                </div>
+              )}
+            </div>
+
+            <Button
+              className="w-full bg-slate-900 text-white"
               onClick={handleUpload}
               disabled={!file || !designNumber || uploading}
             >
@@ -142,23 +196,23 @@ const DesignUploadPage = () => {
 
               <div className="bg-white p-4 rounded-lg border border-purple-100 space-y-2">
                 <Label className="text-xs uppercase text-purple-600 flex items-center gap-1">
-                   ✨ AI Description
+                  ✨ AI Description
                 </Label>
                 <p className="text-sm text-slate-700 leading-relaxed">
                   {result.description}
                 </p>
               </div>
-              
+
               <div className="flex gap-3 pt-2">
-                 <WhatsAppButton 
-                   data={{ name: result.design_number, sku: result.url }} 
-                   type="design" 
-                   variant="default"
-                   size="default"
-                 />
-                 <Button variant="outline" className="w-full" onClick={() => { setResult(null); setPreview(null); setFile(null); setDesignNumber(''); }}>
-                   Upload Another
-                 </Button>
+                <WhatsAppButton
+                  data={{ name: result.design_number, sku: result.url }}
+                  type="design"
+                  variant="default"
+                  size="default"
+                />
+                <Button variant="outline" className="w-full" onClick={() => { setResult(null); setPreview(null); setFile(null); setDesignNumber(''); }}>
+                  Upload Another
+                </Button>
               </div>
             </CardContent>
           </Card>

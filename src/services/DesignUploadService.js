@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/customSupabaseClient';
+
 export const DesignUploadService = {
   uploadToBunnyNet: async (file, designNumber) => {
     // This assumes environment variables are set
@@ -37,6 +39,29 @@ export const DesignUploadService = {
       console.error("Bunny Upload Error:", error);
       throw error;
     }
+  },
+
+  saveToDesignMaster: async (designData) => {
+    // Clean design number (e.g. "D No. 5059" -> "5059")
+    const cleanDesignNo = designData.design_no
+      .replace(/^D\s*(No\.?)?\s*/i, '')
+      .trim();
+
+    const { data, error } = await supabase
+      .from('design_batch_master')
+      .upsert({
+        design_no: cleanDesignNo,
+        primary_image_url: designData.url,
+        fabric_type: designData.fabric_type,
+        hsn_code: designData.hsn_code,
+        gst_rate: designData.gst_rate || 5,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'design_no' })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   },
 
   generateAIDescription: async (file) => {

@@ -55,6 +55,7 @@ import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
 // ── Admin: Integrations ──
 import CloudSyncPage from '@/pages/admin/integrations/CloudSyncPage';
 import TallyPrimePage from '@/pages/admin/integrations/TallyPrimePage';
+import TallySyncDashboard from '@/pages/admin/integrations/TallySyncDashboard';
 import GoogleDrivePage from '@/pages/admin/integrations/GoogleDrivePage';
 import BunnyNetPage from '@/pages/admin/integrations/BunnyNetPage';
 // ── Admin: New Functional Pages ──
@@ -166,8 +167,8 @@ const App = () => {
                     {/* Integrations */}
                     <Route path="whatsapp" element={<WhatsAppBotPage />} />
                     <Route path="cloud-sync" element={<CloudSyncPage />} />
-                    <Route path="tally-prime" element={<TallyPrimePage />} />
-                    <Route path="tally-sync" element={<TallyPrimePage />} />
+                    <Route path="tally-prime" element={<TallySyncDashboard />} />
+                    <Route path="tally-sync" element={<TallySyncDashboard />} />
                     <Route path="google-drive" element={<GoogleDrivePage />} />
                     <Route path="bunny-cdn" element={<BunnyNetPage />} />
                     {/* Backup Control */}

@@ -61,6 +61,7 @@ import CustomerMasterPage from '@/pages/admin/CustomerMasterPage';
 import ChallansPage from '@/pages/admin/ChallansPage';
 import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
 import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
+import OutstandingReceivable from '@/pages/reports/OutstandingReceivable';
 import MarketIntelPage from '@/pages/admin/MarketIntelPage';
 import FieldVisitTrackerPage from '@/pages/admin/FieldVisitTrackerPage';
 import Customer360Page from '@/pages/admin/Customer360Page';
@@ -152,6 +153,7 @@ const App = () => {
                     <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="🌐" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features → Multilingual" />} />
                     <Route path="customer-360" element={<Customer360Page />} />
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
+                    <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
 
                     {/* CRM & Access */}
                     <Route path="field-visits" element={<FieldVisitTrackerPage />} />

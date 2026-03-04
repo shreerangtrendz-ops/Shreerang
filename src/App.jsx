@@ -54,7 +54,6 @@ import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
 import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
 // ── Admin: Integrations ──
 import CloudSyncPage from '@/pages/admin/integrations/CloudSyncPage';
-import TallyPrimePage from '@/pages/admin/integrations/TallyPrimePage';
 import TallySyncDashboard from '@/pages/admin/integrations/TallySyncDashboard';
 import GoogleDrivePage from '@/pages/admin/integrations/GoogleDrivePage';
 import BunnyNetPage from '@/pages/admin/integrations/BunnyNetPage';

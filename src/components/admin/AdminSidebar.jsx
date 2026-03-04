@@ -77,7 +77,7 @@ const navGroups = [
     label: 'Integrations',
     items: [
       { icon: '💬', label: 'WhatsApp Bot', to: '/admin/whatsapp', nb: 'ON', nbClass: 'ok' },
-      { icon: '📊', label: 'Tally Prime', to: '/admin/tally-prime', nb: 'SYNC', nbClass: 'ok' },
+      { icon: '🔄', label: 'Tally Sync', to: '/admin/tally-sync', nb: 'SYNC', nbClass: 'ok' },
       { icon: '☁️', label: 'Cloud Storage', to: '/admin/cloud-sync' },
       { icon: '🤖', label: 'AI Price Sync', to: '/admin/ai-pricing' },
     ]

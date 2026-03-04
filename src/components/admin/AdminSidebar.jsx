@@ -50,6 +50,7 @@ const navGroups = [
       { icon: '🏭', label: 'Vendor Master', to: '/admin/settings/suppliers' },
       { icon: '👥', label: 'Customers', to: '/admin/customers' },
       { icon: '💰', label: 'Outstanding Receivable', to: '/admin/outstanding-receivable' },
+      { icon: '💸', label: 'Outstanding Payable', to: '/admin/outstanding-payable' },
       { icon: '📡', label: 'Market Intelligence', to: '/admin/market-intel', nb: 'NEW', nbClass: '' },
       { icon: '🎯', label: 'Make-to-Order', to: '/admin/mto-orders', nb: 'NEW', nbClass: 'gold' },
     ]

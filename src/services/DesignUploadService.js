@@ -54,7 +54,9 @@ export const DesignUploadService = {
         primary_image_url: designData.url,
         fabric_type: designData.fabric_type,
         hsn_code: designData.hsn_code,
-        gst_rate: designData.gst_rate || 5,
+        gst_rate: designData.gst_rate,
+        item_name: designData.item_name,
+        is_active: true,
         updated_at: new Date().toISOString()
       }, { onConflict: 'design_no' })
       .select()

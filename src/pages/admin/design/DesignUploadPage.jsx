@@ -14,6 +14,7 @@ import WhatsAppButton from '@/components/admin/whatsapp/WhatsAppButton';
 const DesignUploadPage = () => {
   const [file, setFile] = useState(null);
   const [designNumber, setDesignNumber] = useState('');
+  const [itemName, setItemName] = useState('');
   const [fabricType, setFabricType] = useState('');
   const [hsnCode, setHsnCode] = useState('');
   const [gstRate, setGstRate] = useState('5');
@@ -51,7 +52,8 @@ const DesignUploadPage = () => {
         url,
         fabric_type: fabricType,
         hsn_code: hsnCode,
-        gst_rate: parseFloat(gstRate)
+        gst_rate: parseFloat(gstRate),
+        item_name: itemName
       });
 
       const designData = { design_number: designNumber, url, description: aiDesc };
@@ -60,6 +62,7 @@ const DesignUploadPage = () => {
       toast({ title: 'Success', description: 'Design master record created and image uploaded!' });
       setFile(null);
       setDesignNumber('');
+      setItemName('');
       setFabricType('');
       setHsnCode('');
     } catch (error) {
@@ -84,14 +87,26 @@ const DesignUploadPage = () => {
             <CardDescription>Enter details and select file</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="d_num">Design Number *</Label>
-              <Input
-                id="d_num"
-                placeholder="e.g. D No. 5059"
-                value={designNumber}
-                onChange={e => setDesignNumber(e.target.value)}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="d_num">Design Number *</Label>
+                <Input
+                  id="d_num"
+                  placeholder="e.g. 5059"
+                  value={designNumber}
+                  onChange={e => setDesignNumber(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="item_name">Item Name / Description</Label>
+                <Input
+                  id="item_name"
+                  placeholder="e.g. 14 Kg Capsule Discharge Foil Mill Print Design"
+                  value={itemName}
+                  onChange={e => setItemName(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

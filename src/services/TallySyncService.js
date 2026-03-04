@@ -128,15 +128,16 @@ export async function pullJobBillsFromTally(fromDate, toDate) {
 }
 
 // ============================================================
-// 3. PULL STOCK SUMMARY FROM TALLY
+// 3. PULL STOCK WITH DESIGN DETAIL
 // ============================================================
-export async function pullStockFromTally() {
+export async function pullStockWithDesignDetail() {
     const xml = `<ENVELOPE>
   <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
   <BODY><EXPORTDATA><REQUESTDESC>
-    <REPORTNAME>Stock Summary</REPORTNAME>
+    <REPORTNAME>Stock Item Monthly Summary</REPORTNAME>
     <STATICVARIABLES>
       <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      <EXPLODEFLAG>Yes</EXPLODEFLAG>
     </STATICVARIABLES>
   </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
 
@@ -145,19 +146,47 @@ export async function pullStockFromTally() {
         const { stockItems } = parseTallyXMLResponse(responseXml);
         const today = new Date().toISOString().split('T')[0];
 
+        let count = 0;
         for (const item of stockItems) {
-            await supabase.from('fabric_stock_live').upsert({
-                fabric_sku: item.name,
-                fabric_name: item.name,
-                closing_qty_mtrs: item.closingQty || 0,
-                sync_date: today,
-                last_tally_sync: new Date().toISOString(),
-            }, { onConflict: 'fabric_sku,sync_date' });
+            if (item.batches && item.batches.length > 0) {
+                for (const batch of item.batches) {
+                    let designNo = batch.name;
+                    if (designNo) {
+                        // Strip out "D", "D No.", "D No" from the beginning
+                        designNo = designNo.replace(/^D\s*(No\.?)?\s*/i, '').trim();
+                        // Ignore default batch names
+                        if (designNo.toLowerCase() === 'primary batch') designNo = 'MAIN';
+                    } else {
+                        designNo = 'MAIN';
+                    }
+
+                    await supabase.from('fabric_stock_live').upsert({
+                        fabric_sku: item.name,
+                        fabric_name: item.name,
+                        design_no: designNo,
+                        closing_qty_mtrs: batch.closingQty || 0,
+                        sync_date: today,
+                        last_tally_sync: new Date().toISOString(),
+                    }, { onConflict: 'fabric_sku,design_no,sync_date' });
+                    count++;
+                }
+            } else {
+                // Fallback if no batch found
+                await supabase.from('fabric_stock_live').upsert({
+                    fabric_sku: item.name,
+                    fabric_name: item.name,
+                    design_no: 'MAIN',
+                    closing_qty_mtrs: item.closingQty || 0,
+                    sync_date: today,
+                    last_tally_sync: new Date().toISOString(),
+                }, { onConflict: 'fabric_sku,design_no,sync_date' });
+                count++;
+            }
         }
 
-        return { success: true, count: stockItems.length };
+        return { success: true, count };
     } catch (err) {
-        await logSyncError('stock_pull', 'tally_to_supabase', 'batch', err.message);
+        await logSyncError('stock_pull_with_design', 'tally_to_supabase', 'batch', err.message);
         return { success: false, error: err.message };
     }
 }
@@ -312,9 +341,22 @@ export function parseTallyXMLResponse(xml) {
     const stockMatches = [...xml.matchAll(/<STOCKITEM[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)];
     for (const match of stockMatches) {
         const block = match[1];
+
+        // Extract batches if EXPLODEFLAG gives BATCHALLOCATIONS.LIST
+        const batches = [];
+        const batchMatches = [...block.matchAll(/<BATCHALLOCATIONS\.LIST[^>]*>([\s\S]*?)<\/BATCHALLOCATIONS\.LIST>/gi)];
+        for (const bMatch of batchMatches) {
+            const bBlock = bMatch[1];
+            batches.push({
+                name: extractTag(bBlock, 'BATCHNAME') || extractTag(bBlock, 'NAME'),
+                closingQty: parseFloat(extractTag(bBlock, 'CLOSINGBALANCE') || '0'),
+            });
+        }
+
         stockItems.push({
             name: extractTag(block, 'NAME'),
             closingQty: parseFloat(extractTag(block, 'CLOSINGBALANCE') || '0'),
+            batches: batches,
         });
     }
 

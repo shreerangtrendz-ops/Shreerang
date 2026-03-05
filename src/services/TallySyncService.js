@@ -133,7 +133,7 @@ export async function pullStockWithDesignDetail() {
     const xml = `<ENVELOPE>
   <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
   <BODY><EXPORTDATA><REQUESTDESC>
-    <REPORTNAME>Stock Item Monthly Summary</REPORTNAME>
+    <REPORTNAME>Stock Summary</REPORTNAME>
     <STATICVARIABLES>
       <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
       <EXPLODEFLAG>Yes</EXPLODEFLAG>

@@ -19,7 +19,7 @@ const SalesOrderForm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+
   const [orderData, setOrderData] = useState({
     order_no: '',
     customer_name: '',
@@ -39,13 +39,20 @@ const SalesOrderForm = () => {
   useEffect(() => {
     if (id) {
       // Fetch existing order logic here
-      // For now, generating new order number
     } else {
-      setOrderData(prev => ({
-        ...prev,
-        order_no: `SO-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
-        delivery_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      }));
+      // Generate sequential SRTPL/NNNN/25-26 order number
+      (async () => {
+        const { count } = await supabase
+          .from('sales_orders')
+          .select('*', { count: 'exact', head: true });
+        const serial = String((count || 0) + 1).padStart(4, '0');
+        const orderNo = `SRTPL/${serial}/25-26`;
+        setOrderData(prev => ({
+          ...prev,
+          order_no: orderNo,
+          delivery_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        }));
+      })();
     }
   }, [id]);
 
@@ -133,8 +140,8 @@ const SalesOrderForm = () => {
     <FormErrorBoundary>
       <div className="max-w-6xl mx-auto space-y-6 pb-20 p-6">
         <Helmet><title>{id ? 'Edit Sales Order' : 'New Sales Order'}</title></Helmet>
-        
-        <AdminPageHeader 
+
+        <AdminPageHeader
           title={id ? `Edit Order #${orderData.order_no}` : "New Sales Order"}
           breadcrumbs={[{ label: 'Orders', href: '/admin/orders' }, { label: 'New Sales Order' }]}
           onBack={() => navigate('/admin/orders')}
@@ -156,7 +163,7 @@ const SalesOrderForm = () => {
                 <Label>Status</Label>
                 <Input value={orderData.status} readOnly className="capitalize bg-slate-50" />
               </div>
-              
+
               <div className="space-y-2">
                 <Label>Customer Name</Label>
                 <Input name="customer_name" value={orderData.customer_name} onChange={handleHeaderChange} placeholder="Enter name" required />
@@ -169,7 +176,7 @@ const SalesOrderForm = () => {
                 <Label>Email</Label>
                 <Input name="customer_email" type="email" value={orderData.customer_email} onChange={handleHeaderChange} placeholder="email@example.com" />
               </div>
-              
+
               <div className="md:col-span-3 space-y-2">
                 <Label>Shipping Address</Label>
                 <Textarea name="shipping_address" value={orderData.shipping_address} onChange={handleHeaderChange} rows={2} />
@@ -194,51 +201,51 @@ const SalesOrderForm = () => {
                       <Label className="mb-2 block">Design</Label>
                       <DesignUploadComponent onUploadComplete={(data) => handleDesignUpload(item.id, data)} />
                     </div>
-                    
+
                     <div className="md:col-span-8 grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="space-y-2">
                         <Label>Design No.</Label>
-                        <Input 
-                          value={item.design_number} 
+                        <Input
+                          value={item.design_number}
                           onChange={(e) => handleItemChange(item.id, 'design_number', e.target.value)}
                           placeholder="DSN-001"
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Fabric Type</Label>
-                        <Input 
-                          value={item.fabric_type} 
+                        <Input
+                          value={item.fabric_type}
                           onChange={(e) => handleItemChange(item.id, 'fabric_type', e.target.value)}
                           placeholder="e.g. Cotton 60s"
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Quantity (Mtrs)</Label>
-                        <Input 
-                          type="number" 
-                          value={item.quantity} 
+                        <Input
+                          type="number"
+                          value={item.quantity}
                           onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
                           min="1"
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Rate (₹)</Label>
-                        <Input 
-                          type="number" 
-                          value={item.rate} 
+                        <Input
+                          type="number"
+                          value={item.rate}
                           onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
                           min="0"
                         />
                       </div>
                       <div className="md:col-start-4 space-y-2">
-                         <Label>Amount</Label>
-                         <Input value={item.amount.toFixed(2)} readOnly className="bg-slate-100 font-mono text-right" />
+                        <Label>Amount</Label>
+                        <Input value={item.amount.toFixed(2)} readOnly className="bg-slate-100 font-mono text-right" />
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
-              
+
               <Button type="button" variant="outline" onClick={addItem} className="w-full border-dashed">
                 <Plus className="h-4 w-4 mr-2" /> Add Another Item
               </Button>
@@ -259,7 +266,7 @@ const SalesOrderForm = () => {
                     <Textarea name="notes" value={orderData.notes} onChange={handleHeaderChange} placeholder="Only visible to admin" />
                   </div>
                 </div>
-                
+
                 <div className="w-full md:w-1/3 space-y-2 bg-slate-50 p-4 rounded-lg">
                   <div className="flex justify-between py-1">
                     <span className="text-slate-600">Subtotal:</span>

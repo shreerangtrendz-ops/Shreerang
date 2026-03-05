@@ -326,18 +326,22 @@ export default function TallySyncDashboard() {
                                 'Domain Gateway': infra.domain,
                                 'Nginx Router': infra.nginx,
                                 'n8n Automation': infra.n8n
-                            }).map(([label, status]) => (
-                                <div key={label} className="flex justify-between items-center p-2 bg-slate-50 rounded border">
-                                    <span className="text-xs font-medium text-slate-700 truncate mr-2">{label}</span>
-                                    {status === 'checking' ? (
-                                        <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0"></div>
-                                    ) : status === 'online' ? (
-                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-[10px] h-5 px-1.5 shrink-0">Online</Badge>
-                                    ) : (
-                                        <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-[10px] h-5 px-1.5 shrink-0">Offline</Badge>
-                                    )}
-                                </div>
-                            ))}
+                            }).map(([label, status]) => {
+                                const isOnline = status === 'online';
+                                const isChecking = status === 'checking';
+                                return (
+                                    <div key={label} className="flex justify-between items-center p-2 bg-slate-50 rounded border">
+                                        <span className="text-xs font-medium text-slate-700 truncate mr-2">{label}</span>
+                                        {isChecking ? (
+                                            <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0"></div>
+                                        ) : isOnline ? (
+                                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-[10px] h-5 px-1.5 shrink-0">Online</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-[10px] h-5 px-1.5 shrink-0">Offline</Badge>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         {(infra.tally === 'online' && infra.tallyCompany) ? (

@@ -240,7 +240,7 @@ export default function TallySyncDashboard() {
                         <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border">
                             <div className="flex items-center gap-2">
                                 <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                                <span className="font-medium">Ngrok Tunnel</span>
+                                <span className="font-medium">FRP Tunnel</span>
                             </div>
                             <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>
                         </div>

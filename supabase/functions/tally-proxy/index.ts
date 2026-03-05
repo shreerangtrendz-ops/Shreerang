@@ -42,8 +42,9 @@ serve(async (req) => {
             });
         }
 
-        return new Response(responseText, {
-            headers: { ...corsHeaders, "Content-Type": "text/xml" },
+        // Return as JSON to avoid Blob issues in browser Supabase client
+        return new Response(JSON.stringify({ xml: responseText }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     } catch (error) {
         const msg = error instanceof Error ? error.message : "Unknown error";

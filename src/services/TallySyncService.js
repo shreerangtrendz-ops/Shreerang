@@ -10,6 +10,7 @@ const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
 async function postToTally(xml) {
+    console.log(`[TallySyncService] Sending XML to proxy...`);
     const { data, error } = await supabase.functions.invoke('tally-proxy', {
         body: { xmlBody: xml }
     });
@@ -17,12 +18,22 @@ async function postToTally(xml) {
     if (error) {
         throw new Error(`Tally HTTP error (via proxy): ${error.message}`);
     }
-    if (data.error) {
+
+    // Tally returns error inside JSON if proxy caught it
+    if (data && data.error) {
         throw new Error(`Tally Server error: ${data.error}`);
     }
 
-    // The proxy returns the raw XML string from Tally
-    return data;
+    // After our fix, tally-proxy returns { xml: "..." }
+    const responseXml = data?.xml || data;
+
+    if (typeof responseXml !== 'string') {
+        console.error('[TallySyncService] Unexpected response format:', data);
+        throw new Error('Received non-string response from Tally Proxy');
+    }
+
+    console.log(`[TallySyncService] Received XML (${responseXml.length} chars)`);
+    return responseXml;
 }
 
 // ─── HELPER: Log sync error to Supabase ─────────────────────

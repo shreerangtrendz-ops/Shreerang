@@ -6,8 +6,7 @@
 
 import { supabase } from '../lib/supabase';
 
-const TALLY_URL = 'https://yvone-unincreased-wilford.ngrok-free.app';
-// Future: const TALLY_URL = 'https://tally.shreerangtrendz.com';
+const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
 async function postToTally(xml) {
@@ -361,4 +360,174 @@ export function parseTallyXMLResponse(xml) {
     }
 
     return { vouchers, stockItems };
+}
+
+// ─── SYNC CUSTOMERS FROM TALLY ──────────────────────────────
+export async function syncCustomersFromTally() {
+    const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>Ledger</REPORTNAME>
+    <STATICVARIABLES>
+      <SVCURRENTCOMPANY>Shreerang Trendz Pvt Ltd</SVCURRENTCOMPANY>
+      <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      <LEDGERGROUPSFILTER>Sundry Debtors</LEDGERGROUPSFILTER>
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
+
+    try {
+        const xml_response = await postToTally(xml);
+        const ledgers = parseLedgersFromXML(xml_response);
+        let count = 0;
+        for (const ledger of ledgers) {
+            await supabase.from('customers').upsert({
+                name: ledger.name,
+                tally_ledger_name: ledger.name,
+                phone: ledger.phone || null,
+                address: ledger.address || null,
+                gst_number: ledger.gstin || null,
+                credit_days: ledger.creditDays || 30,
+                status: 'active',
+            }, { onConflict: 'tally_ledger_name' });
+            count++;
+        }
+        return { success: true, count };
+    } catch (err) {
+        await logSyncError('customer_sync', 'tally_to_supabase', 'batch', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// ─── SYNC SUPPLIERS/CREDITORS FROM TALLY ────────────────────
+export async function syncSuppliersFromTally() {
+    const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>Ledger</REPORTNAME>
+    <STATICVARIABLES>
+      <SVCURRENTCOMPANY>Shreerang Trendz Pvt Ltd</SVCURRENTCOMPANY>
+      <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      <LEDGERGROUPSFILTER>Sundry Creditors</LEDGERGROUPSFILTER>
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
+
+    try {
+        const xml_response = await postToTally(xml);
+        const ledgers = parseLedgersFromXML(xml_response);
+        let count = 0;
+        for (const ledger of ledgers) {
+            await supabase.from('customers').upsert({
+                name: ledger.name,
+                tally_ledger_name: ledger.name,
+                phone: ledger.phone || null,
+                address: ledger.address || null,
+                gst_number: ledger.gstin || null,
+                business_type: 'supplier',
+                credit_days: 30,
+                status: 'active',
+            }, { onConflict: 'tally_ledger_name' });
+            count++;
+        }
+        return { success: true, count };
+    } catch (err) {
+        await logSyncError('supplier_sync', 'tally_to_supabase', 'batch', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// ─── SYNC AGENTS FROM TALLY ─────────────────────────────────
+export async function syncAgentsFromTally() {
+    const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>Ledger</REPORTNAME>
+    <STATICVARIABLES>
+      <SVCURRENTCOMPANY>Shreerang Trendz Pvt Ltd</SVCURRENTCOMPANY>
+      <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      <LEDGERGROUPSFILTER>Sales Accounts</LEDGERGROUPSFILTER>
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
+
+    try {
+        const xml_response = await postToTally(xml);
+        const ledgers = parseLedgersFromXML(xml_response);
+        let count = 0;
+        for (const ledger of ledgers) {
+            await supabase.from('sales_team').upsert({
+                name: ledger.name,
+                phone: ledger.phone || null,
+                email: ledger.email || null,
+                is_active: true,
+            }, { onConflict: 'name' });
+            count++;
+        }
+        return { success: true, count };
+    } catch (err) {
+        await logSyncError('agent_sync', 'tally_to_supabase', 'batch', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// ─── SYNC OUTSTANDING FROM TALLY ────────────────────────────
+export async function syncOutstandingFromTally() {
+    const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC>
+    <REPORTNAME>Bill Outstanding</REPORTNAME>
+    <STATICVARIABLES>
+      <SVCURRENTCOMPANY>Shreerang Trendz Pvt Ltd</SVCURRENTCOMPANY>
+      <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+    </STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
+
+    try {
+        const xml_response = await postToTally(xml);
+        // Parse and upsert into payment_followups
+        const bills = parseBillsFromXML(xml_response);
+        for (const bill of bills) {
+            await supabase.from('payment_followups').upsert({
+                customer_name: bill.partyName,
+                total_outstanding: bill.amount,
+                committed_date: bill.dueDate,
+                status: 'pending',
+            }, { onConflict: 'customer_name' });
+        }
+        return { success: true, count: bills.length };
+    } catch (err) {
+        await logSyncError('outstanding_sync', 'tally_to_supabase', 'batch', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// ─── PARSE LEDGERS FROM TALLY XML ───────────────────────────
+function parseLedgersFromXML(xml) {
+    const ledgers = [];
+    const matches = [...xml.matchAll(/<LEDGER[^>]*NAME="([^"]*)"[^>]*>([\s\S]*?)<\/LEDGER>/gi)];
+    for (const match of matches) {
+        const name = match[1];
+        const block = match[2];
+        ledgers.push({
+            name,
+            gstin: extractTag(block, 'PARTYGSTIN'),
+            phone: extractTag(block, 'LEDGERPHONE'),
+            address: extractTag(block, 'ADDRESS'),
+            email: extractTag(block, 'EMAIL'),
+            creditDays: parseInt(extractTag(block, 'CREDITLIMITDAYS') || '30'),
+        });
+    }
+    return ledgers;
+}
+
+function parseBillsFromXML(xml) {
+    const bills = [];
+    const matches = [...xml.matchAll(/<BILLDETAILS[^>]*>([\s\S]*?)<\/BILLDETAILS>/gi)];
+    for (const match of matches) {
+        const block = match[1];
+        bills.push({
+            partyName: extractTag(block, 'PARTYLEDGERNAME'),
+            amount: parseFloat(extractTag(block, 'CLOSINGBALANCE') || '0'),
+            dueDate: formatTallyDate(extractTag(block, 'BILLDATE')),
+        });
+    }
+    return bills;
 }

@@ -18,6 +18,12 @@ const DesignUploadPage = () => {
   const [fabricType, setFabricType] = useState('');
   const [hsnCode, setHsnCode] = useState('');
   const [gstRate, setGstRate] = useState('5');
+  const [gsm, setGsm] = useState('');
+  const [weight, setWeight] = useState('');
+  const [handfeel, setHandfeel] = useState('');
+  const [construction, setConstruction] = useState('');
+  const [width, setWidth] = useState('');
+  const [colorVariants, setColorVariants] = useState('');
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
@@ -53,7 +59,13 @@ const DesignUploadPage = () => {
         fabric_type: fabricType,
         hsn_code: hsnCode,
         gst_rate: parseFloat(gstRate),
-        item_name: itemName
+        item_name: itemName,
+        gsm,
+        weight: weight ? parseFloat(weight) : null,
+        handfeel,
+        construction,
+        width,
+        color_variants: colorVariants
       });
 
       const designData = { design_number: designNumber, url, description: aiDesc };
@@ -65,6 +77,12 @@ const DesignUploadPage = () => {
       setItemName('');
       setFabricType('');
       setHsnCode('');
+      setGsm('');
+      setWeight('');
+      setHandfeel('');
+      setConstruction('');
+      setWidth('');
+      setColorVariants('');
     } catch (error) {
       toast({ variant: 'destructive', title: 'Upload Failed', description: error.message });
     } finally {
@@ -143,6 +161,74 @@ const DesignUploadPage = () => {
                   <SelectItem value="18">18%</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <Label>GSM</Label>
+                <Input
+                  type="number"
+                  value={gsm}
+                  onChange={e => setGsm(e.target.value)}
+                  placeholder="e.g. 120"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Weight (kg/meter)</Label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  value={weight}
+                  onChange={e => setWeight(e.target.value)}
+                  placeholder="e.g. 0.125"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Handfeel</Label>
+                <Select value={handfeel} onValueChange={setHandfeel}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Select Handfeel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Soft">Soft</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="Stiff">Stiff</SelectItem>
+                    <SelectItem value="Silky">Silky</SelectItem>
+                    <SelectItem value="Rough">Rough</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Width (inches)</Label>
+                <Select value={width} onValueChange={setWidth}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Select Width" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['36', '38', '40', '42', '44', '48', '54', '58', '60', '72', '78'].map(w => (
+                      <SelectItem key={w} value={w}>{w}"</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Construction</Label>
+                <Input
+                  type="text"
+                  value={construction}
+                  onChange={e => setConstruction(e.target.value)}
+                  placeholder="e.g. Plain Weave, Twill"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Color Variants</Label>
+                <Input
+                  type="text"
+                  value={colorVariants}
+                  onChange={e => setColorVariants(e.target.value)}
+                  placeholder="e.g. Red, Blue, Green (comma separated)"
+                />
+              </div>
             </div>
 
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:bg-slate-50 transition-colors relative">

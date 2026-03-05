@@ -3,7 +3,11 @@ import { supabase } from '../../../lib/supabase';
 import {
     pullPurchasesFromTally,
     pullJobBillsFromTally,
-    pullStockWithDesignDetail as pullStockFromTally
+    pullStockWithDesignDetail as pullStockFromTally,
+    syncCustomersFromTally,
+    syncSuppliersFromTally,
+    syncAgentsFromTally,
+    syncOutstandingFromTally
 } from '../../../services/TallySyncService';
 import {
     RefreshCcw,
@@ -27,6 +31,10 @@ export default function TallySyncDashboard() {
     const [stockCount, setStockCount] = useState(0);
     const [purchaseCount, setPurchaseCount] = useState(0);
     const [jobBillCount, setJobBillCount] = useState(0);
+    const [customerCount, setCustomerCount] = useState(0);
+    const [supplierCount, setSupplierCount] = useState(0);
+    const [agentCount, setAgentCount] = useState(0);
+    const [outstandingCount, setOutstandingCount] = useState(0);
     const { toast } = useToast();
 
     const today = new Date().toISOString().split('T')[0];
@@ -63,6 +71,32 @@ export default function TallySyncDashboard() {
             .select('*', { count: 'exact', head: true });
         setJobBillCount(jc || 0);
 
+        // Customers count
+        const { count: cc } = await supabase
+            .from('customers')
+            .select('*', { count: 'exact', head: true })
+            .neq('business_type', 'supplier');
+        setCustomerCount(cc || 0);
+
+        // Suppliers count
+        const { count: supc } = await supabase
+            .from('customers')
+            .select('*', { count: 'exact', head: true })
+            .eq('business_type', 'supplier');
+        setSupplierCount(supc || 0);
+
+        // Agents count
+        const { count: ac } = await supabase
+            .from('sales_team')
+            .select('*', { count: 'exact', head: true });
+        setAgentCount(ac || 0);
+
+        // Outstanding count
+        const { count: oc } = await supabase
+            .from('payment_followups')
+            .select('*', { count: 'exact', head: true });
+        setOutstandingCount(oc || 0);
+
         // Fetch last sync times from tally_sync_log
         const { data: logData } = await supabase
             .from('tally_sync_log')
@@ -89,6 +123,14 @@ export default function TallySyncDashboard() {
                 res = await pullJobBillsFromTally(thirtyDaysAgo, today);
             } else if (type === 'stock') {
                 res = await pullStockFromTally();
+            } else if (type === 'customers') {
+                res = await syncCustomersFromTally();
+            } else if (type === 'suppliers') {
+                res = await syncSuppliersFromTally();
+            } else if (type === 'agents') {
+                res = await syncAgentsFromTally();
+            } else if (type === 'outstanding') {
+                res = await syncOutstandingFromTally();
             }
 
             if (res?.success) {
@@ -112,72 +154,50 @@ export default function TallySyncDashboard() {
             />
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-blue-50/50 border-blue-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-blue-600 flex items-center gap-2">
-                            <Package className="h-4 w-4" /> Live Stock
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stockCount}</div>
-                        <p className="text-xs text-slate-500">Records synced for today</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4 w-full bg-white shadow-sm border-blue-200"
-                            onClick={() => handleSync('stock')}
-                            disabled={loading.stock}
-                        >
-                            <RefreshCcw className={`mr-2 h-3 w-3 ${loading.stock ? 'animate-spin' : ''}`} />
-                            Sync Stock Detail
-                        </Button>
-                    </CardContent>
-                </Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                {[
+                    { type: 'stock', title: 'Live Stock', description: 'Sync Stock Detail', icon: <Package className="h-4 w-4" />, count: stockCount, countLabel: 'Records synced for today', color: 'blue' },
+                    { type: 'purchases', title: 'Purchases', description: 'Sync Purchases (30d)', icon: <ShoppingCart className="h-4 w-4" />, count: purchaseCount, countLabel: 'Total purchase bills tracked', color: 'indigo' },
+                    { type: 'job_bills', title: 'Job Bills', description: 'Sync Job Bills (30d)', icon: <Factory className="h-4 w-4" />, count: jobBillCount, countLabel: 'Total job worker bills', color: 'purple' },
+                    { type: 'customers', title: 'Customers (Debtors)', description: 'Pull all Sundry Debtors from Tally', icon: '👥', count: customerCount, countLabel: 'customers in database', color: 'teal' },
+                    { type: 'suppliers', title: 'Suppliers (Creditors)', description: 'Pull all Sundry Creditors from Tally', icon: '🏭', count: supplierCount, countLabel: 'suppliers in database', color: 'indigo' },
+                    { type: 'agents', title: 'Sales Agents', description: 'Pull agents from Tally Sales Accounts', icon: '🤝', count: agentCount, countLabel: 'agents in database', color: 'pink' },
+                    { type: 'outstanding', title: 'Outstanding Bills', description: 'Pull live outstanding from Tally', icon: '💰', count: outstandingCount, countLabel: 'bills tracked', color: 'red' },
+                ].map((card) => {
+                    const colorData = {
+                        blue: { bg: 'bg-blue-50/50', border: 'border-blue-100', text: 'text-blue-600', btnBorder: 'border-blue-200' },
+                        indigo: { bg: 'bg-indigo-50/50', border: 'border-indigo-100', text: 'text-indigo-600', btnBorder: 'border-indigo-200' },
+                        purple: { bg: 'bg-purple-50/50', border: 'border-purple-100', text: 'text-purple-600', btnBorder: 'border-purple-200' },
+                        teal: { bg: 'bg-teal-50/50', border: 'border-teal-100', text: 'text-teal-600', btnBorder: 'border-teal-200' },
+                        pink: { bg: 'bg-pink-50/50', border: 'border-pink-100', text: 'text-pink-600', btnBorder: 'border-pink-200' },
+                        red: { bg: 'bg-red-50/50', border: 'border-red-100', text: 'text-red-600', btnBorder: 'border-red-200' },
+                    }[card.color];
 
-                <Card className="bg-indigo-50/50 border-indigo-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-indigo-600 flex items-center gap-2">
-                            <ShoppingCart className="h-4 w-4" /> Purchases
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{purchaseCount}</div>
-                        <p className="text-xs text-slate-500">Total purchase bills tracked</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4 w-full bg-white shadow-sm border-indigo-200"
-                            onClick={() => handleSync('purchases')}
-                            disabled={loading.purchases}
-                        >
-                            <RefreshCcw className={`mr-2 h-3 w-3 ${loading.purchases ? 'animate-spin' : ''}`} />
-                            Sync Purchases (30d)
-                        </Button>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-purple-50/50 border-purple-100">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-purple-600 flex items-center gap-2">
-                            <Factory className="h-4 w-4" /> Job Bills
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{jobBillCount}</div>
-                        <p className="text-xs text-slate-500">Total job worker bills</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="mt-4 w-full bg-white shadow-sm border-purple-200"
-                            onClick={() => handleSync('job_bills')}
-                            disabled={loading.job_bills}
-                        >
-                            <RefreshCcw className={`mr-2 h-3 w-3 ${loading.job_bills ? 'animate-spin' : ''}`} />
-                            Sync Job Bills (30d)
-                        </Button>
-                    </CardContent>
-                </Card>
+                    return (
+                        <Card key={card.type} className={`${colorData.bg} border ${colorData.border}`}>
+                            <CardHeader className="pb-2">
+                                <CardTitle className={`text-sm font-medium ${colorData.text} flex items-center gap-2`}>
+                                    {typeof card.icon === 'string' ? <span className="text-lg leading-none">{card.icon}</span> : card.icon}
+                                    {card.title}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{card.count}</div>
+                                <p className="text-xs text-slate-500">{card.countLabel}</p>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={`mt-4 w-full bg-white shadow-sm border ${colorData.btnBorder}`}
+                                    onClick={() => handleSync(card.type)}
+                                    disabled={loading[card.type]}
+                                >
+                                    <RefreshCcw className={`mr-2 h-3 w-3 ${loading[card.type] ? 'animate-spin' : ''}`} />
+                                    {card.description}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    );
+                })}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -254,7 +274,7 @@ export default function TallySyncDashboard() {
 
                         <div className="bg-slate-900 p-4 rounded-lg text-white font-mono text-[10px] space-y-1 mt-4">
                             <p className="text-slate-400"># Tally ERP Ready on Port 9000</p>
-                            <p className="text-green-400">Ngrok: Forwarding https://yvone...-wilford.ngrok-free.app</p>
+                            <p className="text-green-400">FRP: Forwarding https://tally.shreerangtrendz.com</p>
                             <p className="text-blue-400">Status: Listening for data requests...</p>
                         </div>
                     </CardContent>

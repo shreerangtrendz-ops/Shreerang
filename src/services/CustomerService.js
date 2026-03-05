@@ -3,12 +3,12 @@ import { supabase } from '@/lib/customSupabaseClient';
 export const CustomerService = {
   async createCustomer(customerData) {
     const { phone, name, email, company_name, business_type, location, gst_number, website, source } = customerData;
-    
+
     // Auto-assign tier based on business type
     let tier = 'REGISTERED';
     if (['Manufacturer', 'Wholesaler', 'Exporter'].includes(business_type)) {
       // Could logic here to auto-set to VIP based on other factors, but default to REGISTERED for vetting
-      tier = 'REGISTERED'; 
+      tier = 'REGISTERED';
     }
 
     const payload = {
@@ -32,7 +32,23 @@ export const CustomerService = {
       .insert([payload])
       .select()
       .single();
-      
+
+    if (error) throw error;
+    return data;
+  },
+
+  async listCustomers(params = {}) {
+    let query = supabase
+      .from('customers')
+      .select('*')
+      .neq('business_type', 'supplier')
+      .order('created_at', { ascending: false });
+
+    if (params.search) {
+      query = query.or(`name.ilike.%${params.search}%,firm_name.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     return data;
   },
@@ -43,7 +59,7 @@ export const CustomerService = {
       .select('*')
       .eq('phone', phone)
       .single();
-      
+
     if (error && error.code !== 'PGRST116') throw error; // Ignore not found error
     return data;
   },
@@ -55,7 +71,7 @@ export const CustomerService = {
       .eq('phone', phone)
       .select()
       .single();
-      
+
     if (error) throw error;
     return data;
   },
@@ -84,9 +100,9 @@ export const CustomerService = {
       .from('customers')
       .update({ conversation_history: updatedHistory, last_contact: new Date().toISOString() })
       .eq('id', customer.id);
-      
+
     if (error) throw error;
-    
+
     // Also log to conversations_extended table
     await supabase.from('conversations_extended').insert({
       customer_id: customer.id,

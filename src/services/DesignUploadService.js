@@ -56,6 +56,12 @@ export const DesignUploadService = {
         hsn_code: designData.hsn_code,
         gst_rate: designData.gst_rate,
         item_name: designData.item_name,
+        gsm: designData.gsm,
+        weight: designData.weight,
+        handfeel: designData.handfeel,
+        construction: designData.construction,
+        width: designData.width,
+        color_variants: designData.color_variants,
         is_active: true,
         updated_at: new Date().toISOString()
       }, { onConflict: 'design_no' })

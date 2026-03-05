@@ -58,6 +58,7 @@ const navGroups = [
     items: [
       { icon: '💰', label: 'Outstanding Receivable', to: '/admin/outstanding-receivable' },
       { icon: '📤', label: 'Outstanding Payable', to: '/admin/outstanding-payable' },
+      { icon: '🏦', label: 'Cash & Bank Balance', to: '/admin/cash-bank' },
     ]
   },
   {

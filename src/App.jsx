@@ -64,6 +64,7 @@ import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
 import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
 import OutstandingReceivable from '@/pages/reports/OutstandingReceivable';
 import OutstandingPayable from '@/pages/reports/OutstandingPayable';
+import CashBankBalance from '@/pages/reports/CashBankBalance';
 import MarketIntelPage from '@/pages/admin/MarketIntelPage';
 import FieldVisitTrackerPage from '@/pages/admin/FieldVisitTrackerPage';
 import Customer360Page from '@/pages/admin/Customer360Page';
@@ -158,6 +159,7 @@ const App = () => {
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
                     <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
                     <Route path="outstanding-payable" element={<OutstandingPayable />} />
+                    <Route path="cash-bank" element={<CashBankBalance />} />
 
                     {/* CRM & Access */}
                     <Route path="field-visits" element={<FieldVisitTrackerPage />} />

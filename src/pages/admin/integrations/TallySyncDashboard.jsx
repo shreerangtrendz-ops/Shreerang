@@ -16,7 +16,10 @@ import {
     Package,
     AlertCircle,
     Clock,
-    CheckCircle2
+    CheckCircle2,
+    Activity,
+    Server,
+    Globe
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
@@ -36,6 +39,85 @@ export default function TallySyncDashboard() {
     const [agentCount, setAgentCount] = useState(0);
     const [outstandingCount, setOutstandingCount] = useState(0);
     const { toast } = useToast();
+
+    // ─── STATE ───────────────────────────────────────────────
+    const [infra, setInfra] = useState({
+        frps: 'checking',      // KVM-1 frps service
+        frpc: 'checking',      // Windows frpc tunnel
+        tally: 'checking',     // Tally Prime app
+        nginx: 'checking',     // KVM nginx
+        n8n: 'checking',       // n8n automation
+        domain: 'checking',    // tally.shreerangtrendz.com
+        lastChecked: null,
+        tallyCompany: '',
+        stockItems: 0,
+        frpsUptime: '',
+    });
+
+    async function checkInfrastructure() {
+        setInfra(prev => ({
+            ...prev,
+            frps: 'checking', frpc: 'checking', tally: 'checking',
+            nginx: 'checking', domain: 'checking'
+        }));
+
+        // ── TEST 1: Domain reachable = nginx + frps both up ──
+        try {
+            const r = await fetch('https://tally.shreerangtrendz.com', {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/xml' },
+                body: '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>',
+                signal: AbortSignal.timeout(8000),
+            });
+
+            const text = await r.text();
+            const domainOk = r.ok;
+            const frpcOk = domainOk; // domain works = frpc tunnel connected
+            const frpsOk = domainOk; // domain works = frps receiving
+            const nginxOk = domainOk; // domain works = nginx routing
+
+            // Tally is ON only if we get real stock XML back
+            const tallyOk = text.includes('DSPDISPNAME') && !text.includes('LINEERROR');
+            const itemCount = (text.match(/<DSPDISPNAME>/g) || []).length;
+            const companyMatch = text.match(/<DSPDISPNAME>(.*?)<\/DSPDISPNAME>/);
+
+            // Check n8n separately
+            let n8nOk = false;
+            try {
+                const n8nRes = await fetch('https://n8n.shreerangtrendz.com/healthz', {
+                    signal: AbortSignal.timeout(5000)
+                });
+                n8nOk = n8nRes.ok;
+            } catch { n8nOk = false; }
+
+            setInfra({
+                frps: frpsOk ? 'online' : 'offline',
+                frpc: frpcOk ? 'online' : 'offline',
+                nginx: nginxOk ? 'online' : 'offline',
+                tally: tallyOk ? 'online' : 'offline',
+                domain: domainOk ? 'online' : 'offline',
+                n8n: n8nOk ? 'online' : 'offline',
+                lastChecked: new Date(),
+                tallyCompany: companyMatch ? companyMatch[1] : '',
+                stockItems: itemCount,
+            });
+
+        } catch (err) {
+            // Total failure = domain/nginx/frps all down
+            setInfra(prev => ({
+                ...prev,
+                frps: 'offline', frpc: 'offline', nginx: 'offline',
+                tally: 'offline', domain: 'offline',
+                lastChecked: new Date(),
+            }));
+        }
+    }
+
+    useEffect(() => {
+        checkInfrastructure();
+        const interval = setInterval(checkInfrastructure, 30000);
+        return () => clearInterval(interval);
+    }, []);
 
     const today = new Date().toISOString().split('T')[0];
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -229,53 +311,56 @@ export default function TallySyncDashboard() {
                     </CardContent>
                 </Card>
 
-                {/* Sync Status / Logs Table Snapshot */}
+                {/* Infrastructure Status Panel */}
                 <Card className="shadow-sm">
-                    <CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                            <CheckCircle2 className="h-5 w-5 text-green-600" /> Tally Gateway Status
+                            <Activity className="h-5 w-5 text-indigo-600" /> Infrastructure Status
                         </CardTitle>
+                        <Button variant="outline" size="sm" onClick={checkInfrastructure} disabled={infra.domain === 'checking'}>
+                            <RefreshCcw className={`h-3 w-3 mr-2 ${infra.domain === 'checking' ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </Button>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border">
-                            <div className="flex items-center gap-2">
-                                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                                <span className="font-medium">FRP Tunnel</span>
-                            </div>
-                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Active</Badge>
+                        <div className="grid grid-cols-2 gap-3">
+                            {Object.entries({
+                                'Tally Prime': infra.tally,
+                                'FRP Tunnel (Win)': infra.frpc,
+                                'FRP Server (KVM)': infra.frps,
+                                'Domain Gateway': infra.domain,
+                                'Nginx Router': infra.nginx,
+                                'n8n Automation': infra.n8n
+                            }).map(([label, status]) => (
+                                <div key={label} className="flex justify-between items-center p-2 bg-slate-50 rounded border">
+                                    <span className="text-xs font-medium text-slate-700 truncate mr-2">{label}</span>
+                                    {status === 'checking' ? (
+                                        <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0"></div>
+                                    ) : status === 'online' ? (
+                                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-[10px] h-5 px-1.5 shrink-0">Online</Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 text-[10px] h-5 px-1.5 shrink-0">Offline</Badge>
+                                    )}
+                                </div>
+                            ))}
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                            <h4 className="text-sm font-semibold uppercase text-slate-500 tracking-wider">Last Successful Syncs</h4>
-                            <div className="space-y-2 text-sm">
-                                {lastSyncs.purchases && (
-                                    <div className="flex justify-between items-center py-1 border-b border-slate-100 last:border-0">
-                                        <span className="text-slate-700 font-medium">Purchases</span>
-                                        <span className="text-slate-500 text-xs">{new Date(lastSyncs.purchases).toLocaleString()}</span>
-                                    </div>
-                                )}
-                                {lastSyncs.job_bills && (
-                                    <div className="flex justify-between items-center py-1 border-b border-slate-100 last:border-0">
-                                        <span className="text-slate-700 font-medium">Job Bills</span>
-                                        <span className="text-slate-500 text-xs">{new Date(lastSyncs.job_bills).toLocaleString()}</span>
-                                    </div>
-                                )}
-                                {lastSyncs.stock_pull_with_design && (
-                                    <div className="flex justify-between items-center py-1 border-b border-slate-100 last:border-0">
-                                        <span className="text-slate-700 font-medium">Stock Detail</span>
-                                        <span className="text-slate-500 text-xs">{new Date(lastSyncs.stock_pull_with_design).toLocaleString()}</span>
-                                    </div>
-                                )}
-                                {Object.keys(lastSyncs).length === 0 && (
-                                    <p className="text-xs text-slate-400 italic py-2">No sync records found in log.</p>
-                                )}
+                        {(infra.tally === 'online' && infra.tallyCompany) ? (
+                            <div className="bg-slate-900 p-3 rounded-lg text-white font-mono text-xs space-y-1">
+                                <p className="text-green-400">► Connected to Tally ERP Prime</p>
+                                <p className="text-slate-300">Company: {infra.tallyCompany}</p>
+                                <p className="text-slate-300">Items: {infra.stockItems}</p>
                             </div>
-                        </div>
+                        ) : infra.tally === 'offline' ? (
+                            <div className="bg-slate-900 p-3 rounded-lg text-white font-mono text-xs space-y-1">
+                                <p className="text-red-400">► Error Details</p>
+                                <p className="text-slate-300">Could not connect to Tally endpoint.</p>
+                                <p className="text-slate-400 italic">Check if Tally Prime is open with HTTP Port 9000 enabled.</p>
+                            </div>
+                        ) : null}
 
-                        <div className="bg-slate-900 p-4 rounded-lg text-white font-mono text-[10px] space-y-1 mt-4">
-                            <p className="text-slate-400"># Tally ERP Ready on Port 9000</p>
-                            <p className="text-green-400">FRP: Forwarding https://tally.shreerangtrendz.com</p>
-                            <p className="text-blue-400">Status: Listening for data requests...</p>
+                        <div className="text-xs text-center text-slate-400">
+                            Last checked: {infra.lastChecked ? infra.lastChecked.toLocaleTimeString() : 'Never'}
                         </div>
                     </CardContent>
                 </Card>

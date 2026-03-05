@@ -61,27 +61,15 @@ export default function TallySyncDashboard() {
             nginx: 'checking', domain: 'checking'
         }));
 
-        // ── TEST 1: Domain reachable = nginx + frps both up ──
+        // ── Call our server-side Edge Function to avoid browser CORS ──
         try {
-            const r = await fetch('https://tally.shreerangtrendz.com', {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/xml' },
-                body: '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>',
-                signal: AbortSignal.timeout(8000),
-            });
+            const r = await fetch(
+                'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health',
+                { method: 'GET', signal: AbortSignal.timeout(12000) }
+            );
+            const json = await r.json();
 
-            const text = await r.text();
-            const domainOk = r.ok;
-            const frpcOk = domainOk; // domain works = frpc tunnel connected
-            const frpsOk = domainOk; // domain works = frps receiving
-            const nginxOk = domainOk; // domain works = nginx routing
-
-            // Tally is ON only if we get real stock XML back
-            const tallyOk = text.includes('DSPDISPNAME') && !text.includes('LINEERROR');
-            const itemCount = (text.match(/<DSPDISPNAME>/g) || []).length;
-            const companyMatch = text.match(/<DSPDISPNAME>(.*?)<\/DSPDISPNAME>/);
-
-            // Check n8n separately
+            // Check n8n separately (no CORS issue — returns public status)
             let n8nOk = false;
             try {
                 const n8nRes = await fetch('https://n8n.shreerangtrendz.com/healthz', {
@@ -91,19 +79,18 @@ export default function TallySyncDashboard() {
             } catch { n8nOk = false; }
 
             setInfra({
-                frps: frpsOk ? 'online' : 'offline',
-                frpc: frpcOk ? 'online' : 'offline',
-                nginx: nginxOk ? 'online' : 'offline',
-                tally: tallyOk ? 'online' : 'offline',
-                domain: domainOk ? 'online' : 'offline',
+                frps: json.frps || 'offline',
+                frpc: json.frpc || 'offline',
+                nginx: json.nginx || 'offline',
+                tally: json.tally || 'offline',
+                domain: json.domain || 'offline',
                 n8n: n8nOk ? 'online' : 'offline',
                 lastChecked: new Date(),
-                tallyCompany: companyMatch ? companyMatch[1] : '',
-                stockItems: itemCount,
+                tallyCompany: json.tallyCompany || '',
+                stockItems: json.stockItems || 0,
             });
 
         } catch (err) {
-            // Total failure = domain/nginx/frps all down
             setInfra(prev => ({
                 ...prev,
                 frps: 'offline', frpc: 'offline', nginx: 'offline',

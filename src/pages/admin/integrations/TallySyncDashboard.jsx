@@ -65,7 +65,15 @@ export default function TallySyncDashboard() {
         try {
             const r = await fetch(
                 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health',
-                { method: 'GET', signal: AbortSignal.timeout(12000) }
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    signal: AbortSignal.timeout(12000)
+                }
             );
             const json = await r.json();
 

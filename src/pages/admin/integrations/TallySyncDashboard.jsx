@@ -110,7 +110,7 @@ export default function TallySyncDashboard() {
 
     useEffect(() => {
         checkInfrastructure();
-        const interval = setInterval(checkInfrastructure, 30000);
+        const interval = setInterval(checkInfrastructure, 60000);
         return () => clearInterval(interval);
     }, []);
 

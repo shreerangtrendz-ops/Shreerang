@@ -6,7 +6,7 @@
 
 import { supabase } from '../lib/supabase';
 
-const TALLY_URL = 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy';
+const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
 async function postToTally(xml) {

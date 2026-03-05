@@ -1,25 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const TALLY_LOCAL_URL = "http://localhost:9000";
+const TALLY_URL = "https://tally.shreerangtrendz.com";
+
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 serve(async (req) => {
-    const corsHeaders = {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    };
-
     if (req.method === "OPTIONS") {
         return new Response("ok", { headers: corsHeaders });
     }
 
     try {
-        const body = await req.text();
-        const tallyUrl = `${TALLY_LOCAL_URL}`;
+        const { xmlBody } = await req.json();
 
-        const tallyResponse = await fetch(tallyUrl, {
+        if (!xmlBody) {
+            throw new Error("Missing xmlBody in request");
+        }
+
+        const tallyResponse = await fetch(TALLY_URL, {
             method: "POST",
             headers: { "Content-Type": "text/xml" },
-            body: body,
+            body: xmlBody,
+            signal: AbortSignal.timeout(30000) // Tally sometimes takes a while for huge XMLs
         });
 
         const responseText = await tallyResponse.text();
@@ -28,7 +32,8 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "text/xml" },
         });
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        return new Response(JSON.stringify({ error: msg }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

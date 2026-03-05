@@ -10,13 +10,19 @@ const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
 async function postToTally(xml) {
-    const response = await fetch(TALLY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/xml' },
-        body: xml,
+    const { data, error } = await supabase.functions.invoke('tally-proxy', {
+        body: { xmlBody: xml }
     });
-    if (!response.ok) throw new Error(`Tally HTTP error: ${response.status}`);
-    return await response.text();
+
+    if (error) {
+        throw new Error(`Tally HTTP error (via proxy): ${error.message}`);
+    }
+    if (data.error) {
+        throw new Error(`Tally Server error: ${data.error}`);
+    }
+
+    // The proxy returns the raw XML string from Tally
+    return data;
 }
 
 // ─── HELPER: Log sync error to Supabase ─────────────────────

@@ -1,0 +1,203 @@
+{
+  "name": "Shreerang Trendz — Daily Tally Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily 6AM IST Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "health-check",
+      "name": "Check Tally Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.tally }}",
+              "rightValue": "online",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-tally-online",
+      "name": "Is Tally Online?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.shreerangtrendz.com/api/tally-proxy",
+        "method": "POST",
+        "contentType": "raw",
+        "rawContentType": "text/xml",
+        "body": "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "sync-stock",
+      "name": "Sync Stock from Tally",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.whatsapp.com/v1/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAKigiKCL4gBQgGbanff0HC285ROFmsHqIcOEuSbkrhPFu9bS2jhisuLeH0kuBbL0zt0eMYDZAUJkdgF9DCkckPNtZBg98oB5CGvdVhXGMLZA7k1XZAHvYhM2VPTlaG9rLm6fBvIZCUD0KjI8ZCo1vmA4q4GyKLOI74NDttpDj14wzTUZC56OJD4zDts8wBxAZDZD"
+            }
+          ]
+        },
+        "contentType": "json",
+        "body": "={
+  "messaging_product": "whatsapp",
+  "to": "919099987614",
+  "type": "text",
+  "text": { "body": "✅ Shreerang Trendz: Daily sync complete at {{ $now.format('hh:mm A') }}" }
+}",
+        "options": {}
+      },
+      "id": "whatsapp-success",
+      "name": "WhatsApp Success Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.whatsapp.com/v1/messages",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer EAAKigiKCL4gBQgGbanff0HC285ROFmsHqIcOEuSbkrhPFu9bS2jhisuLeH0kuBbL0zt0eMYDZAUJkdgF9DCkckPNtZBg98oB5CGvdVhXGMLZA7k1XZAHvYhM2VPTlaG9rLm6fBvIZCUD0KjI8ZCo1vmA4q4GyKLOI74NDttpDj14wzTUZC56OJD4zDts8wBxAZDZD"
+            }
+          ]
+        },
+        "contentType": "json",
+        "body": "={
+  "messaging_product": "whatsapp",
+  "to": "919099987614",
+  "type": "text",
+  "text": { "body": "⚠️ Shreerang Trendz: Daily sync FAILED — Tally is OFFLINE. Please open Tally Prime and check frpc.exe." }
+}",
+        "options": {}
+      },
+      "id": "whatsapp-error",
+      "name": "WhatsApp Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Daily 6AM IST Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Tally Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tally Health": {
+      "main": [
+        [
+          {
+            "node": "Is Tally Online?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Tally Online?": {
+      "main": [
+        [
+          {
+            "node": "Sync Stock from Tally",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Stock from Tally": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Success Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-03-06T00:00:00.000Z",
+      "updatedAt": "2026-03-06T00:00:00.000Z",
+      "id": "tally-sync",
+      "name": "tally-sync"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-06T00:00:00.000Z",
+  "versionId": "1"
+}

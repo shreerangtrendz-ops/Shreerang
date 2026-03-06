@@ -45,7 +45,7 @@ const StoreManagerOrders = () => {
         try {
             const { data, error } = await supabase
                 .from('sales_orders')
-                .select('id, order_no, status, total_amount, created_at, party_details, items')
+                .select('id, order_no, status, total_amount, created_at, party_details, items, order_channel, payment_status, tally_voucher_id')
                 .in('status', ['pending', 'confirmed', 'processing', 'packed', 'dispatched'])
                 .order('created_at', { ascending: true });
             if (error) throw error;
@@ -93,6 +93,24 @@ const StoreManagerOrders = () => {
         return [];
     };
 
+    const CHANNEL_CONFIG = {
+        website:    { icon: '\ud83c\udf10', label: 'Website',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
+        admin:      { icon: '\ud83c\udfe2', label: 'Admin',     color: 'bg-slate-100 text-slate-600 border-slate-200' },
+        whatsapp:   { icon: '\ud83d\udcac', label: 'WhatsApp',  color: 'bg-green-50 text-green-700 border-green-200' },
+        'sales-rep':{ icon: '\ud83e\udd1d', label: 'Sales Rep', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    };
+    const ChannelBadge = ({ channel, tallyId }) => {
+        const cfg = CHANNEL_CONFIG[channel] || { icon: '\ud83d\udccb', label: channel || 'Admin', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+        return (
+            <div className="flex flex-col gap-1">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
+                    {cfg.icon} {cfg.label}
+                </span>
+                {tallyId && <span className="text-xs text-green-600">\u2705 Tally</span>}
+            </div>
+        );
+    };
+
     const StatusBadge = ({ status }) => {
         const config = STATUS_CONFIG[status] || { label: status, color: 'bg-slate-100 text-slate-700' };
         return (
@@ -106,7 +124,7 @@ const StoreManagerOrders = () => {
         <div className="space-y-6 pb-20">
             <Helmet><title>Store Manager - Orders | Shreerang</title></Helmet>
             <AdminPageHeader
-                title="Store Manager — Dispatch Board"
+                title="Store Manager \u2014 Dispatch Board"
                 description="Manage packing and dispatching all confirmed sales orders."
                 breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Store Dispatch' }]}
             />
@@ -154,14 +172,15 @@ const StoreManagerOrders = () => {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Amount</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Channel</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">Loading orders...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">Loading orders...</TableCell></TableRow>
                             ) : filtered.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">No orders found for this filter.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">No orders found for this filter.</TableCell></TableRow>
                             ) : (
                                 filtered.map(order => {
                                     const nextActions = getNextActions(order.status);
@@ -171,8 +190,11 @@ const StoreManagerOrders = () => {
                                             <TableCell className="font-mono font-semibold text-slate-800">{order.order_no}</TableCell>
                                             <TableCell className="font-medium">{order.party_details?.name || 'Unknown'}</TableCell>
                                             <TableCell className="text-slate-500 text-sm">{format(new Date(order.created_at), 'dd MMM yyyy')}</TableCell>
-                                            <TableCell className="font-bold">₹{Number(order.total_amount || 0).toLocaleString('en-IN')}</TableCell>
+                                            <TableCell className="font-bold">\u20b9{Number(order.total_amount || 0).toLocaleString('en-IN')}</TableCell>
                                             <TableCell><StatusBadge status={order.status} /></TableCell>
+                                            <TableCell>
+                                                <ChannelBadge channel={order.order_channel} tallyId={order.tally_voucher_id} />
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     {nextActions.map(action => (

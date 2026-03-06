@@ -21,6 +21,9 @@ import ContactPage from '@/pages/ContactPage';
 import WholesalePortalPage from '@/pages/WholesalePortalPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
+// ── Customer Portal ──
+import CustomerLoginPage from '@/pages/CustomerLoginPage';
+import CustomerDashboard from '@/pages/customer/CustomerDashboard';
 // ── Admin Core ──
 import AdminLayout from '@/components/admin/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -106,6 +109,11 @@ const App = () => {
                     <Route path="/wholesale" element={<WholesalePortalPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
+
+                {/* ── Customer Portal Routes ── */}
+                <Route path="/customer/login" element={<CustomerLoginPage />} />
+                <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+                <Route path="/customer" element={<Navigate to="/customer/login" replace />} />
                   </Route>
 
                   {/* ═══════════════════ ADMIN ROUTES ═══════════════════ */}

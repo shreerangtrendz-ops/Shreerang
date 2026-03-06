@@ -13,7 +13,7 @@ const AdminDashboard = () => {
   const setSidebarOpen = ctx.setSidebarOpen || (() => { });
 
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ totalFabrics: 0, totalDesigns: 0, totalOrders: 0 });
+  const [stats, setStats] = useState({ totalFabrics: 0, totalDesigns: 0, totalOrders: 0, pendingOrders: 0, purchaseThisMonth: 0, salesThisMonth: 0, outstandingReceivable: 0, outstandingPayable: 0, lastTallySync: null });
   const [recentOrders, setRecentOrders] = useState([]);
   const [tallyOnline, setTallyOnline] = useState(null); // null=checking, true=online, false=offline
 
@@ -30,19 +30,15 @@ const AdminDashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const results = await Promise.allSettled([
-        DashboardService.getTotalFabrics(),
-        DashboardService.getTotalDesigns(),
-        DashboardService.getTotalOrders(),
+      const [kpis, recentOrdersData] = await Promise.allSettled([
+        DashboardService.getDashboardKPIs(),
         DashboardService.getRecentOrders(5),
       ]);
+      if (kpis.status === 'fulfilled' && kpis.value) {
+        setStats(kpis.value);
+      }
       const v = (r, d) => r.status === 'fulfilled' && r.value ? r.value : d;
-      setStats({
-        totalFabrics: v(results[0], 1084),
-        totalDesigns: v(results[1], 247),
-        totalOrders: v(results[2], 34),
-      });
-      setRecentOrders(ensureArray(v(results[3], [])));
+      setRecentOrders(ensureArray(v(recentOrdersData, [])));
     } catch (e) {
       console.error(e);
     } finally {
@@ -126,43 +122,76 @@ const AdminDashboard = () => {
           <a onClick={() => navigate('/admin/payment-reminders')} style={{ color: 'var(--red)', cursor: 'pointer', textDecoration: 'underline' }}>Send Reminders →</a>
         </div>
 
-        {/* KPI Grid */}
+        {/* KPI Grid — Real Data from Supabase */}
         <div className="kpi-grid">
+          {/* Row 1: Catalogue */}
           <div className="kpi-card" style={{ '--accent': 'var(--teal)', '--accent-glow': 'rgba(61,191,174,0.10)' }}>
             <div className="kpi-label">Active Designs</div>
-            <div className="kpi-value" style={{ color: 'var(--teal)' }}>{loading ? '—' : stats.totalDesigns}</div>
+            <div className="kpi-value" style={{ color: 'var(--teal)' }}>{loading ? '—' : stats.totalDesigns.toLocaleString()}</div>
             <div className="kpi-sub">Schiffli · Digital · Mill Print</div>
-            <div className="kpi-change up">↑ 18 this month</div>
           </div>
           <div className="kpi-card" style={{ '--accent': 'var(--green)', '--accent-glow': 'rgba(60,181,115,0.08)' }}>
             <div className="kpi-label">Fabric SKUs Live</div>
             <div className="kpi-value" style={{ color: 'var(--green)' }}>{loading ? '—' : stats.totalFabrics.toLocaleString()}</div>
             <div className="kpi-sub">Base + Finish + Fancy</div>
-            <div className="kpi-change up">↑ 56 new</div>
           </div>
           <div className="kpi-card" style={{ '--accent': 'var(--blue)', '--accent-glow': 'rgba(74,124,240,0.08)' }}>
             <div className="kpi-label">Open Orders</div>
-            <div className="kpi-value" style={{ color: 'var(--blue)' }}>{loading ? '—' : stats.totalOrders}</div>
-            <div className="kpi-sub">3 overdue · 12 pending dispatch</div>
-            <div className="kpi-change dn">↓ 2 pending</div>
+            <div className="kpi-value" style={{ color: 'var(--blue)' }}>{loading ? '—' : stats.pendingOrders}</div>
+            <div className="kpi-sub">Pending · Processing</div>
+            {!loading && stats.pendingOrders > 0 && <div className="kpi-change up">Total: {stats.totalOrders}</div>}
           </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--orange)', '--accent-glow': 'rgba(224,120,66,0.08)' }}>
-            <div className="kpi-label">Fabric at Processors</div>
-            <div className="kpi-value" style={{ color: 'var(--orange)' }}>8,420 m</div>
-            <div className="kpi-sub">Surbhi · Rungta · GCG</div>
-            <div className="kpi-change up">7 challans open</div>
+          {/* Row 2: Accounting — REAL DATA FROM TALLY */}
+          <div className="kpi-card" style={{ '--accent': 'var(--green)', '--accent-glow': 'rgba(60,181,115,0.08)', cursor: 'pointer' }}
+            onClick={() => navigate('/admin/accounting/sales-bills')}>
+            <div className="kpi-label">Sales This Month 💰</div>
+            <div className="kpi-value" style={{ color: 'var(--green)' }}>
+              {loading ? '—' : `₹${(stats.salesThisMonth / 100000).toFixed(1)}L`}
+            </div>
+            <div className="kpi-sub">{loading ? '…' : `₹${stats.salesThisMonth.toLocaleString()}`}</div>
+            <div className="kpi-change up">→ Sales Bills</div>
           </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--purple)', '--accent-glow': 'rgba(139,101,207,0.08)' }}>
-            <div className="kpi-label">Avg Cost/Mtr</div>
-            <div className="kpi-value" style={{ color: 'var(--purple)' }}>₹102</div>
-            <div className="kpi-sub">Schiffli Digital</div>
-            <div className="kpi-change dn">↑ ₹4 vs last batch</div>
+          <div className="kpi-card" style={{ '--accent': 'var(--orange)', '--accent-glow': 'rgba(224,120,66,0.08)', cursor: 'pointer' }}
+            onClick={() => navigate('/admin/accounting/purchase-bills')}>
+            <div className="kpi-label">Purchase This Month 📥</div>
+            <div className="kpi-value" style={{ color: 'var(--orange)' }}>
+              {loading ? '—' : `₹${(stats.purchaseThisMonth / 100000).toFixed(1)}L`}
+            </div>
+            <div className="kpi-sub">{loading ? '…' : `₹${stats.purchaseThisMonth.toLocaleString()}`}</div>
+            <div className="kpi-change dn">→ Purchase Bills</div>
           </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--teal)', '--accent-glow': 'rgba(56,191,172,0.08)' }}>
-            <div className="kpi-label">WA Leads Today</div>
-            <div className="kpi-value" style={{ color: 'var(--teal)' }}>23</div>
-            <div className="kpi-sub">18 known · 5 new</div>
-            <div className="kpi-change up">↑ 5 new customers</div>
+          {/* Row 3: Outstanding */}
+          <div className="kpi-card" style={{ '--accent': 'var(--red)', '--accent-glow': 'rgba(239,68,68,0.08)', cursor: 'pointer', border: stats.outstandingReceivable > 0 ? '1px solid rgba(239,68,68,0.2)' : undefined }}
+            onClick={() => navigate('/admin/outstanding-receivable')}>
+            <div className="kpi-label">Outstanding Receivable ⚠</div>
+            <div className="kpi-value" style={{ color: stats.outstandingReceivable > 0 ? 'var(--red, #ef4444)' : 'var(--green)' }}>
+              {loading ? '—' : `₹${(stats.outstandingReceivable / 100000).toFixed(1)}L`}
+            </div>
+            <div className="kpi-sub">Customers owe you</div>
+            <div className="kpi-change">{stats.outstandingReceivable > 0 ? '→ Collect Now' : '✓ All Clear'}</div>
+          </div>
+          <div className="kpi-card" style={{ '--accent': 'var(--orange)', '--accent-glow': 'rgba(224,120,66,0.08)', cursor: 'pointer' }}
+            onClick={() => navigate('/admin/outstanding-payable')}>
+            <div className="kpi-label">Outstanding Payable 📤</div>
+            <div className="kpi-value" style={{ color: 'var(--orange)' }}>
+              {loading ? '—' : `₹${(stats.outstandingPayable / 100000).toFixed(1)}L`}
+            </div>
+            <div className="kpi-sub">You owe suppliers</div>
+            <div className="kpi-change">→ Pay Bills</div>
+          </div>
+          {/* Tally Sync Status */}
+          <div className="kpi-card" style={{ '--accent': 'var(--teal)', '--accent-glow': 'rgba(43,168,152,0.08)', cursor: 'pointer' }}
+            onClick={() => navigate('/admin/tally-sync')}>
+            <div className="kpi-label">Tally Sync</div>
+            <div className="kpi-value" style={{ color: tallyOnline ? 'var(--green)' : 'var(--red, #ef4444)', fontSize: 16 }}>
+              {tallyOnline === null ? '⏳ Checking…' : tallyOnline ? '✅ Online' : '❌ Offline'}
+            </div>
+            <div className="kpi-sub">
+              {stats.lastTallySync
+                ? `Last sync: ${new Date(stats.lastTallySync.synced_at).toLocaleTimeString()}`
+                : 'No sync yet today'}
+            </div>
+            <div className="kpi-change">→ Sync Now</div>
           </div>
         </div>
 

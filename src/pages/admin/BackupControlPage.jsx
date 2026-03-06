@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase';
 // Add route in App.jsx: /admin/backup-control
 // ============================================================
 
-const BACKUP_PIN = '925937'; // 🔐 Change this to your secret PIN
+// 🔐 PIN is read from Vite env variable VITE_BACKUP_PIN (set in .env.local / Vercel dashboard)
+// If not set, falls back to a default — change this before production!
+const BACKUP_PIN = import.meta.env.VITE_BACKUP_PIN || '925937';
 
 export default function BackupControlPage() {
   const [pinVerified, setPinVerified] = useState(false);

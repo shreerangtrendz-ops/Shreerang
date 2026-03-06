@@ -92,6 +92,10 @@ import SalesOrderForm from '@/pages/admin/sales/SalesOrderForm';
 import PartyLedger from '@/pages/reports/PartyLedger';
 import DayBook from '@/pages/reports/DayBook';
 import DesignProfitability from '@/pages/reports/DesignProfitability';
+import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
+import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
+import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
+import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -220,6 +224,12 @@ const App = () => {
                     <Route path="reports/party-ledger" element={<PartyLedger />} />
                     <Route path="reports/day-book" element={<DayBook />} />
                     <Route path="reports/design-profitability" element={<DesignProfitability />} />
+
+                    {/* Accounting Pages */}
+                    <Route path="accounting/purchase-bills" element={<PurchaseBillsPage />} />
+                    <Route path="accounting/sales-bills" element={<SalesBillsPage />} />
+                    <Route path="accounting/job-work-bills" element={<JobWorkBillsPage />} />
+                    <Route path="accounting/quotations" element={<QuotationsPage />} />
 
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

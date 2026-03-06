@@ -9,7 +9,10 @@ import { supabase } from '@/lib/supabase';
 
 // 🔐 PIN is read from Vite env variable VITE_BACKUP_PIN (set in .env.local / Vercel dashboard)
 // If not set, falls back to a default — change this before production!
-const BACKUP_PIN = import.meta.env.VITE_BACKUP_PIN || '925937';
+const BACKUP_PIN = import.meta.env.VITE_BACKUP_PIN || 'NOTSET';
+if (!import.meta.env.VITE_BACKUP_PIN) {
+  console.warn('[BackupControl] ⚠️ VITE_BACKUP_PIN env variable not set! Set it in Vercel Dashboard → Settings → Environment Variables.');
+}
 
 export default function BackupControlPage() {
   const [pinVerified, setPinVerified] = useState(false);

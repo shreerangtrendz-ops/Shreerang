@@ -9,44 +9,40 @@ import { supabase } from '../lib/supabase';
 const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
-// Uses /api/tally-proxy (Vercel serverless function) which forwards to tally.shreerangtrendz.com
+// Uses Supabase Edge Function tally-proxy as a CORS-bypass server
+// Edge fn receives: JSON { xmlBody: "..." }
+// Edge fn returns:  JSON { xml: "..." } or { error: "..." }
 async function postToTally(xml) {
-    console.log(`[TallySyncService] Sending XML to /api/tally-proxy...`);
-    let res;
-    try {
-        res = await fetch('/api/tally-proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/xml' },
-            body: xml,
-            signal: AbortSignal.timeout(30000),
-        });
-    } catch (err) {
-        throw new Error(`Network error reaching Tally proxy: ${err.message}. Check Vercel is deployed and Tally is running.`);
+    console.log(`[TallySyncService] POSTing to tally-proxy edge function (${xml.length} bytes)...`);
+
+    const { data, error } = await supabase.functions.invoke('tally-proxy', {
+        body: { xmlBody: xml },
+    });
+
+    if (error) {
+        // Edge function itself failed (network, auth, etc.)
+        console.error('[TallySyncService] Edge function error:', error);
+        throw new Error(`Tally proxy edge function error: ${error.message}. Ensure Supabase edge function is deployed and Tally FRP tunnel is running.`);
     }
 
-    if (!res.ok) {
-        let detail = '';
-        try { const j = await res.json(); detail = j.error || j.detail || ''; } catch {}
-        throw new Error(`Tally proxy returned ${res.status}: ${detail || 'FRP tunnel may be offline'}`);
+    if (!data) {
+        throw new Error('Empty response from tally-proxy edge function');
     }
 
-    const contentType = res.headers.get('content-type') || '';
-    let responseXml;
-
-    if (contentType.includes('application/json')) {
-        const j = await res.json();
-        if (j.error) throw new Error(`Tally Server error: ${j.error}. Detail: ${j.detail || ''}`);
-        responseXml = j.xml || j;
-    } else {
-        responseXml = await res.text();
+    // Edge fn returns { xml: "..." } or { error: "..." }
+    if (data.error) {
+        console.error('[TallySyncService] Tally server error from edge fn:', data.error);
+        throw new Error(`Tally server error: ${data.error}${data.details ? ' | ' + data.details : ''}`);
     }
 
-    if (typeof responseXml !== 'string') {
-        console.error('[TallySyncService] Unexpected response format:', responseXml);
-        throw new Error('Received non-string response from Tally Proxy');
+    const responseXml = data.xml;
+
+    if (!responseXml || typeof responseXml !== 'string') {
+        console.error('[TallySyncService] Unexpected response format:', JSON.stringify(data).slice(0, 200));
+        throw new Error('tally-proxy returned non-XML response. Check edge function logs in Supabase dashboard.');
     }
 
-    console.log(`[TallySyncService] Received XML (${responseXml.length} chars)`);
+    console.log(`[TallySyncService] Tally responded: ${responseXml.length} chars`);
     return responseXml;
 }
 

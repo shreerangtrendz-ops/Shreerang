@@ -94,10 +94,10 @@ const StoreManagerOrders = () => {
     };
 
     const CHANNEL_CONFIG = {
-        website:    { icon: '🌐', label: 'Website',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
-        admin:      { icon: '🏢', label: 'Admin',     color: 'bg-slate-100 text-slate-600 border-slate-200' },
-        whatsapp:   { icon: '💬', label: 'WhatsApp',  color: 'bg-green-50 text-green-700 border-green-200' },
-        'sales-rep':{ icon: '🤝', label: 'Sales Rep', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+        website: { icon: '🌐', label: 'Website', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+        admin: { icon: '🏢', label: 'Admin', color: 'bg-slate-100 text-slate-600 border-slate-200' },
+        whatsapp: { icon: '💬', label: 'WhatsApp', color: 'bg-green-50 text-green-700 border-green-200' },
+        'sales-rep': { icon: '🤝', label: 'Sales Rep', color: 'bg-purple-50 text-purple-700 border-purple-200' },
     };
     const ChannelBadge = ({ channel, tallyId }) => {
         const cfg = CHANNEL_CONFIG[channel] || { icon: '📋', label: channel || 'Admin', color: 'bg-slate-100 text-slate-600 border-slate-200' };
@@ -124,7 +124,7 @@ const StoreManagerOrders = () => {
         <div className="space-y-6 pb-20">
             <Helmet><title>Store Manager - Orders | Shreerang</title></Helmet>
             <AdminPageHeader
-                title="Store Manager — Dispatch Board"
+                title="Store Manager \u2014 Dispatch Board"
                 description="Manage packing and dispatching all confirmed sales orders."
                 breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Store Dispatch' }]}
             />
@@ -178,9 +178,9 @@ const StoreManagerOrders = () => {
                         </TableHeader>
                         <TableBody>
                             {loading ? (
-                                <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">Loading orders...</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">Loading orders...</TableCell></TableRow>
                             ) : filtered.length === 0 ? (
-                                <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-500">No orders found for this filter.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="text-center py-12 text-slate-500">No orders found for this filter.</TableCell></TableRow>
                             ) : (
                                 filtered.map(order => {
                                     const nextActions = getNextActions(order.status);
@@ -190,7 +190,7 @@ const StoreManagerOrders = () => {
                                             <TableCell className="font-mono font-semibold text-slate-800">{order.order_no}</TableCell>
                                             <TableCell className="font-medium">{order.party_details?.name || 'Unknown'}</TableCell>
                                             <TableCell className="text-slate-500 text-sm">{format(new Date(order.created_at), 'dd MMM yyyy')}</TableCell>
-                                            <TableCell className="font-bold">₹{Number(order.total_amount || 0).toLocaleString('en-IN')}</TableCell>
+                                            <TableCell className="font-bold">\u20b9{Number(order.total_amount || 0).toLocaleString('en-IN')}</TableCell>
                                             <TableCell><StatusBadge status={order.status} /></TableCell>
                                             <TableCell>
                                                 <ChannelBadge channel={order.order_channel} tallyId={order.tally_voucher_id} />

@@ -6,28 +6,29 @@ import '@/styles/admin.css';
 
 const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Sync sidebar collapsed state via CSS custom property on :root
+  // The sidebar itself controls collapse internally — we just listen via
+  // a data attribute set on the layout for margin-left transitions
   return (
-    <div className="admin-root">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(11,46,43,0.5)',
-            zIndex: 190,
-            backdropFilter: 'blur(2px)'
-          }}
-        />
-      )}
-
+    <div
+      className="admin-root"
+      data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      style={{
+        // Override the static --sidebar-w with the dynamic value
+        '--sidebar-w': sidebarCollapsed ? '60px' : '240px',
+      }}
+    >
       <AdminSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        onCollapseChange={setSidebarCollapsed}
       />
 
-      <main className="admin-main">
+      <main className="admin-main" style={{
+        transition: 'margin-left 0.25s cubic-bezier(0.4,0,0.2,1)',
+      }}>
         <PageErrorBoundary>
           <Outlet context={{ setSidebarOpen }} />
         </PageErrorBoundary>

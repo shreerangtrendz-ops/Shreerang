@@ -108,7 +108,7 @@ function Badge({ text, cls }) {
   );
 }
 
-export default function AdminSidebar({ isOpen, onClose }) {
+export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   const location = useLocation();
   const [openGroups, setOpenGroups] = useState(() => {
     // Auto-open the group that contains the current route
@@ -116,6 +116,10 @@ export default function AdminSidebar({ isOpen, onClose }) {
     return active ? { [active.id]: true } : { overview: true, accounts: true };
   });
   const [collapsed, setCollapsed] = useState(false);
+  const toggleCollapse = (val) => {
+    setCollapsed(val);
+    if (onCollapseChange) onCollapseChange(val);
+  };
   const [search, setSearch] = useState('');
   const searchRef = useRef(null);
 
@@ -252,7 +256,7 @@ export default function AdminSidebar({ isOpen, onClose }) {
           )}
           <button
             className="sb-collapse-btn"
-            onClick={() => setCollapsed(c => !c)}
+            onClick={() => toggleCollapse(!collapsed)}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? '›' : '‹'}

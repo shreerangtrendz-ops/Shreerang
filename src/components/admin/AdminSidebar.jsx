@@ -40,6 +40,7 @@ const navGroups = [
     label: 'Store',
     items: [
       { icon: '🛒', label: 'Store Sync', to: '/admin/store-sync', nb: 'LIVE', nbClass: 'gold' },
+      { icon: '🛒', label: 'Ecom Control', to: '/admin/ecom' },
     ]
   },
   {

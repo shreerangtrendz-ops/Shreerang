@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -10,7 +10,7 @@ import PageErrorBoundary from '@/components/common/PageErrorBoundary';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
 import ErrorLogger from '@/lib/errorLogger';
 import ComingSoonPage from '@/components/admin/ComingSoonPage';
-// ── Public Pages ──
+// â”€â”€ Public Pages â”€â”€
 import HomePage from '@/pages/HomePage';
 import ShopPage from '@/pages/ShopPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
@@ -21,28 +21,28 @@ import ContactPage from '@/pages/ContactPage';
 import WholesalePortalPage from '@/pages/WholesalePortalPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
-// ── Customer Portal ──
+// â”€â”€ Customer Portal â”€â”€
 import CustomerLoginPage from '@/pages/CustomerLoginPage';
 import CustomerDashboard from '@/pages/customer/CustomerDashboard';
 import ProductCatalog from '@/pages/customer/ProductCatalog';
 import DesignGallery from '@/pages/customer/DesignGallery';
 import CustomerOrders from '@/pages/customer/CustomerOrders';
 import CustomerOutstanding from '@/pages/customer/CustomerOutstanding';
-// ── Admin Core ──
+// â”€â”€ Admin Core â”€â”€
 import AdminLayout from '@/components/admin/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
-// ── Admin: Dashboard ──
+// â”€â”€ Admin: Dashboard â”€â”€
 import AdminDashboard from '@/pages/admin/AdminDashboard';
-// ── Admin: Fabric Master ──
+// â”€â”€ Admin: Fabric Master â”€â”€
 import BaseFabricForm from '@/pages/admin/fabric/BaseFabricForm';
 import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
 import FancyFinishFabricForm from '@/pages/admin/fabric/FancyFinishFabricForm';
 import FancyBaseFabricForm from '@/pages/admin/fabric/FancyBaseFabricForm';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
-// ── Admin: Images ──
+// â”€â”€ Admin: Images â”€â”€
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
 import DesignUploadPage from '@/pages/admin/design/DesignUploadPage';
-// ── Admin: Cost Engine ──
+// â”€â”€ Admin: Cost Engine â”€â”€
 import PurchaseEntryPage from '@/pages/admin/cost/PurchaseEntryPage';
 import ProcessEntryPage from '@/pages/admin/cost/ProcessEntryPage';
 import ValueAdditionEntryPage from '@/pages/admin/cost/ValueAdditionEntryPage';
@@ -50,21 +50,21 @@ import CostSheetPage from '@/pages/admin/cost/CostSheetPage';
 import HakobaBatchCalculator from '@/pages/admin/cost/HakobaBatchCalculator';
 import PriceDatabasePage from '@/pages/admin/pricing/PriceDatabasePage';
 import ReadymadeGarmentCostSheet from '@/pages/admin/costing/ReadymadeGarmentCostSheet';
-// ── Admin: Settings ──
+// â”€â”€ Admin: Settings â”€â”€
 import RateCardPage from '@/pages/admin/settings/RateCardPage';
 import DropdownManager from '@/pages/admin/settings/DropdownManager';
 import JobUnitsPage from '@/pages/admin/unit-management/JobUnitsPage';
 import SuppliersManager from '@/pages/admin/settings/SuppliersManager';
 import HSNCodeMaster from '@/pages/admin/settings/HSNCodeMaster';
-// ── Admin: Sales & Orders ──
+// â”€â”€ Admin: Sales & Orders â”€â”€
 import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
 import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
-// ── Admin: Integrations ──
+// â”€â”€ Admin: Integrations â”€â”€
 import CloudSyncPage from '@/pages/admin/integrations/CloudSyncPage';
 import TallySyncDashboard from '@/pages/admin/integrations/TallySyncDashboard';
 import GoogleDrivePage from '@/pages/admin/integrations/GoogleDrivePage';
 import BunnyNetPage from '@/pages/admin/integrations/BunnyNetPage';
-// ── Admin: New Functional Pages ──
+// â”€â”€ Admin: New Functional Pages â”€â”€
 import CustomerMasterPage from '@/pages/admin/CustomerMasterPage';
 import ChallansPage from '@/pages/admin/ChallansPage';
 import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
@@ -84,6 +84,7 @@ import CustomerPortalAccessPage from '@/pages/admin/CustomerPortalAccessPage';
 import AccessControlPage from '@/pages/admin/AccessControlPage';
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 import BackupControlPage from '@/pages/admin/BackupControlPage';
+import EcomControlPage from '@/pages/admin/EcomControlPage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -101,7 +102,7 @@ const App = () => {
             <CartProvider>
               <React.Suspense fallback={<div className="h-screen w-full flex items-center justify-center"><LoadingSpinner /></div>}>
                 <Routes>
-                  {/* ═══════════════════ PUBLIC ROUTES ═══════════════════ */}
+                  {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PUBLIC ROUTES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                   <Route element={<CustomerLayout />}>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/shop" element={<ShopPage />} />
@@ -114,18 +115,18 @@ const App = () => {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
 
-                {/* ── Customer Portal Routes ── */}
-                <Route path="/customer/login" element={<CustomerLoginPage />} />
-                <Route path="/customer/dashboard" element={<CustomerDashboard />} />
-                <Route path="/customer/catalogue" element={<ProductCatalog />} />
-                <Route path="/customer/designs" element={<DesignGallery />} />
-                <Route path="/customer/orders" element={<CustomerOrders />} />
-                <Route path="/customer/outstanding" element={<CustomerOutstanding />} />
-                <Route path="/customer/cart" element={<CartPage />} />
-                <Route path="/customer" element={<Navigate to="/customer/dashboard" replace />} />
+                    {/* â”€â”€ Customer Portal Routes â”€â”€ */}
+                    <Route path="/customer/login" element={<CustomerLoginPage />} />
+                    <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+                    <Route path="/customer/catalogue" element={<ProductCatalog />} />
+                    <Route path="/customer/designs" element={<DesignGallery />} />
+                    <Route path="/customer/orders" element={<CustomerOrders />} />
+                    <Route path="/customer/outstanding" element={<CustomerOutstanding />} />
+                    <Route path="/customer/cart" element={<CartPage />} />
+                    <Route path="/customer" element={<Navigate to="/customer/dashboard" replace />} />
                   </Route>
 
-                  {/* ═══════════════════ ADMIN ROUTES ═══════════════════ */}
+                  {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ADMIN ROUTES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
                   <Route path="/admin" element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <AdminLayout />
@@ -145,7 +146,7 @@ const App = () => {
                     <Route path="images/upload" element={<ImageUploadPage />} />
                     <Route path="design/upload" element={<DesignUploadPage />} />
                     <Route path="design-velocity" element={<DesignVelocityPage />} />
-                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="🗂" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue → Product Master" />} />
+                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="ðŸ—‚" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue â†’ Product Master" />} />
 
                     {/* Cost Engine */}
                     <Route path="cost/purchase-entry" element={<PurchaseEntryPage />} />
@@ -157,7 +158,7 @@ const App = () => {
                     <Route path="garment-cost" element={<ReadymadeGarmentCostSheet />} />
 
                     {/* Store */}
-                    <Route path="store-sync" element={<ComingSoonPage title="Store Sync" icon="🛒" desc="Sync approved designs directly to the storefront." breadcrumb="Store → Store Sync" />} />
+                    <Route path="store-sync" element={<ComingSoonPage title="Store Sync" icon="ðŸ›’" desc="Sync approved designs directly to the storefront." breadcrumb="Store â†’ Store Sync" />} />
 
                     {/* Operations */}
                     <Route path="order-database/sales" element={<StoreManagerOrders />} />
@@ -171,7 +172,7 @@ const App = () => {
                     <Route path="calendar" element={<CalendarVisitsPage />} />
                     <Route path="supplier-price-ai" element={<AIPriceSyncPage />} />
                     <Route path="ai-pricing" element={<AIPriceSyncPage />} />
-                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="🌐" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features → Multilingual" />} />
+                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="ðŸŒ" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features â†’ Multilingual" />} />
                     <Route path="customer-360" element={<Customer360Page />} />
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
                     <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
@@ -193,6 +194,8 @@ const App = () => {
                     <Route path="bunny-cdn" element={<BunnyNetPage />} />
                     {/* Backup Control */}
                     <Route path="backup-control" element={<BackupControlPage />} />
+                    {/* Ecom Control */}
+                     <Route path="ecom" element={<EcomControlPage />} />
                     {/* Settings */}
                     <Route path="settings/rate-card" element={<RateCardPage />} />
                     <Route path="settings/dropdown-manager" element={<DropdownManager />} />

@@ -9,26 +9,40 @@ import { supabase } from '../lib/supabase';
 const TALLY_URL = 'https://tally.shreerangtrendz.com';
 
 // ─── HELPER: POST XML to Tally ──────────────────────────────
+// Uses /api/tally-proxy (Vercel serverless function) which forwards to tally.shreerangtrendz.com
 async function postToTally(xml) {
-    console.log(`[TallySyncService] Sending XML to proxy...`);
-    const { data, error } = await supabase.functions.invoke('tally-proxy', {
-        body: { xmlBody: xml }
-    });
-
-    if (error) {
-        throw new Error(`Tally HTTP error (via proxy): ${error.message}`);
+    console.log(`[TallySyncService] Sending XML to /api/tally-proxy...`);
+    let res;
+    try {
+        res = await fetch('/api/tally-proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/xml' },
+            body: xml,
+            signal: AbortSignal.timeout(30000),
+        });
+    } catch (err) {
+        throw new Error(`Network error reaching Tally proxy: ${err.message}. Check Vercel is deployed and Tally is running.`);
     }
 
-    // Tally returns error inside JSON if proxy caught it
-    if (data && data.error) {
-        throw new Error(`Tally Server error: ${data.error}`);
+    if (!res.ok) {
+        let detail = '';
+        try { const j = await res.json(); detail = j.error || j.detail || ''; } catch {}
+        throw new Error(`Tally proxy returned ${res.status}: ${detail || 'FRP tunnel may be offline'}`);
     }
 
-    // After our fix, tally-proxy returns { xml: "..." }
-    const responseXml = data?.xml || data;
+    const contentType = res.headers.get('content-type') || '';
+    let responseXml;
+
+    if (contentType.includes('application/json')) {
+        const j = await res.json();
+        if (j.error) throw new Error(`Tally Server error: ${j.error}. Detail: ${j.detail || ''}`);
+        responseXml = j.xml || j;
+    } else {
+        responseXml = await res.text();
+    }
 
     if (typeof responseXml !== 'string') {
-        console.error('[TallySyncService] Unexpected response format:', data);
+        console.error('[TallySyncService] Unexpected response format:', responseXml);
         throw new Error('Received non-string response from Tally Proxy');
     }
 

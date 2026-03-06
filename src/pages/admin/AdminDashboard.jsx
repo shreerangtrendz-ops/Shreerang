@@ -16,6 +16,26 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState({ totalFabrics: 0, totalDesigns: 0, totalOrders: 0, pendingOrders: 0, purchaseThisMonth: 0, salesThisMonth: 0, outstandingReceivable: 0, outstandingPayable: 0, lastTallySync: null });
   const [recentOrders, setRecentOrders] = useState([]);
   const [tallyOnline, setTallyOnline] = useState(null); // null=checking, true=online, false=offline
+  const [billsSyncing, setBillsSyncing] = useState(false);
+
+  async function syncBillsNow(e) {
+    e.stopPropagation();
+    if (billsSyncing) return;
+    if (!tallyOnline) { alert('Tally is offline. Start Tally Prime and the FRP tunnel first.'); return; }
+    setBillsSyncing(true);
+    try {
+      const res = await fetch('/api/tally-sync', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const json = await res.json();
+      if (json.success) {
+        alert(`✅ Synced! Purchase: ${json.synced.purchase} | Sales: ${json.synced.sales} bills`);
+        fetchData();
+      } else {
+        alert('Sync issues: ' + (json.errors?.join(', ') || 'Unknown error'));
+      }
+    } catch(err) {
+      alert('Sync error: ' + err.message);
+    } finally { setBillsSyncing(false); }
+  }
 
   useEffect(() => {
     fetchData();
@@ -191,7 +211,15 @@ const AdminDashboard = () => {
                 ? `Last sync: ${new Date(stats.lastTallySync.synced_at).toLocaleTimeString()}`
                 : 'No sync yet today'}
             </div>
-            <div className="kpi-change">→ Sync Now</div>
+            <div className="kpi-change">
+              <button
+                onClick={syncBillsNow}
+                disabled={billsSyncing}
+                style={{ background:'none', border:'none', color:'inherit', cursor: billsSyncing ? 'wait' : 'pointer', padding:0, fontWeight:600, fontSize:'inherit' }}
+              >
+                {billsSyncing ? '⏳ Syncing…' : '→ Sync Bills Now'}
+              </button>
+            </div>
           </div>
         </div>
 

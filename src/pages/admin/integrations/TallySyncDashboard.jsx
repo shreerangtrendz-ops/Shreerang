@@ -110,6 +110,55 @@ export default function TallySyncDashboard() {
 
   async function syncAll() {
     for (const k of CARDS.map(c=>c.key)) { await handleSync(k); }
+    await syncBills();
+  }
+
+  /* ── sync purchase_bills + sales_bills via /api/tally-sync ── */
+  const [billsSyncing, setBillsSyncing] = useState(false);
+  const [billsCounts, setBillsCounts]   = useState({ purchase: 0, sales: 0, lastSync: null });
+
+  async function loadBillsCounts() {
+    try {
+      const [{ count: pc }, { count: sc }, { data: lastLog }] = await Promise.all([
+        supabase.from('purchase_bills').select('*', { count: 'exact', head: true }),
+        supabase.from('sales_bills').select('*', { count: 'exact', head: true }),
+        supabase.from('tally_sync_log')
+          .select('synced_at,records_synced')
+          .in('sync_type', ['purchase_vouchers','sales_vouchers'])
+          .eq('status','success')
+          .order('synced_at',{ascending:false})
+          .limit(1),
+      ]);
+      setBillsCounts({
+        purchase: pc || 0,
+        sales: sc || 0,
+        lastSync: lastLog?.[0]?.synced_at || null,
+      });
+    } catch(e) { console.error('loadBillsCounts:', e); }
+  }
+
+  useEffect(() => { loadBillsCounts(); }, []);
+
+  async function syncBills() {
+    if (infra.tally !== 'online') {
+      toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime and the FRP tunnel first.' });
+      return;
+    }
+    setBillsSyncing(true);
+    try {
+      const res = await fetch('/api/tally-sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
+      const json = await res.json();
+      if (json.success) {
+        toast({ title:'Bills Synced ✅', description:`Purchase: ${json.synced.purchase} | Sales: ${json.synced.sales} records` });
+        loadBillsCounts();
+        loadData();
+      } else {
+        toast({ variant:'destructive', title:'Sync Issues', description: json.errors?.join(', ') || 'Partial failure' });
+        loadBillsCounts();
+      }
+    } catch(e) {
+      toast({ variant:'destructive', title:'Sync Error', description: e.message });
+    } finally { setBillsSyncing(false); }
   }
 
   /* ── counts map ── */
@@ -142,6 +191,9 @@ export default function TallySyncDashboard() {
           <button onClick={syncAll} style={{ padding:'9px 18px', background:'linear-gradient(135deg,#3DBFAE,#2BA898)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', boxShadow:'0 3px 14px rgba(43,168,152,.35)', fontFamily:"'DM Sans',sans-serif" }}>
             ⚡ Sync All Now
           </button>
+          <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'9px 18px', background: billsSyncing ? '#555' : 'linear-gradient(135deg,#E8A800,#D4920A)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor: billsSyncing ? 'wait':'pointer', boxShadow:'0 3px 14px rgba(212,146,10,.35)', fontFamily:"'DM Sans',sans-serif", marginLeft:6 }}>
+            {billsSyncing ? '⏳ Syncing Bills…' : '💰 Sync Bills Now'}
+          </button>
         </div>
       </div>
 
@@ -161,6 +213,41 @@ export default function TallySyncDashboard() {
         {/* ── ROW 2: 3 cards ── */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:13 }}>
           {CARDS.slice(4).map(c => <SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
+        </div>
+
+        {/* ── BILLS ACCOUNTING ROW ── */}
+        <div>
+          <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+            <span>💰 Bills Accounting — Tally Vouchers ↔ Supabase</span>
+            <span style={{ flex:1, height:1, background:'var(--border,rgba(43,168,152,.18))', display:'block' }} />
+            {billsCounts.lastSync && <span style={{ fontSize:10, color:'#6A9B95' }}>Last sync: {new Date(billsCounts.lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
+            <div style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:'1px solid rgba(36,104,200,.18)', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:38, height:38, background:'linear-gradient(135deg,#2468C8,#0E96A0)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🛒</div>
+                  <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>Purchase Bills</div><div style={{ fontSize:11, color:'#6A9B95' }}>Tally purchase vouchers → DB</div></div>
+                </div>
+                <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:'#2468C8', lineHeight:1 }}>{billsCounts.purchase}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
+              </div>
+              <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':'linear-gradient(135deg,#2468C8,#0E96A0)', border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
+                {billsSyncing ? '⏳ Syncing…' : '↻ Pull Purchase Bills'}
+              </button>
+            </div>
+            <div style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:'1px solid rgba(30,158,90,.18)', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <div style={{ width:38, height:38, background:'linear-gradient(135deg,#1E9E5A,#0E9E6A)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💹</div>
+                  <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>Sales Bills</div><div style={{ fontSize:11, color:'#6A9B95' }}>Tally sales vouchers → DB</div></div>
+                </div>
+                <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:'#1E9E5A', lineHeight:1 }}>{billsCounts.sales}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
+              </div>
+              <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':'linear-gradient(135deg,#1E9E5A,#0E9E6A)', border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
+                {billsSyncing ? '⏳ Syncing…' : '↻ Pull Sales Bills'}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* ── ROW 3: Infra + Log ── */}

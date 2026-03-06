@@ -24,6 +24,10 @@ import RegisterPage from '@/pages/RegisterPage';
 // ── Customer Portal ──
 import CustomerLoginPage from '@/pages/CustomerLoginPage';
 import CustomerDashboard from '@/pages/customer/CustomerDashboard';
+import ProductCatalog from '@/pages/customer/ProductCatalog';
+import DesignGallery from '@/pages/customer/DesignGallery';
+import CustomerOrders from '@/pages/customer/CustomerOrders';
+import CustomerOutstanding from '@/pages/customer/CustomerOutstanding';
 // ── Admin Core ──
 import AdminLayout from '@/components/admin/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -113,7 +117,12 @@ const App = () => {
                 {/* ── Customer Portal Routes ── */}
                 <Route path="/customer/login" element={<CustomerLoginPage />} />
                 <Route path="/customer/dashboard" element={<CustomerDashboard />} />
-                <Route path="/customer" element={<Navigate to="/customer/login" replace />} />
+                <Route path="/customer/catalogue" element={<ProductCatalog />} />
+                <Route path="/customer/designs" element={<DesignGallery />} />
+                <Route path="/customer/orders" element={<CustomerOrders />} />
+                <Route path="/customer/outstanding" element={<CustomerOutstanding />} />
+                <Route path="/customer/cart" element={<CartPage />} />
+                <Route path="/customer" element={<Navigate to="/customer/dashboard" replace />} />
                   </Route>
 
                   {/* ═══════════════════ ADMIN ROUTES ═══════════════════ */}

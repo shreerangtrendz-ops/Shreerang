@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,8 +17,48 @@ const FinishFabricForm = () => {
   const [formData, setFormData] = useState({
     baseFabricId: '', baseFabricName: '', shortCode: '', finishWidth: '', 
     process: '', printType: '', class: '', tags: '', inkType: '', 
-    finishTreatment: '', printConcept: '', jobWorkUnit: '', shortage: ''
+    finishTreatment: '', printConcept: '', jobWorkUnit: '', shortage: '',
+    design_image_url: ''
   });
+  const [imageFile, setImageFile]     = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading]     = useState(false);
+  const fileInputRef = useRef(null);
+
+  async function uploadImageToBunny(file) {
+    const BUNNY_ZONE = 'shreerang-s';
+    const BUNNY_HOST = 'https://storage.bunnycdn.com';
+    const BUNNY_KEY  = import.meta.env.VITE_BUNNY_API_KEY || 'c63b3837-120a-46bf-b953-191f40f9059c5c9f12ae-f798-4293-abb2-359df5942b06';
+    const CDN_URL    = 'https://shreerang.b-cdn.net';
+    const ext = file.name.split('.').pop();
+    const fileName = `designs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const res = await fetch(`${BUNNY_HOST}/${BUNNY_ZONE}/${fileName}`, {
+      method: 'PUT',
+      headers: { AccessKey: BUNNY_KEY, 'Content-Type': file.type },
+      body: file,
+    });
+    if (!res.ok) throw new Error('Bunny upload failed: ' + res.status);
+    return `${CDN_URL}/${fileName}`;
+  }
+
+  async function handleImagePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
+
+  async function handleImageUpload() {
+    if (!imageFile) return;
+    setUploading(true);
+    try {
+      const url = await uploadImageToBunny(imageFile);
+      handleChange('design_image_url', url);
+      toast({ title: 'Image uploaded ✅', description: 'Bunny CDN link saved.' });
+    } catch(e) {
+      toast({ variant:'destructive', title:'Upload failed', description: e.message });
+    } finally { setUploading(false); }
+  }
 
   useEffect(() => {
     FabricMasterService.getBaseFabrics().then(setBases).catch(console.error);
@@ -41,7 +81,13 @@ const FinishFabricForm = () => {
   const handleSave = async (e) => {
     e?.preventDefault();
     try {
+      let formData = { ...formData };
       if(!formData.baseFabricId) throw new Error("Select a Base Fabric first");
+      // Upload image first if pending
+      if (imageFile && !formData.design_image_url) {
+        const url = await uploadImageToBunny(imageFile);
+        formData = { ...formData, design_image_url: url };
+      }
       await FabricMasterService.createFinishFabric(formData);
       toast({ title: 'Success', description: 'Finish Fabric created successfully!' });
     } catch (error) {
@@ -123,6 +169,34 @@ const FinishFabricForm = () => {
               <div className="space-y-2"><Label>Print Concept</Label><Input value={formData.printConcept} onChange={e=>handleChange('printConcept', e.target.value)} /></div>
               <div className="space-y-2"><Label>Job Work Unit</Label><Input value={formData.jobWorkUnit} onChange={e=>handleChange('jobWorkUnit', e.target.value)} /></div>
               <div className="space-y-2"><Label>Shortage % *</Label><Input type="number" step="0.01" min="0.01" required value={formData.shortage} onChange={e=>handleChange('shortage', e.target.value)} /></div>
+            </CardContent>
+          </Card>
+
+          {/* Design Image Upload */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm font-semibold text-teal-800">📷 Design Image (Bunny CDN)</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-3 items-start">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="preview" className="w-24 h-24 object-cover rounded-lg border" />
+                ) : formData.design_image_url ? (
+                  <img src={formData.design_image_url} alt="design" className="w-24 h-24 object-cover rounded-lg border" />
+                ) : (
+                  <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-3xl border cursor-pointer" onClick={()=>fileInputRef.current?.click()}>📷</div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
+                  <Button type="button" variant="outline" size="sm" onClick={()=>fileInputRef.current?.click()} className="w-full">Choose Image</Button>
+                  {imageFile && !formData.design_image_url && (
+                    <Button type="button" size="sm" onClick={handleImageUpload} disabled={uploading} className="w-full bg-teal-600 hover:bg-teal-700 text-white">
+                      {uploading ? '⏳ Uploading…' : '☁ Upload to Bunny CDN'}
+                    </Button>
+                  )}
+                  {formData.design_image_url && (
+                    <p className="text-xs text-green-700 break-all">✅ {formData.design_image_url.split('/').pop()}</p>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 

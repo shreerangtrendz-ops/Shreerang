@@ -1,0 +1,242 @@
+{
+  "name": "Shreerang Daily Tally Sync v3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 0 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 8 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "30 13 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger (3x daily IST)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ],
+      "id": "schedule-1"
+    },
+    {
+      "parameters": {
+        "url": "https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health",
+        "method": "GET",
+        "headers": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}"
+            }
+          ]
+        },
+        "timeout": 15000
+      },
+      "name": "Check Tally Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ],
+      "id": "health-check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.tally }}",
+              "operation": "equal",
+              "value2": "online"
+            }
+          ]
+        }
+      },
+      "name": "Is Tally Online?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "id": "tally-check"
+    },
+    {
+      "parameters": {
+        "url": "https://www.shreerangtrendz.com/api/tally-sync",
+        "method": "POST",
+        "headers": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": {
+          "contentType": "json",
+          "body": "{}"
+        },
+        "timeout": 60000
+      },
+      "name": "Sync Bills (Purchase + Sales)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        200
+      ],
+      "id": "sync-bills"
+    },
+    {
+      "parameters": {
+        "url": "https://www.shreerangtrendz.com/api/tally-outstanding",
+        "method": "POST",
+        "headers": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "body": {
+          "contentType": "json",
+          "body": "{}"
+        },
+        "timeout": 60000
+      },
+      "name": "Sync Outstanding Receivable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        400
+      ],
+      "id": "sync-outstanding"
+    },
+    {
+      "parameters": {
+        "url": "https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy",
+        "method": "POST",
+        "headers": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_ANON_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "text/xml"
+            }
+          ]
+        },
+        "body": {
+          "contentType": "raw",
+          "body": "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+        },
+        "timeout": 60000
+      },
+      "name": "Sync Stock Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        600
+      ],
+      "id": "sync-stock"
+    },
+    {
+      "parameters": {
+        "message": "\u26a0\ufe0f Tally OFFLINE - skipping sync at {{ $now }}"
+      },
+      "name": "Log Tally Offline",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        900,
+        480
+      ],
+      "id": "tally-offline"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (3x daily IST)": {
+      "main": [
+        [
+          {
+            "node": "Check Tally Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tally Health": {
+      "main": [
+        [
+          {
+            "node": "Is Tally Online?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Tally Online?": {
+      "main": [
+        [
+          {
+            "node": "Sync Bills (Purchase + Sales)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync Outstanding Receivable",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sync Stock Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Tally Offline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

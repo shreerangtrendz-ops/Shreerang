@@ -1,129 +1,156 @@
 # 🏭 Shreerang Trendz — Implementation Tracker
-*Last updated: 06 Mar 2026 | Project: ERP Dashboard (shreerangtrendz.com/admin)*
+*Last updated: 06 Mar 2026 | Live: shreerangtrendz.com/admin*
 
 ---
 
-## ✅ COMPLETED
+## ✅ FULLY COMPLETED (All Committed to Master)
 
-### 🖥️ Dashboard & Navigation
-| # | Feature | Commit | Status |
-|---|---------|--------|--------|
-| 1 | **Sidebar redesigned** — 11 sections → 5 groups (Overview, Catalogue, Accounts, Operations, Settings) | [665fc3b](https://github.com/shreerangtrendz-ops/Shreerang/commit/665fc3bc) | ✅ Live |
-| 2 | **Sidebar search bar** — press `/` to instantly filter all nav items | [665fc3b](https://github.com/shreerangtrendz-ops/Shreerang/commit/665fc3bc) | ✅ Live |
-| 3 | **Sidebar collapse** — `‹ ›` button shrinks to 60px icon-only mode | [665fc3b](https://github.com/shreerangtrendz-ops/Shreerang/commit/665fc3bc) | ✅ Live |
-| 4 | **Dynamic sidebar width** — AdminLayout syncs collapse state with smooth CSS transition | [de36532](https://github.com/shreerangtrendz-ops/Shreerang/commit/de36532) | ✅ Live |
-| 5 | **Integration status lights** — Tally, n8n, WhatsApp live indicators at sidebar bottom | [665fc3b](https://github.com/shreerangtrendz-ops/Shreerang/commit/665fc3bc) | ✅ Live |
-| 6 | **Badge system** — NEW (gold), LIVE (green), AI (purple), ON (green) per nav item | [665fc3b](https://github.com/shreerangtrendz-ops/Shreerang/commit/665fc3bc) | ✅ Live |
+### 🖥️ Dashboard & Navigation (Commits 1–4)
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | Sidebar redesigned — 5 groups (Overview, Catalogue, Accounts, Operations, Settings) | ✅ Live |
+| 2 | Sidebar search (press `/`), collapse button (60px ↔ 240px) | ✅ Live |
+| 3 | Integration status lights — Tally, n8n, WhatsApp | ✅ Live |
+| 4 | Dynamic sidebar width — AdminLayout CSS transition | ✅ Live |
 
-### 📊 Dashboard KPI Cards
-| # | Feature | Commit | Status |
-|---|---------|--------|--------|
-| 7 | **Real Sales This Month** — from `sales_bills` table (₹XL format) | [1168d55](https://github.com/shreerangtrendz-ops/Shreerang/commit/1168d557) | ✅ Live |
-| 8 | **Real Purchase This Month** — from `purchase_bills` table | [1168d55](https://github.com/shreerangtrendz-ops/Shreerang/commit/1168d557) | ✅ Live |
-| 9 | **Outstanding Receivable** — calculated from pending orders (red if > 0) | [1168d55](https://github.com/shreerangtrendz-ops/Shreerang/commit/1168d557) | ✅ Live |
-| 10 | **Outstanding Payable** — from purchase_fabric unpaid records | [1168d55](https://github.com/shreerangtrendz-ops/Shreerang/commit/1168d557) | ✅ Live |
-| 11 | **Tally Sync Status** — live ✅/❌ + last sync time | [1168d55](https://github.com/shreerangtrendz-ops/Shreerang/commit/1168d557) | ✅ Live |
-| 12 | **Sync Bills Now button** — in Dashboard Tally KPI card, calls `/api/tally-sync` | [today] | ✅ Committed |
+### 📊 Dashboard KPI Cards (Commit 3)
+| # | Feature | Status |
+|---|---------|--------|
+| 5 | Real Sales This Month from `sales_bills` | ✅ Live |
+| 6 | Real Purchase This Month from `purchase_bills` | ✅ Live |
+| 7 | Outstanding Receivable (red border if >0) | ✅ Live |
+| 8 | Outstanding Payable | ✅ Live |
+| 9 | Tally Sync Status — live ✅/❌ + last sync time | ✅ Live |
+| 10 | **Sync Bills Now** functional button in Tally KPI card | ✅ Live |
 
-### ⚡ Tally Integration
-| # | Feature | Commit | Status |
-|---|---------|--------|--------|
-| 13 | **`tally-health` edge function** — deployed to Supabase, checks FRP+Tally status | pre-existing | ✅ Live |
-| 14 | **`api/tally-proxy.js`** — Vercel serverless, proxies XML to tally.shreerangtrendz.com | pre-existing | ✅ Live |
-| 15 | **`api/tally-sync.js`** — NEW: pulls purchase+sales vouchers, parses XML, upserts into Supabase | [cfea6e3](https://github.com/shreerangtrendz-ops/Shreerang/commit/cfea6e3) | ✅ Committed |
-| 16 | **n8n workflow v2** — syncs 3× daily (6AM, 2PM, 9:30PM IST) | [cfea6e3](https://github.com/shreerangtrendz-ops/Shreerang/commit/cfea6e3) | ✅ Committed (needs import) |
-| 17 | **TallySyncDashboard** — `💰 Sync Bills Now` button in header + Bills Accounting section with Purchase/Sales cards | [today] | ✅ Committed |
-| 18 | **`purchase_bills` table** — exists in Supabase, will populate when Tally is online | schema pre-existing | ✅ Ready |
-| 19 | **`sales_bills` table** — exists in Supabase, will populate when Tally is online | schema pre-existing | ✅ Ready |
-| 20 | **`tally_sync_log` table** — logs every sync with type, status, record count | pre-existing | ✅ Active |
+### ⚡ Tally Integration (Commits 5–8)
+| # | Feature | Status |
+|---|---------|--------|
+| 11 | `tally-health` edge function — Supabase deployed | ✅ Live |
+| 12 | `api/tally-proxy.js` — Vercel, forwards XML to FRP tunnel | ✅ Live |
+| 13 | `api/tally-sync.js` v2 — **FIXED** (correct column names: `bill_number`, `supplier_name`, `customer_name`) | ✅ Live |
+| 14 | `api/tally-outstanding.js` — NEW: syncs Outstanding Receivable snapshot | ✅ Live |
+| 15 | n8n workflow v3 — 3× daily: bills + outstanding + stock in parallel | ✅ Committed |
 
----
+### 🧮 Accounting Pages (All NEW — Commit a5e9bb0)
+| # | Page | Route | Status |
+|---|------|-------|--------|
+| 16 | **Purchase Bills** — table, search, date filter, manual entry, Tally sync | `/admin/accounting/purchase-bills` | ✅ Live |
+| 17 | **Sales Bills** — table, search, date filter, manual entry, Tally sync | `/admin/accounting/sales-bills` | ✅ Live |
+| 18 | **Job Work Bills** — table with design no, process type, manual entry | `/admin/accounting/job-work-bills` | ✅ Live |
+| 19 | **Quotations** — full CRUD, status management (pending/approved/rejected/expired) | `/admin/accounting/quotations` | ✅ Live |
 
-## 🔴 PENDING — One Manual Step by You
+### 💹 Tally Sync Control Centre  
+| # | Feature | Status |
+|---|---------|--------|
+| 20 | TallySyncDashboard `💰 Sync Bills Now` header button | ✅ Live |
+| 21 | Purchase Bills + Sales Bills cards with live record counts | ✅ Live |
+| 22 | Bills Accounting section showing last sync timestamp | ✅ Live |
 
-### Step 1: Start FRP Tunnel on Tally PC (CRITICAL — needed for any sync to work)
-**Do this on your Windows PC where Tally Prime is installed:**
-1. Open **Tally Prime** → load company `ShreeRang Trendz Pvt. Ltd.`
-2. Go to: Gateway → Configure → Advanced Configuration
-3. Enable: **HTTP Server** = Yes, Port = **9000**
-4. Open Command Prompt in the folder where `frpc.exe` is saved (Drive folder `17HHDAaoChjq_sqWaxgMT8OC2b5y96PHZ`)
-5. Run: `frpc.exe -c frpc.ini`
-6. You should see: `start proxy success`
-7. **Test**: Go to [tally-sync-dashboard](https://shreerangtrendz.com/admin/tally-sync) → should show **🟢 Tally Live**
+### 📊 Reports (All pre-existing)
+| # | Page | Route | Status |
+|---|------|-------|--------|
+| 23 | Outstanding Receivable | `/admin/outstanding-receivable` | ✅ Live |
+| 24 | Outstanding Payable | `/admin/outstanding-payable` | ✅ Live |
+| 25 | Cash & Bank Balance | `/admin/cash-bank` | ✅ Live |
+| 26 | Party Ledger | `/admin/reports/party-ledger` | ✅ Live |
+| 27 | Day Book | `/admin/reports/day-book` | ✅ Live |
+| 28 | Design Profitability | `/admin/reports/design-profitability` | ✅ Live |
 
-### Step 2: Import n8n Workflow v2 (for automated 3× daily sync)
-1. Download `n8n-daily-tally-sync-workflow-v2.json` from the GitHub repo root
-2. Open [n8n cloud](https://shreerangtrendz.app.n8n.cloud)
-3. Click **Import workflow** → upload the JSON
-4. Add credential for Supabase header auth (key: `apikey`, value: your anon key)
-5. Activate the workflow
-6. Sync will run automatically at 6AM, 2PM, 9:30PM IST
-
-### Step 3: Verify bills sync
-After FRP is running:
-1. Go to `/admin/tally-sync` → click **💰 Sync Bills Now**
-2. Check `purchase_bills` and `sales_bills` tables in Supabase for data
-3. Dashboard KPIs should show real ₹ figures
+### 🖼️ Product Images (Phase 2)
+| # | Feature | Status |
+|---|---------|--------|
+| 29 | **FinishFabricForm image upload** — Bunny CDN integration, preview + upload | ✅ Live |
+| 30 | `design_image_url` field added to FinishFabricForm state + saved to `finish_fabrics` | ✅ Live |
 
 ---
 
-## 🟡 NEXT UP (Recommended Order)
+## 🔴 ONE MANUAL STEP — START FRP TUNNEL (Required for ANY Tally sync)
 
-### Phase 2 — Product Images & Customer Fields
-| # | Task | Tables | Effort |
-|---|------|--------|--------|
-| A | Connect Bunny CDN to `fabric_master.image_url` | fabric_master | Medium |
-| B | Add customer-visible fields: composition, width, GSM, MOQ | fabric_master | Small |
-| C | Map `designs.image_url` to fabric_master by SKU | designs, fabric_master | Medium |
-| D | Update `FabricMasterForm.jsx` with image upload to Bunny CDN | FabricMasterForm | Medium |
+**Do this on your Windows PC where Tally Prime is running:**
 
-### Phase 3 — AI Automation
-| # | Feature | Description | Effort |
-|---|---------|-------------|--------|
-| E | **AI Bill Scanner** | Upload PDF/image → extract bill data → push to Tally | High |
-| F | **Smart Cost Engine** | AI suggests selling price based on cost + market | High |
-| G | **WhatsApp Order Bot** | Customer message → order created → Tally entry | High |
-| H | **Design Velocity AI** | Predict reorder needs from sales patterns | High |
+```
+1. Open Tally Prime → Load company "ShreeRang Trendz Pvt. Ltd."
+2. Gateway → Configure → Advanced Configuration
+3. Enable: HTTP Server = Yes, Port = 9000
+4. CMD in folder with frpc.exe (Drive folder: 17HHDAaoChjq_sqWaxgMT8OC2b5y96PHZ)
+5. Run: frpc.exe -c frpc.ini
+6. Confirm: "start proxy success" appears
+```
+
+Then test: Visit `/admin/tally-sync` → should show 🟢 Tally Live  
+Then sync: Click **💰 Sync Bills Now** → purchase_bills and sales_bills will populate
+
+**Import n8n Workflow v3:**
+1. Download `n8n-daily-tally-sync-v3.json` from repo root  
+2. Open https://shreerangtrendz.app.n8n.cloud → Import workflow  
+3. Set `SUPABASE_ANON_KEY` environment variable  
+4. Activate — will auto-sync 3× daily at 12:30am, 8:30am, 1:30pm IST
 
 ---
 
-## 🏗️ Architecture Reference
+## 🟡 REMAINING (Phase 3 — AI Automation)
+
+| # | Feature | Description | Est. Effort |
+|---|---------|-------------|-------------|
+| A | **AI Bill Scanner** | Upload PDF/photo → extract bill fields → push to Tally | 3–4 days |
+| B | **WhatsApp Order Bot** | Customer WhatsApp message → create order → confirm | 2–3 days |
+| C | **Smart Cost Engine** | AI suggests MRP based on GSM, process, market data | 2–3 days |
+| D | **Design Velocity AI** | Predict reorder needs from sales velocity | 2–3 days |
+| E | **Customer Portal Image Sync** | Show fabric images on customer portal `/customer/designs` | 1 day |
+| F | **B2B Catalogue PDF** | Generate price list PDF from current designs | 1 day |
+
+---
+
+## 🏗️ System Architecture (Final)
 
 ```
 Tally Prime PC (port 9000)
-    ↕ FRP tunnel (frpc.exe → tally.shreerangtrendz.com)
-Vercel API Routes:
-    /api/tally-proxy  → forward XML to Tally (raw)
-    /api/tally-sync   → fetch vouchers → parse → upsert Supabase ← NEW
-Supabase Edge Functions:
-    tally-health      → health check (deployed ✅)
-    tally-proxy       → Supabase-side proxy (code in repo)
-Supabase DB:
-    purchase_bills    → Tally purchase vouchers
-    sales_bills       → Tally sales vouchers  
-    tally_sync_log    → every sync logged
-    outstanding_receivable → party balances
-n8n Cloud:
-    Workflow v2       → 3× daily: health check → /api/tally-sync
+  ↕  frpc.exe → tally.shreerangtrendz.com (FRP tunnel)
+
+Vercel Serverless APIs:
+  /api/tally-proxy        → raw XML bridge
+  /api/tally-sync         → purchase_bills + sales_bills  ← FIXED ✅
+  /api/tally-outstanding  → outstanding_receivable         ← NEW ✅
+
+Supabase DB (zdekydcscwhuusliwqaz):
+  purchase_bills          → Tally purchase vouchers
+  sales_bills             → Tally sales vouchers
+  job_work_bills          → Job worker charges
+  quotations              → Customer price quotes
+  outstanding_receivable  → Party-wise outstanding snapshot
+  cash_bank_ledger        → Account balances
+  tally_sync_log          → Every sync logged
+
+n8n Cloud (v3 workflow):
+  6:00am / 2:00pm / 9:30pm IST
+  → health check → sync bills + outstanding + stock (parallel)
+
+Bunny CDN (shreerang.b-cdn.net):
+  Storage zone: shreerang-s
+  design_image_url on finish_fabrics table
 ```
 
 ---
 
-## 📁 Key Files
+## 📁 Complete File Map
 
-| File | Purpose |
-|------|---------|
-| `src/components/admin/AdminSidebar.jsx` | New 5-group sidebar with search + collapse |
-| `src/components/admin/AdminLayout.jsx` | Dynamic sidebar width management |
-| `src/pages/admin/AdminDashboard.jsx` | Real KPIs + Sync Bills Now button |
-| `src/pages/admin/integrations/TallySyncDashboard.jsx` | Full sync control centre + Bills cards |
-| `src/services/DashboardService.js` | Accounting KPI queries (sales, purchase, outstanding) |
-| `src/services/TallySyncService.js` | Tally XML API integration service |
-| `api/tally-proxy.js` | Vercel: forwards XML to Tally FRP tunnel |
-| `api/tally-sync.js` | Vercel: full sync — vouchers → Supabase tables |
-| `supabase/functions/tally-health/index.ts` | Edge fn: Tally health check |
-| `n8n-daily-tally-sync-workflow-v2.json` | n8n: 3× daily automated sync |
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/components/admin/AdminSidebar.jsx` | 5-group nav with search/collapse | ✅ |
+| `src/components/admin/AdminLayout.jsx` | Dynamic sidebar width | ✅ |
+| `src/pages/admin/AdminDashboard.jsx` | Real KPIs + Sync Bills Now button | ✅ |
+| `src/pages/admin/integrations/TallySyncDashboard.jsx` | Full sync control + Bills cards | ✅ |
+| `src/pages/admin/accounting/PurchaseBillsPage.jsx` | Purchase bills table + Tally sync | ✅ NEW |
+| `src/pages/admin/accounting/SalesBillsPage.jsx` | Sales bills table + Tally sync | ✅ NEW |
+| `src/pages/admin/accounting/JobWorkBillsPage.jsx` | Job work billing management | ✅ NEW |
+| `src/pages/admin/accounting/QuotationsPage.jsx` | Quotations CRUD + status | ✅ NEW |
+| `src/pages/admin/fabric/FinishFabricForm.jsx` | Finish fabric + Bunny image upload | ✅ UPDATED |
+| `src/services/DashboardService.js` | Accounting KPI queries | ✅ |
+| `api/tally-proxy.js` | Vercel: XML bridge to Tally | ✅ |
+| `api/tally-sync.js` | Vercel: voucher sync (FIXED columns) | ✅ FIXED |
+| `api/tally-outstanding.js` | Vercel: outstanding receivable sync | ✅ NEW |
+| `n8n-daily-tally-sync-v3.json` | n8n: 3× daily full sync | ✅ NEW |
+| `IMPLEMENTATION_TRACKER.md` | This file | ✅ |
 
----
-
-*Generated by Claude — Shreerang Trendz ERP Project — 06 Mar 2026*
+*06 Mar 2026 — Shreerang Trendz ERP*

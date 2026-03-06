@@ -25,7 +25,7 @@ const CustomerLoginPage = () => {
     if (error) {
       toast({ variant: "destructive", title: "Login Failed", description: error.message });
     } else {
-      navigate('/'); // Redirect to Home Page always
+      navigate('/customer/dashboard'); // Redirect to customer portal
     }
   };
 

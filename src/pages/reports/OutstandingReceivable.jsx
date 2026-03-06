@@ -4,6 +4,22 @@ import { supabase } from '../../lib/supabase';
 export default function OutstandingReceivable() {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
+
+    async function syncFromTally() {
+        setSyncing(true);
+        try {
+            const res = await fetch('/api/tally-outstanding', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+            const json = await res.json();
+            if (json.success) {
+                alert(`✅ Synced ${json.synced} outstanding records from Tally`);
+                fetchData();
+            } else {
+                alert('Tally offline or error: ' + (json.error || 'Check FRP tunnel'));
+            }
+        } catch(e) { alert('Error: ' + e.message); }
+        finally { setSyncing(false); }
+    }
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all'); // all | overdue | current
 
@@ -53,7 +69,14 @@ export default function OutstandingReceivable() {
         <div className="p-6 max-w-7xl mx-auto">
             {/* Header */}
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Outstanding Receivable</h1>
+                <div className="flex items-center justify-between">
+                    <h1 className="text-2xl font-bold text-gray-900">Outstanding Receivable</h1>
+                    <button onClick={syncFromTally} disabled={syncing}
+                        className="px-4 py-2 rounded-lg text-white text-sm font-bold"
+                        style={{ background: syncing ? '#999' : 'linear-gradient(135deg,#3DBFAE,#2BA898)', cursor: syncing ? 'wait':'pointer' }}>
+                        {syncing ? '⏳ Syncing…' : '↻ Sync from Tally'}
+                    </button>
+                </div>
                 <p className="text-gray-500 text-sm mt-1">Money owed TO Shreerang Trendz by customers</p>
             </div>
 

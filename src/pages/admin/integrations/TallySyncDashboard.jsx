@@ -117,6 +117,26 @@ export default function TallySyncDashboard() {
   const [billsSyncing, setBillsSyncing] = useState(false);
   const [billsCounts, setBillsCounts]   = useState({ purchase: 0, sales: 0, lastSync: null });
 
+  async function syncOutstanding() {
+    if (infra.tally !== 'online') {
+      toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime and the FRP tunnel first.' });
+      return;
+    }
+    setBillsSyncing(true);
+    try {
+      const res = await fetch('/api/tally-outstanding', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
+      const json = await res.json();
+      if (json.success) {
+        toast({ title:'Outstanding Synced ✅', description:`Synced ${json.synced} party outstanding records` });
+        loadData();
+      } else {
+        toast({ variant:'destructive', title:'Sync Failed', description: json.error || 'Unknown error' });
+      }
+    } catch(e) {
+      toast({ variant:'destructive', title:'Sync Error', description: e.message });
+    } finally { setBillsSyncing(false); }
+  }
+
   async function loadBillsCounts() {
     try {
       const [{ count: pc }, { count: sc }, { data: lastLog }] = await Promise.all([
@@ -193,6 +213,9 @@ export default function TallySyncDashboard() {
           </button>
           <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'9px 18px', background: billsSyncing ? '#555' : 'linear-gradient(135deg,#E8A800,#D4920A)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor: billsSyncing ? 'wait':'pointer', boxShadow:'0 3px 14px rgba(212,146,10,.35)', fontFamily:"'DM Sans',sans-serif", marginLeft:6 }}>
             {billsSyncing ? '⏳ Syncing Bills…' : '💰 Sync Bills Now'}
+          </button>
+          <button onClick={syncOutstanding} disabled={billsSyncing} style={{ padding:'9px 18px', background: billsSyncing ? '#555' : 'linear-gradient(135deg,#6E44C8,#8B5CF6)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor: billsSyncing ? 'wait':'pointer', boxShadow:'0 3px 14px rgba(110,68,200,.3)', fontFamily:"'DM Sans',sans-serif", marginLeft:6 }}>
+            {billsSyncing ? '⏳…' : '📊 Sync Outstanding'}
           </button>
         </div>
       </div>

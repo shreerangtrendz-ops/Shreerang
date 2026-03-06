@@ -45,7 +45,7 @@ const StoreManagerOrders = () => {
         try {
             const { data, error } = await supabase
                 .from('sales_orders')
-                .select('id, order_no, status, total_amount, created_at, party_details, items')
+                .select('id, order_no, status, total_amount, created_at, party_details, items, order_channel, payment_status, tally_voucher_id')
                 .in('status', ['pending', 'confirmed', 'processing', 'packed', 'dispatched'])
                 .order('created_at', { ascending: true });
             if (error) throw error;
@@ -91,6 +91,24 @@ const StoreManagerOrders = () => {
         if (status === 'packed') return ['dispatched'];
         if (status === 'dispatched') return ['delivered'];
         return [];
+    };
+
+    const CHANNEL_CONFIG = {
+        website:    { icon: '🌐', label: 'Website',   color: 'bg-blue-50 text-blue-700 border-blue-200' },
+        admin:      { icon: '🏢', label: 'Admin',     color: 'bg-slate-100 text-slate-600 border-slate-200' },
+        whatsapp:   { icon: '💬', label: 'WhatsApp',  color: 'bg-green-50 text-green-700 border-green-200' },
+        'sales-rep':{ icon: '🤝', label: 'Sales Rep', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    };
+    const ChannelBadge = ({ channel, tallyId }) => {
+        const cfg = CHANNEL_CONFIG[channel] || { icon: '📋', label: channel || 'Admin', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+        return (
+            <div className="flex flex-col gap-1">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
+                    {cfg.icon} {cfg.label}
+                </span>
+                {tallyId && <span className="text-xs text-green-600">✅ Tally</span>}
+            </div>
+        );
     };
 
     const StatusBadge = ({ status }) => {
@@ -154,6 +172,7 @@ const StoreManagerOrders = () => {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Amount</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>Channel</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -173,6 +192,9 @@ const StoreManagerOrders = () => {
                                             <TableCell className="text-slate-500 text-sm">{format(new Date(order.created_at), 'dd MMM yyyy')}</TableCell>
                                             <TableCell className="font-bold">₹{Number(order.total_amount || 0).toLocaleString('en-IN')}</TableCell>
                                             <TableCell><StatusBadge status={order.status} /></TableCell>
+                                            <TableCell>
+                                                <ChannelBadge channel={order.order_channel} tallyId={order.tally_voucher_id} />
+                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     {nextActions.map(action => (

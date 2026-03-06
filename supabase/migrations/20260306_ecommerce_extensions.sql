@@ -25,6 +25,8 @@ COMMENT ON COLUMN public.customers.shipping_address IS 'Default delivery address
 -- ─── 2. SALES_ORDERS TABLE — Add channel tracking columns ──
 ALTER TABLE public.sales_orders
   ADD COLUMN IF NOT EXISTS order_channel      text DEFAULT 'admin' CHECK (order_channel IN ('website', 'admin', 'whatsapp', 'sales-rep')),
+  ADD COLUMN IF NOT EXISTS payment_method     text DEFAULT 'credit' CHECK (payment_method IN ('online', 'upi', 'neft', 'cash', 'credit', 'cheque')),
+  ADD COLUMN IF NOT EXISTS payment_status     text DEFAULT 'pending' CHECK (payment_status IN ('pending', 'partial', 'paid', 'refunded')),
   ADD COLUMN IF NOT EXISTS tally_voucher_id   text,
   ADD COLUMN IF NOT EXISTS dispatch_date      date,
   ADD COLUMN IF NOT EXISTS shipping_address_snapshot jsonb DEFAULT '{}';

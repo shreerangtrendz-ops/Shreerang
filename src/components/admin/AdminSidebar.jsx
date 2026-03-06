@@ -46,7 +46,8 @@ const navGroups = [
   {
     label: 'Operations',
     items: [
-      { icon: '📋', label: 'Orders', to: '/admin/order-database/sales', nb: '3' },
+      { icon: '📋', label: 'Sales Orders', to: '/admin/orders' },
+      { icon: '➕', label: 'New Order', to: '/admin/orders/new', nb: 'NEW', nbClass: 'gold' },
       { icon: '📄', label: 'Challans', to: '/admin/challans' },
       { icon: '🏭', label: 'Vendor Master', to: '/admin/settings/suppliers' },
       { icon: '👥', label: 'Customers', to: '/admin/customers' },

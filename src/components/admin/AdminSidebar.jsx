@@ -60,6 +60,9 @@ const navGroups = [
       { icon: '💰', label: 'Outstanding Receivable', to: '/admin/outstanding-receivable' },
       { icon: '📤', label: 'Outstanding Payable', to: '/admin/outstanding-payable' },
       { icon: '🏦', label: 'Cash & Bank Balance', to: '/admin/cash-bank' },
+      { icon: '📒', label: 'Party Ledger', to: '/admin/reports/party-ledger', nb: 'NEW', nbClass: 'teal' },
+      { icon: '📅', label: 'Day Book', to: '/admin/reports/day-book', nb: 'NEW', nbClass: 'teal' },
+      { icon: '🎨', label: 'Design Profitability', to: '/admin/reports/design-profitability', nb: 'NEW', nbClass: 'gold' },
     ]
   },
   {

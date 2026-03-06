@@ -85,6 +85,13 @@ import AccessControlPage from '@/pages/admin/AccessControlPage';
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 import BackupControlPage from '@/pages/admin/BackupControlPage';
 import EcomControlPage from '@/pages/admin/EcomControlPage';
+// ─── Admin: Sales Orders (new) ───
+import SalesOrderList from '@/pages/admin/sales/SalesOrderList';
+import SalesOrderForm from '@/pages/admin/sales/SalesOrderForm';
+// ─── Admin: Reports (new) ────────
+import PartyLedger from '@/pages/reports/PartyLedger';
+import DayBook from '@/pages/reports/DayBook';
+import DesignProfitability from '@/pages/reports/DesignProfitability';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -203,6 +210,17 @@ const App = () => {
                     <Route path="settings/suppliers" element={<SuppliersManager />} />
                     <Route path="settings/hsn-codes" element={<HSNCodeMaster />} />
                     <Route path="sales/quick-price" element={<QuickPriceCheckPage />} />
+
+                    {/* Sales Orders */}
+                    <Route path="orders" element={<SalesOrderList />} />
+                    <Route path="orders/new" element={<SalesOrderForm />} />
+                    <Route path="orders/:id/edit" element={<SalesOrderForm />} />
+
+                    {/* Reports */}
+                    <Route path="reports/party-ledger" element={<PartyLedger />} />
+                    <Route path="reports/day-book" element={<DayBook />} />
+                    <Route path="reports/design-profitability" element={<DesignProfitability />} />
+
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Route>

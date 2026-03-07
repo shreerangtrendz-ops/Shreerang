@@ -59,7 +59,7 @@ export default function TallySyncDashboard() {
       });
       const json = await r.json();
       let n8nOk = false;
-      try { const nr = await fetch('https://n8n.shreerangtrendz.com/healthz',{ signal:AbortSignal.timeout(5000) }); n8nOk = nr.ok; } catch {}
+      try { const nr = await fetch('http://72.61.249.86:32771/healthz',{ signal:AbortSignal.timeout(5000) }); n8nOk = nr.ok; } catch {}
       setInfra({ frps:json.frps||'offline', frpc:json.frpc||'offline', nginx:json.nginx||'offline',
         tally:json.tally||'offline', domain:json.domain||'offline', n8n:n8nOk?'online':'offline',
         lastChecked:new Date(), tallyCompany:json.tallyCompany||'', stockItems:json.stockItems||0 });
@@ -117,6 +117,53 @@ export default function TallySyncDashboard() {
   const [billsSyncing, setBillsSyncing] = useState(false);
   const [billsCounts, setBillsCounts]   = useState({ purchase: 0, sales: 0, lastSync: null });
 
+  /* ── Company Selector ── */
+  const [companies, setCompanies] = useState([]);
+  const [activeCompany, setActiveCompany] = useState('');
+  const [detectingCompany, setDetectingCompany] = useState(false);
+
+  useEffect(() => {
+    async function loadCompanies() {
+      try {
+        const { data } = await supabase
+          .from('tally_companies')
+          .select('*')
+          .eq('is_active', true)
+          .order('is_default', { ascending: false });
+        if (data?.length) {
+          setCompanies(data);
+          const def = data.find(c => c.is_default);
+          if (def) setActiveCompany(def.company_name);
+        }
+      } catch (e) { console.warn('Could not load tally_companies:', e.message); }
+    }
+    loadCompanies();
+  }, []);
+
+  async function detectActiveCompany() {
+    setDetectingCompany(true);
+    try {
+      const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
+        method:'GET',
+        headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
+        signal: AbortSignal.timeout(12000)
+      });
+      const json = await r.json();
+      if (json.tallyCompany) {
+        setActiveCompany(json.tallyCompany);
+        toast({ description: `Detected active company: ${json.tallyCompany}` });
+        await supabase.from('tally_companies').upsert(
+          { company_name: json.tallyCompany, is_active: true, last_synced_at: new Date().toISOString() },
+          { onConflict: 'company_name' }
+        );
+      } else {
+        toast({ variant:'destructive', description: 'Could not detect company — is Tally open?' });
+      }
+    } catch(e) {
+      toast({ variant:'destructive', description: e.message });
+    } finally { setDetectingCompany(false); }
+  }
+
   async function syncOutstanding() {
     if (infra.tally !== 'online') {
       toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime and the FRP tunnel first.' });
@@ -166,7 +213,7 @@ export default function TallySyncDashboard() {
     }
     setBillsSyncing(true);
     try {
-      const res = await fetch('/api/tally-sync', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:'{}' });
+      const res = await fetch('/api/tally-sync', { method:'POST', headers:{ 'Content-Type':'application/json', ...(activeCompany?{'X-Tally-Company':activeCompany}:{}) }, body:'{}' });
       const json = await res.json();
       if (json.success) {
         toast({ title:'Bills Synced ✅', description:`Purchase: ${json.synced.purchase} | Sales: ${json.synced.sales} records` });
@@ -222,7 +269,29 @@ export default function TallySyncDashboard() {
 
       <div style={{ padding:'22px 26px', display:'flex', flexDirection:'column', gap:20 }}>
 
-        {/* ── ROW 1: section label + 4 cards ── */}
+        {/* ── COMPANY SELECTOR ── */}
+        <div style={{ background:'#fff', borderRadius:12, padding:'12px 18px', border:'1px solid rgba(43,168,152,.2)', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', boxShadow:'0 2px 8px rgba(0,0,0,.05)' }}>
+          <span style={{ fontSize:14 }}>🏢</span>
+          <div style={{ fontWeight:700, fontSize:12, color:'#0B2E2B' }}>Tally Company:</div>
+          <select value={activeCompany} onChange={e=>setActiveCompany(e.target.value)}
+            style={{ padding:'5px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, fontFamily:"'DM Sans',sans-serif", background:'#F4FBFA', color:'#0B2E2B', cursor:'pointer', minWidth:180 }}>
+            <option value="">— Select Company —</option>
+            {companies.map(c=>(
+              <option key={c.id} value={c.company_name}>{c.company_name}{c.is_default?' (Default)':''}</option>
+            ))}
+          </select>
+          {activeCompany && (
+            <span style={{ padding:'3px 10px', borderRadius:100, background:'rgba(43,168,152,.12)', color:'#2BA898', fontSize:11, fontWeight:700 }}>
+              ✓ {activeCompany}
+            </span>
+          )}
+          <button onClick={detectActiveCompany} disabled={detectingCompany || infra.tally!=='online'}
+            style={{ marginLeft:'auto', padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(110,68,200,.1)', color:'#6E44C8', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+            {detectingCompany ? '⏳ Detecting…' : '🔍 Detect Active Company'}
+          </button>
+        </div>
+
+        {/* ── ROW 1: section label + 4 cards ── */}}
         <div>
           <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>📊 Data Sources — Pull Live from Tally ERP Prime</span>

@@ -1,6 +1,6 @@
-// api/tally-sync.js  v2
+// api/tally-sync.js  v3 — Delta Sync
 // Pulls Purchase + Sales vouchers from Tally XML API → upserts into Supabase
-// Uses CORRECT column names: bill_number, supplier_name, customer_name
+// Uses delta sync: only fetches records newer than last_synced_voucher_date
 
 const TALLY_PROXY = 'https://www.shreerangtrendz.com/api/tally-proxy';
 const SUPABASE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co';
@@ -25,6 +25,10 @@ function tallyDate(d) {
   if (m) return `${m[3]}-${mths[m[2].toLowerCase()]}-${m[1].padStart(2,'0')}`;
   return null;
 }
+function toTallyDateStr(isoDate) {
+  // Convert "2026-01-15" → "20260115"
+  return isoDate.replace(/-/g, '');
+}
 
 async function supabaseUpsert(table, rows, conflictCol) {
   if (!rows.length) return [];
@@ -39,15 +43,55 @@ async function supabaseUpsert(table, rows, conflictCol) {
 }
 
 async function logSync(type, status, count, raw, err = null) {
+  const today = new Date().toISOString().slice(0,10);
   await fetch(`${SUPABASE_URL}/rest/v1/tally_sync_log`, {
     method: 'POST',
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sync_type: type, status, records_synced: count, raw_response: raw?.slice(0,5000) ?? null, error_message: err }),
+    body: JSON.stringify({
+      sync_type: type, status, records_synced: count,
+      raw_response: raw?.slice(0,5000) ?? null, error_message: err,
+      last_voucher_date: today
+    }),
   });
 }
 
-async function callTally(xml) {
-  const r = await fetch(TALLY_PROXY, { method:'POST', headers:{'Content-Type':'text/xml'}, body: xml, signal: AbortSignal.timeout(30000) });
+// Get last synced voucher date for delta sync
+async function getLastSyncDate(syncType) {
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/tally_sync_state?sync_type=eq.${syncType}&select=last_synced_voucher_date`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    const data = await r.json();
+    return data?.[0]?.last_synced_voucher_date || null;
+  } catch { return null; }
+}
+
+// Update last synced date after successful sync
+async function updateSyncState(syncType, date, totalRecords) {
+  await fetch(`${SUPABASE_URL}/rest/v1/tally_sync_state?on_conflict=sync_type`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({
+      sync_type: syncType,
+      last_synced_voucher_date: date,
+      total_records_synced: totalRecords,
+      updated_at: new Date().toISOString()
+    }),
+  });
+}
+
+async function callTally(xml, company) {
+  const url = company
+    ? `${TALLY_PROXY}?company=${encodeURIComponent(company)}`
+    : TALLY_PROXY;
+  const r = await fetch(url, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/xml', ...(company ? { 'X-Tally-Company': company } : {}) },
+    body: xml,
+    signal: AbortSignal.timeout(30000)
+  });
   if (!r.ok) throw new Error(`Proxy ${r.status}`);
   const txt = await r.text();
   if (txt.includes('LINEERROR')) throw new Error(`Tally: ${extractTag(txt,'LINEERROR')}`);
@@ -90,28 +134,46 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const today = new Date();
-  const to   = today.toISOString().slice(0,10).replace(/-/g,'');
-  const from = new Date(today - 90*864e5).toISOString().slice(0,10).replace(/-/g,'');
+  const todayStr = today.toISOString().slice(0,10);
+  const toDate = toTallyDateStr(todayStr);
+  const company = req.headers['x-tally-company'] || req.query?.company || '';
 
-  const results = { purchase: 0, sales: 0, errors: [] };
+  const results = { purchase: 0, sales: 0, errors: [], deltaSync: {} };
 
+  // PURCHASE — delta sync
   try {
-    const xml = await callTally(voucherXml(from, to, 'Purchase'));
+    const lastDate = await getLastSyncDate('purchase_vouchers');
+    // If we have a last sync date, fetch from that date; else fetch last 90 days
+    const fromDate = lastDate
+      ? toTallyDateStr(lastDate)
+      : toTallyDateStr(new Date(today - 90*864e5).toISOString().slice(0,10));
+    results.deltaSync.purchaseFrom = lastDate || '90 days ago';
+
+    const xml = await callTally(voucherXml(fromDate, toDate, 'Purchase'), company);
     const rows = parseVouchers(xml, 'Purchase');
     if (rows.length) await supabaseUpsert('purchase_bills', rows, 'bill_number');
     results.purchase = rows.length;
     await logSync('purchase_vouchers', 'success', rows.length, xml);
+    await updateSyncState('purchase_vouchers', todayStr, rows.length);
   } catch(e) {
     results.errors.push(`Purchase: ${e.message}`);
     await logSync('purchase_vouchers', 'error', 0, null, e.message);
   }
 
+  // SALES — delta sync
   try {
-    const xml = await callTally(voucherXml(from, to, 'Sales'));
+    const lastDate = await getLastSyncDate('sales_vouchers');
+    const fromDate = lastDate
+      ? toTallyDateStr(lastDate)
+      : toTallyDateStr(new Date(today - 90*864e5).toISOString().slice(0,10));
+    results.deltaSync.salesFrom = lastDate || '90 days ago';
+
+    const xml = await callTally(voucherXml(fromDate, toDate, 'Sales'), company);
     const rows = parseVouchers(xml, 'Sales');
     if (rows.length) await supabaseUpsert('sales_bills', rows, 'bill_number');
     results.sales = rows.length;
     await logSync('sales_vouchers', 'success', rows.length, xml);
+    await updateSyncState('sales_vouchers', todayStr, rows.length);
   } catch(e) {
     results.errors.push(`Sales: ${e.message}`);
     await logSync('sales_vouchers', 'error', 0, null, e.message);
@@ -120,6 +182,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     success: results.errors.length === 0,
     synced: { purchase: results.purchase, sales: results.sales },
+    deltaSync: results.deltaSync,
     errors: results.errors,
     timestamp: new Date().toISOString(),
   });

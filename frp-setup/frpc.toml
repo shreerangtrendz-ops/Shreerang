@@ -1,12 +1,13 @@
 # frpc.toml — Shreerang Trendz FRP Client Config
-# Copy this file to: C:\frp_0.58.1_windows_amd64\frpc.toml
-# Then run: frpc.exe -c frpc.toml
+# Save to: C:\frp_0.58.1_windows_amd64\frpc.toml
+# Run: frpc.exe -c frpc.toml  (keep window open!)
 
 serverAddr = "72.61.249.86"
 serverPort = 7000
 
-# Optional: auth token (set this if frps has auth enabled)
-# auth.token = "your_token_here"
+[auth]
+method = "token"
+token = "ShreerangFRP2026"
 
 [[proxies]]
 name = "tally"

@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -102,9 +102,6 @@ import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
 import JobWorkersPage from '@/pages/admin/JobWorkersPage';
 import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
-import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
-import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
-import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -183,7 +180,6 @@ const App = () => {
                     {/* Operations */}
                     <Route path="order-database/sales" element={<StoreManagerOrders />} />
                     <Route path="orders/store-dispatch" element={<StoreManagerOrders />} />
-                    <Route path="challans" element={<ChallansPage />} />
                     <Route path="customers" element={<CustomerMasterPage />} />
                     <Route path="market-intel" element={<MarketIntelPage />} />
                     <Route path="mto-orders" element={<MakeToOrderPage />} />

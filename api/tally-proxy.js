@@ -1,15 +1,17 @@
 // api/tally-proxy.js
 // Vercel serverless function — proxies Tally XML requests
-// to tally.shreerangtrendz.com (via FRP tunnel on KVM-1)
-// v2: Added health check endpoint, 30s timeout, and detailed fix instructions
+// Routes through Supabase Edge Function (tally-proxy) which has correct FRP URL
+// v3: Fixed URL (http:9000), routes to Supabase edge function for reliability
 
-const TALLY_BASE = 'https://tally.shreerangtrendz.com';
-const TIMEOUT_MS = 30000;
+const SUPABASE_EDGE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.placeholder';
+const TALLY_DIRECT = 'http://tally.shreerangtrendz.com:9000';
+const TIMEOUT_MS = 28000;
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Tally-Company');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -22,17 +24,24 @@ export default async function handler(req, res) {
 
     try {
         const body = req.method === 'POST' ? await readBody(req) : undefined;
-        console.log(`[tally-proxy] ${req.method} → ${TALLY_BASE}/ | body: ${body ? body.length : 0} bytes`);
+        const company = req.headers['x-tally-company'] || req.query?.company || '';
 
+        console.log(`[tally-proxy] Forwarding to Supabase edge | body: ${body ? body.length : 0} bytes | company: ${company}`);
+
+        // Route through Supabase edge function which has the correct Tally URL
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-        let tallyRes;
+        let edgeRes;
         try {
-            tallyRes = await fetch(`${TALLY_BASE}/`, {
-                method: req.method || 'POST',
-                headers: { 'Content-Type': 'text/xml' },
-                body,
+            edgeRes = await fetch(SUPABASE_EDGE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'apikey': SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({ xmlBody: body, company }),
                 signal: controller.signal,
             });
         } catch (fetchErr) {
@@ -40,20 +49,27 @@ export default async function handler(req, res) {
             if (fetchErr.name === 'AbortError') {
                 return res.status(504).json({
                     error: 'Tally FRP Tunnel timeout',
-                    detail: 'Tally did not respond within 30 seconds.',
-                    fix: 'Tally → F12 → Advanced Config → Enable HTTP Server → Port 9000',
-                    frp_status: 'tunnel_up_but_tally_not_listening',
+                    detail: 'Tally did not respond within 28 seconds.',
+                    fix: 'Check FRP tunnel is running on Tally PC and KVM server',
                 });
             }
             throw fetchErr;
         }
         clearTimeout(timer);
 
-        const xmlText = await tallyRes.text();
-        console.log(`[tally-proxy] Tally responded: ${tallyRes.status}, ${xmlText.length} bytes`);
+        const edgeData = await edgeRes.json();
 
+        if (!edgeRes.ok) {
+            return res.status(502).json({
+                error: 'Tally proxy error',
+                detail: edgeData?.error || 'Unknown error from edge function',
+            });
+        }
+
+        // Return the XML from Tally
+        const xmlText = edgeData?.xml || '';
         res.setHeader('Content-Type', 'text/xml');
-        return res.status(tallyRes.status).send(xmlText);
+        return res.status(200).send(xmlText);
 
     } catch (err) {
         console.error('[tally-proxy] Error:', err.message);
@@ -74,22 +90,29 @@ async function healthCheck(res) {
     const startTime = Date.now();
     try {
         const pingXml = `<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Companies</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
+
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 8000);
-        const r = await fetch(`${TALLY_BASE}/`, {
+        setTimeout(() => controller.abort(), 10000);
+
+        const r = await fetch(SUPABASE_EDGE_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/xml' },
-            body: pingXml,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'apikey': SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ xmlBody: pingXml }),
             signal: controller.signal,
         });
-        const text = await r.text();
+        const data = await r.json();
+        const text = data?.xml || '';
         const latency = Date.now() - startTime;
         const hasData = text.includes('<ENVELOPE>') || text.includes('<COMPANY>');
+
         return res.status(200).json({
             status: hasData ? 'connected' : 'partial',
             latency_ms: latency,
-            tally_url: TALLY_BASE,
-            http_status: r.status,
+            tally_url: TALLY_DIRECT,
             has_tally_data: hasData,
             message: hasData ? 'Tally is live and responding' : 'Tunnel reached but response unclear',
             timestamp: new Date().toISOString(),
@@ -100,15 +123,12 @@ async function healthCheck(res) {
         return res.status(200).json({
             status: 'offline',
             latency_ms: latency,
-            tally_url: TALLY_BASE,
+            tally_url: TALLY_DIRECT,
             error: err.message,
             is_timeout: isTimeout,
             message: isTimeout
-                ? 'FRP tunnel reachable but Tally HTTP server not responding — enable it in F12'
-                : 'FRP tunnel unreachable — start frpc.exe on the Tally PC',
-            fix: isTimeout
-                ? 'Tally → F12 → Advanced Configuration → Enable HTTP Server → Port 9000 → Ctrl+A'
-                : 'Run frpc.exe -c frpc.toml in CMD on the Tally PC',
+                ? 'FRP tunnel reachable but Tally HTTP server not responding'
+                : 'FRP tunnel unreachable — start frpc.exe on Tally PC',
             timestamp: new Date().toISOString(),
         });
     }

@@ -249,7 +249,7 @@ export default function TallySyncDashboard() {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', position:'relative' }}>
           {[
-            { label:'🏢 Cotton Fabrics', c:'rgba(232,168,0,.12)', b:'rgba(232,168,0,.3)', t:'#E8A800' },
+            { label:`🏢 ${activeCompany || 'No Company'}`, c:'rgba(232,168,0,.12)', b:'rgba(232,168,0,.3)', t:'#E8A800' },
             { label:infra.tally==='online'?'● Tally Live':'○ Tally Offline', c:'rgba(61,191,174,.14)', b:'rgba(61,191,174,.3)', t:'#3DBFAE' },
             { label:`⏱ ${now}`, c:'rgba(255,255,255,.06)', b:'rgba(255,255,255,.1)', t:'#94a3b8' },
           ].map((p,i) => (
@@ -372,7 +372,7 @@ export default function TallySyncDashboard() {
             <div style={{ background:'#0B2E2B', border:'1px solid rgba(61,191,174,.2)', borderRadius:8, padding:'12px 14px', marginTop:11, fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, lineHeight:1.9 }}>
               {infra.tally==='online' ? <>
                 <div style={{ color:'#34d399' }}>▶ Connected · Tally ERP Prime</div>
-                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany || 'Cotton Fabrics'} | Items: {infra.stockItems||12}</div>
+                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany || activeCompany || 'Unknown'} | Items: {infra.stockItems||12}</div>
               </> : <>
                 <div style={{ color:'#f87171' }}>▶ Cannot connect to Tally endpoint</div>
                 <div style={{ color:'#6A9B95' }}>→ Check: Tally Prime open + Port 9000 enabled</div>

@@ -96,6 +96,13 @@ import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
 import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
 import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
 import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
+import AnalyticsPage from '@/pages/admin/AnalyticsPage';
+import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
+import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
+import JobWorkersPage from '@/pages/admin/JobWorkersPage';
+import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
+import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
+import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -230,6 +237,12 @@ const App = () => {
                     <Route path="accounting/sales-bills" element={<SalesBillsPage />} />
                     <Route path="accounting/job-work-bills" element={<JobWorkBillsPage />} />
                     <Route path="accounting/quotations" element={<QuotationsPage />} />
+
+                    {/* New Pages — Analytics, Logs, Media, Job Workers */}
+                    <Route path="analytics" element={<AnalyticsPage />} />
+                    <Route path="activity-logs" element={<ActivityLogsPage />} />
+                    <Route path="media-library" element={<MediaLibraryPage />} />
+                    <Route path="job-workers" element={<JobWorkersPage />} />
 
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

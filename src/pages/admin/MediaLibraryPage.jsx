@@ -1,274 +1,147 @@
-import React, { useState, useCallback } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
-import AdminPageHeader from '@/components/admin/AdminPageHeader';
-import UnsavedChangesModal from '@/components/admin/UnsavedChangesModal';
-import StickyFormFooter from '@/components/admin/StickyFormFooter';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Upload, FileArchive, Cloud, AlertCircle, FileUp, Image as ImageIcon } from 'lucide-react';
-import { useToast } from "@/components/ui/use-toast";
-import MediaMappingTable from '@/components/admin/media/MediaMappingTable';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import Papa from 'papaparse';
+import { useState, useEffect, useRef } from 'react';
 
-// Mock helper to generate random SKUs for auto-match demo
-const generateMockSKU = (filename) => {
-  const clean = filename.replace(/\.[^/.]+$/, "").toUpperCase().replace(/[^A-Z0-9]/g, "-");
-  return clean.substring(0, 10);
-};
+const BUNNY_KEY = import.meta.env.VITE_BUNNY_API_KEY || '';
+const CDN_URL   = 'https://shreerang.b-cdn.net';
+const ZONE      = 'shreerang-s';
+const HOST      = 'https://storage.bunnycdn.com';
 
-const MediaLibraryPage = () => {
-  const [items, setItems] = useState([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const { toast } = useToast();
-  
-  // Use unsaved changes hook
-  const { 
-    showUnsavedModal, 
-    handleNavigation, 
-    proceedNavigation, 
-    stayOnPage 
-  } = useUnsavedChanges(items.length > 0 && items.some(i => i.status !== 'success'));
+export default function MediaLibraryPage() {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [search, setSearch] = useState('');
+  const [folder, setFolder] = useState('designs/');
+  const [selected, setSelected] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Handlers for the Table
-  const handleFilesAdded = (newFiles) => {
-    const newItems = Array.from(newFiles).map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      name: file.name,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-      sku: generateMockSKU(file.name),
-      skuMatch: true,
-      altText: file.name.replace(/\.[^/.]+$/, "").replace(/-/g, " "),
-      status: 'pending',
-      selected: false
-    }));
-    setItems(prev => [...prev, ...newItems]);
-    toast({ title: "Files Added", description: `${newItems.length} files queued for upload.` });
-  };
+  useEffect(() => { listFiles(); }, [folder]);
 
-  const handleUpdateItem = (id, field, value) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
-  };
-
-  const handleRemoveItem = (id) => {
-    setItems(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleToggleSelect = (id, checked) => {
-    setItems(prev => prev.map(item => 
-      item.id === id ? { ...item, selected: checked } : item
-    ));
-  };
-
-  const handleSelectAll = (checked) => {
-    setItems(prev => prev.map(item => ({ ...item, selected: checked })));
-  };
-
-  const handleProcessUpload = async () => {
-    setIsUploading(true);
-    // Simulate upload process
-    const pendingItems = items.filter(i => i.status === 'pending' || i.status === 'error');
-    
-    for (const item of pendingItems) {
-      handleUpdateItem(item.id, 'status', 'uploading');
-      await new Promise(r => setTimeout(r, 800)); // Fake network delay
-      
-      // Random fail for demo
-      const isSuccess = Math.random() > 0.1;
-      handleUpdateItem(item.id, 'status', isSuccess ? 'success' : 'error');
-    }
-    
-    setIsUploading(false);
-    toast({ title: "Processing Complete", description: "Batch processing finished." });
-  };
-
-  const handleRetryFailed = () => {
-    setItems(prev => prev.map(item => 
-      item.status === 'error' ? { ...item, status: 'pending' } : item
-    ));
-    handleProcessUpload();
-  };
-
-  const handleCSVImport = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      Papa.parse(file, {
-        header: true,
-        complete: (results) => {
-          const mapped = results.data
-            .filter(row => row.filename) // Basic validation
-            .map(row => ({
-              id: Math.random().toString(36).substr(2, 9),
-              name: row.filename,
-              preview: null, // Can't preview from CSV only
-              sku: row.sku || generateMockSKU(row.filename),
-              skuMatch: !!row.sku,
-              altText: row.alt_text || '',
-              status: 'pending',
-              selected: false
-          }));
-          setItems(prev => [...prev, ...mapped]);
-          toast({ title: "CSV Parsed", description: `Imported ${mapped.length} records.` });
-        }
+  async function listFiles() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${HOST}/${ZONE}/${folder}`, {
+        headers: { AccessKey: BUNNY_KEY, accept:'application/json' }
       });
-    }
-  };
+      if (res.ok) {
+        const data = await res.json();
+        setFiles(Array.isArray(data) ? data : []);
+      } else {
+        setFiles([]);
+      }
+    } catch { setFiles([]); }
+    setLoading(false);
+  }
 
-  const selectedCount = items.filter(i => i.selected).length;
+  async function uploadFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true); setUploadProgress(0);
+    try {
+      const fileName = `${folder}${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const res = await fetch(`${HOST}/${ZONE}/${fileName}`, {
+        method: 'PUT',
+        headers: { AccessKey: BUNNY_KEY, 'Content-Type': file.type },
+        body: file,
+      });
+      if (res.ok) { setUploadProgress(100); listFiles(); }
+      else alert('Upload failed: ' + res.status);
+    } catch(err) { alert('Upload error: ' + err.message); }
+    finally { setUploading(false); }
+  }
+
+  async function deleteFile(fileName) {
+    if (!confirm(`Delete ${fileName}?`)) return;
+    await fetch(`${HOST}/${ZONE}/${folder}${fileName}`, { method: 'DELETE', headers: { AccessKey: BUNNY_KEY } });
+    listFiles();
+  }
+
+  function copyUrl(fileName) {
+    const url = `${CDN_URL}/${folder}${fileName}`;
+    navigator.clipboard.writeText(url).then(()=>{ setCopied(fileName); setTimeout(()=>setCopied(false), 2000); });
+  }
+
+  const filtered = files.filter(f => f.ObjectName?.toLowerCase().includes(search.toLowerCase()));
+  const images = filtered.filter(f => /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(f.ObjectName||''));
+  const others = filtered.filter(f => !/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(f.ObjectName||''));
+  const fmtSize = b => b > 1e6 ? (b/1e6).toFixed(1)+'MB' : b > 1e3 ? (b/1e3).toFixed(0)+'KB' : b+'B';
 
   return (
-    <>
-      <Helmet><title>Media Library - Admin</title></Helmet>
-      <div className="container py-6 max-w-7xl mx-auto pb-24">
-        <AdminPageHeader 
-          title="Media Library" 
-          breadcrumbs={[{ label: 'Dashboard', href: '/admin' }, { label: 'Media Library' }]}
-          onBack={() => handleNavigation('/admin')}
-        />
-
-        <Tabs defaultValue="direct" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 max-w-[600px]">
-            <TabsTrigger value="direct">Direct Upload</TabsTrigger>
-            <TabsTrigger value="bulk">Bulk Import (CSV/ZIP)</TabsTrigger>
-            <TabsTrigger value="drive">Google Drive</TabsTrigger>
-          </TabsList>
-
-          {/* Tab: Direct Upload */}
-          <TabsContent value="direct" className="space-y-4 animate-in fade-in-50">
-             <Card>
-               <CardHeader>
-                 <CardTitle>Direct File Upload</CardTitle>
-                 <CardDescription>Drag and drop images here or select files from your device.</CardDescription>
-               </CardHeader>
-               <CardContent>
-                 <div 
-                    className="border-2 border-dashed rounded-lg p-10 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors cursor-pointer group"
-                    onClick={() => document.getElementById('direct-upload').click()}
-                 >
-                    <div className="bg-primary/10 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                        <Upload className="h-8 w-8 text-primary" />
-                    </div>
-                    <p className="font-medium text-lg">Click to select files or drag them here</p>
-                    <p className="text-sm text-muted-foreground mt-1">Supports JPG, PNG, WEBP up to 10MB</p>
-                    <input 
-                      id="direct-upload" 
-                      type="file" 
-                      multiple 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => handleFilesAdded(e.target.files)}
-                    />
-                 </div>
-               </CardContent>
-             </Card>
-          </TabsContent>
-
-          {/* Tab: Bulk Import */}
-          <TabsContent value="bulk" className="space-y-4 animate-in fade-in-50">
-             <div className="grid md:grid-cols-2 gap-4">
-               <Card>
-                 <CardHeader className="pb-3">
-                   <CardTitle className="text-base flex items-center gap-2"><FileArchive className="h-4 w-4"/> 1. Upload Assets (ZIP)</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="flex items-center gap-4">
-                     <Button variant="outline" className="w-full h-24 border-dashed flex-col gap-2" onClick={() => toast({description: "Zip upload simulated"})}>
-                        <FileArchive className="h-6 w-6 text-muted-foreground"/>
-                        <span>Select ZIP File</span>
-                     </Button>
-                   </div>
-                   <p className="text-xs text-muted-foreground mt-2">Structure: Root folder with images. No subfolders.</p>
-                 </CardContent>
-               </Card>
-               <Card>
-                 <CardHeader className="pb-3">
-                   <CardTitle className="text-base flex items-center gap-2"><FileUp className="h-4 w-4"/> 2. Upload Mapping (CSV)</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="relative">
-                     <Button variant="outline" className="w-full h-24 border-dashed flex-col gap-2" onClick={() => document.getElementById('csv-upload').click()}>
-                        <FileUp className="h-6 w-6 text-muted-foreground"/>
-                        <span>Select CSV File</span>
-                     </Button>
-                     <input id="csv-upload" type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
-                   </div>
-                   <p className="text-xs text-muted-foreground mt-2">Columns: filename, sku, alt_text</p>
-                 </CardContent>
-               </Card>
-             </div>
-             <Alert>
-               <AlertCircle className="h-4 w-4" />
-               <AlertTitle>Bulk Import Tip</AlertTitle>
-               <AlertDescription>
-                 Ensure filenames in CSV match exactly with files in ZIP. System will attempt to auto-match if SKU is missing.
-               </AlertDescription>
-             </Alert>
-          </TabsContent>
-
-          {/* Tab: Google Drive */}
-          <TabsContent value="drive" className="space-y-4 animate-in fade-in-50">
-            <Card>
-              <CardContent className="pt-6 flex flex-col items-center justify-center min-h-[300px]">
-                <div className="bg-blue-50 p-6 rounded-full mb-6">
-                  <Cloud className="h-12 w-12 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Import from Google Drive</h3>
-                <p className="text-muted-foreground text-center max-w-md mb-6">
-                  Connect your Google Drive account to select multiple files or folders for import.
-                </p>
-                <Button onClick={() => toast({ title: "Google Drive", description: "Picker window would open here." })} className="gap-2">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/1/12/Google_Drive_icon_%282020%29.svg" className="w-4 h-4" alt="Drive" />
-                  Launch Google Picker
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Shared Mapping UI */}
-          {items.length > 0 && (
-            <div className="space-y-4 animate-in slide-in-from-bottom-4">
-              <div className="flex items-center justify-between mt-8">
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                    <h2 className="text-lg font-semibold tracking-tight">Media Mapping & Review</h2>
-                  </div>
-              </div>
-              
-              <MediaMappingTable 
-                  items={items}
-                  onUpdateItem={handleUpdateItem}
-                  onRemoveItem={handleRemoveItem}
-                  onToggleSelect={handleToggleSelect}
-                  onSelectAll={(checked) => handleSelectAll(checked)}
-                  selectedCount={selectedCount}
-                  totalCount={items.length}
-                  onRetryFailed={handleRetryFailed}
-              />
-            </div>
-          )}
-        </Tabs>
-
-        <StickyFormFooter 
-          onSave={handleProcessUpload}
-          onCancel={() => handleNavigation('/admin')}
-          isSaving={isUploading}
-          saveLabel={`Upload ${items.filter(i => i.status === 'pending').length} Files`}
-          disabled={items.filter(i => i.status === 'pending').length === 0}
-        />
-        
-        <UnsavedChangesModal 
-          open={showUnsavedModal} 
-          onContinue={proceedNavigation} 
-          onCancel={stayOnPage} 
-        />
+    <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>
+      <div style={{ background:'linear-gradient(135deg,#0B2E2B,#143F3C)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+        <div>
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:8 }}>
+            <span>🖼️</span> Media Library
+          </div>
+          <p style={{ fontSize:11, color:'#6A9B95', margin:0 }}>Bunny CDN · shreerang.b-cdn.net · Design images</p>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={uploadFile} style={{ display:'none' }} />
+          <button onClick={()=>fileInputRef.current?.click()} disabled={uploading}
+            style={{ padding:'9px 18px', borderRadius:9, border:'none', background: uploading?'#555':'linear-gradient(135deg,#E8A800,#D4920A)', color:'#fff', fontSize:12, fontWeight:700, cursor: uploading?'wait':'pointer' }}>
+            {uploading ? `⏳ Uploading ${uploadProgress}%` : '⬆ Upload File'}
+          </button>
+          <button onClick={listFiles} style={{ padding:'9px 14px', borderRadius:9, border:'none', background:'rgba(255,255,255,.1)', color:'#fff', fontSize:12, cursor:'pointer' }}>↻</button>
+        </div>
       </div>
-    </>
-  );
-};
 
-export default MediaLibraryPage;
+      <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search files…"
+            style={{ flex:1, maxWidth:300, padding:'8px 12px', borderRadius:8, border:'1px solid rgba(43,168,152,.3)', fontSize:13 }} />
+          {['designs/','fabrics/','documents/'].map(f=>(
+            <button key={f} onClick={()=>setFolder(f)} style={{ padding:'6px 14px', borderRadius:20, border:'none', fontSize:12, fontWeight:600, cursor:'pointer',
+              background: folder===f?'#0B2E2B':'#fff', color: folder===f?'#3DBFAE':'#6A9B95', boxShadow:'0 1px 4px rgba(0,0,0,.08)' }}>
+              {f.replace('/','') }
+            </button>
+          ))}
+          <span style={{ fontSize:12, color:'#94a3b8', marginLeft:'auto' }}>{filtered.length} files</span>
+        </div>
+
+        {loading ? <div style={{ textAlign:'center', padding:40, color:'#6A9B95' }}>Loading files…</div>
+        : filtered.length === 0 ? (
+          <div style={{ background:'#fff', borderRadius:12, padding:40, textAlign:'center', color:'#94a3b8', border:'2px dashed rgba(43,168,152,.2)' }}>
+            <div style={{ fontSize:40, marginBottom:10 }}>🖼️</div>
+            <div style={{ fontWeight:600, marginBottom:6 }}>No files in {folder}</div>
+            <div style={{ fontSize:13 }}>Upload design images or switch folder above.</div>
+          </div>
+        ) : (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))', gap:14 }}>
+            {images.map(f=>(
+              <div key={f.ObjectName} onClick={()=>setSelected(selected===f.ObjectName?null:f.ObjectName)}
+                style={{ background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,.08)',
+                  border: selected===f.ObjectName ? '2px solid #3DBFAE' : '2px solid transparent', cursor:'pointer' }}>
+                <div style={{ height:140, overflow:'hidden', background:'#F4FBFA', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <img src={`${CDN_URL}/${folder}${f.ObjectName}`} alt={f.ObjectName} style={{ width:'100%', height:'100%', objectFit:'cover' }} onError={e=>{e.target.style.display='none';}} />
+                </div>
+                <div style={{ padding:'8px 10px' }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:'#0B2E2B', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.ObjectName}</div>
+                  <div style={{ fontSize:10, color:'#94a3b8', marginTop:2 }}>{fmtSize(f.Length||0)}</div>
+                  {selected===f.ObjectName && (
+                    <div style={{ display:'flex', gap:5, marginTop:8 }}>
+                      <button onClick={e=>{e.stopPropagation();copyUrl(f.ObjectName);}}
+                        style={{ flex:1, padding:'4px', borderRadius:6, border:'none', background: copied===f.ObjectName?'#E8FFF4':'#EEF6FF', color: copied===f.ObjectName?'#1E9E5A':'#2468C8', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                        {copied===f.ObjectName?'✅ Copied':'📋 Copy URL'}
+                      </button>
+                      <button onClick={e=>{e.stopPropagation();deleteFile(f.ObjectName);}}
+                        style={{ padding:'4px 8px', borderRadius:6, border:'none', background:'#FFF3F3', color:'#ef4444', fontSize:10, fontWeight:700, cursor:'pointer' }}>
+                        🗑
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!BUNNY_KEY && (
+          <div style={{ background:'#FFF8E8', border:'1px solid rgba(212,146,10,.3)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#92754A' }}>
+            ⚠️ Add <strong>VITE_BUNNY_API_KEY</strong> to your Vercel environment variables to connect Bunny CDN.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

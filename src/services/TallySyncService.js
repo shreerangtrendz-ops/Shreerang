@@ -13,14 +13,35 @@ async function postToTally(xml, company = '') {
   });
   if (error) throw new Error('Tally edge function error: ' + error.message);
   if (!data) throw new Error('Empty response from tally-proxy');
-  if (data.error) throw new Error('Tally error: ' + data.error);
-  const xml_resp = data.xml;
-  if (!xml_resp || typeof xml_resp !== 'string') throw new Error('tally-proxy returned no XML');
-  // Detect Tally Import dialog open state
-  if (xml_resp.includes('IMPORTFILE') || xml_resp.includes('File to Import')) {
-    throw new Error('TALLY_DIALOG_OPEN: Tally is showing Import dialog. Press ESC in Tally to return to Gateway of Tally main screen, then try again.');
+  // New proxy always returns HTTP 200 with {success, data} or {success:false, error}
+  if (data.success === false) {
+    if (data.error === 'TALLY_IMPORT_DIALOG_OPEN') {
+      throw new Error('TALLY_DIALOG_OPEN: Tally is showing Import dialog. Press ESC in Tally to return to Gateway of Tally main screen, then try again.');
+    }
+    throw new Error('Tally error: ' + (data.error || 'Unknown error'));
   }
+  // Support both new format (data.data) and old format (data.xml) for backward compat
+  const xml_resp = data.data || data.xml;
+  if (!xml_resp || typeof xml_resp !== 'string') throw new Error('tally-proxy returned no XML');
   return xml_resp;
+}
+
+// ─── GET REAL COMPANY NAME FROM TALLY ─────────────────────
+export async function getCompanyName(company = '') {
+  try {
+    const xml = \`<ENVELOPE>
+  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER>
+  <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY>
+</ENVELOPE>\`;
+    const responseXml = await postToTally(xml, company);
+    // Try to extract BASICCOMPANYNAME or COMPANYNAME
+    const m = responseXml.match(/<BASICCOMPANYNAME[^>]*>([^<]+)<\/BASICCOMPANYNAME>/i)
+      || responseXml.match(/<COMPANYNAME[^>]*>([^<]+)<\/COMPANYNAME>/i)
+      || responseXml.match(/<NAME[^>]*>([^<]+)<\/NAME>/i);
+    return m ? m[1].trim() : 'Unknown Company';
+  } catch (e) {
+    return 'Tally Offline';
+  }
 }
 
 // ─── DATE HELPERS ─────────────────────────────────────────

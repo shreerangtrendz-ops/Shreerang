@@ -31,7 +31,7 @@ export const DashboardService = {
   // ── CATALOGUE COUNTS ──────────────────────────────────────
   async getTotalFabrics() {
     return safeFetch(
-      supabase.from('fabric_master').select('*', { count: 'exact', head: true }),
+      supabase.from('base_fabrics').select('*', { count: 'exact', head: true }),
       0
     );
   },
@@ -51,21 +51,21 @@ export const DashboardService = {
   // ── ORDERS ────────────────────────────────────────────────
   async getTotalOrders() {
     return safeFetch(
-      supabase.from('orders').select('*', { count: 'exact', head: true }),
+      supabase.from('sales_orders').select('*', { count: 'exact', head: true }),
       0
     );
   },
   async getPendingOrders() {
     return safeFetch(
-      supabase.from('orders').select('*', { count: 'exact', head: true })
+      supabase.from('sales_orders').select('*', { count: 'exact', head: true })
         .in('status', ['pending', 'processing', 'confirmed']),
       0
     );
   },
   async getRecentOrders(limit = 5) {
     return safeFetch(
-      supabase.from('orders')
-        .select('id, order_number, customer_name, final_amount, status, created_at')
+      supabase.from('sales_orders')
+        .select('id, order_number, customer_name, total_amount, status, created_at')
         .order('created_at', { ascending: false })
         .limit(limit),
       []
@@ -81,8 +81,8 @@ export const DashboardService = {
       const { data, error } = await supabase
         .from('purchase_bills')
         .select('total_amount')
-        .gte('invoice_date', start)
-        .lte('invoice_date', end);
+        .gte('bill_date', start)
+        .lte('bill_date', end);
       if (error) return 0;
       return (data || []).reduce((s, r) => s + (parseFloat(r.total_amount) || 0), 0);
     } catch { return 0; }
@@ -117,14 +117,14 @@ export const DashboardService = {
   async getOutstandingReceivable() {
     try {
       const { data, error } = await supabase
-        .from('orders')
-        .select('final_amount, paid_amount')
-        .in('status', ['pending', 'processing', 'dispatched', 'partially_paid']);
-      if (error) return 0;
-      return (data || []).reduce((s, r) => {
-        const outstanding = (parseFloat(r.final_amount) || 0) - (parseFloat(r.paid_amount) || 0);
-        return s + Math.max(0, outstanding);
-      }, 0);
+        .from('outstanding_receivable')
+        .select('outstanding_amount');
+      if (!error && data?.length) {
+        return (data || []).reduce((s, r) => s + (parseFloat(r.outstanding_amount) || 0), 0);
+      }
+      // Fallback: sum from sales_bills
+      const { data: sb } = await supabase.from('sales_bills').select('total_amount').in('status',['pending','synced']);
+      return (sb || []).reduce((s, r) => s + (parseFloat(r.total_amount) || 0), 0);
     } catch { return 0; }
   },
 

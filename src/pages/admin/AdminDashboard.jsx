@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import { DashboardService } from '@/services/DashboardService';
+import { supabase } from '@/lib/supabase';
 import { ensureArray } from '@/lib/arrayValidation';
 
 const TALLY_URL = 'https://tally.shreerangtrendz.com/';
@@ -17,6 +18,7 @@ const AdminDashboard = () => {
   const [recentOrders, setRecentOrders] = useState([]);
   const [tallyOnline, setTallyOnline] = useState(null); // null=checking, true=online, false=offline
   const [billsSyncing, setBillsSyncing] = useState(false);
+  const [jobWorkStats, setJobWorkStats] = useState({ challansOpen:0, challansTotal:0, valueAtMill:0, designsThisMonth:0, mfgEntriesToday:0, pendingMfgEntry:0, totalProcessValue:0 });
 
   async function syncBillsNow(e) {
     e.stopPropagation();
@@ -50,15 +52,39 @@ const AdminDashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [kpis, recentOrdersData] = await Promise.allSettled([
+      const today = new Date().toISOString().split('T')[0];
+      const monthStart = new Date(); monthStart.setDate(1);
+      const monthStr = monthStart.toISOString().split('T')[0];
+
+      const [kpis, recentOrdersData,
+        { data: challans }, { data: mfgEntries }, { data: pendingChallans }
+      ] = await Promise.allSettled([
         DashboardService.getDashboardKPIs(),
         DashboardService.getRecentOrders(5),
+        supabase.from('challans').select('id,status,fabric_value'),
+        supabase.from('manufacturing_entries').select('id,entry_date,total_value').gte('entry_date', monthStr),
+        supabase.from('challans').select('id,party_name').in('status',['open','in_transit']),
       ]);
-      if (kpis.status === 'fulfilled' && kpis.value) {
-        setStats(kpis.value);
-      }
+
+      if (kpis.status === 'fulfilled' && kpis.value) setStats(kpis.value);
       const v = (r, d) => r.status === 'fulfilled' && r.value ? r.value : d;
       setRecentOrders(ensureArray(v(recentOrdersData, [])));
+
+      // Job Work KPIs
+      const ch = challans?.value?.data || [];
+      const me = mfgEntries?.value?.data || [];
+      const pc = pendingChallans?.value?.data || [];
+      const openCh = ch.filter(c=>c.status==='open'||c.status==='in_transit');
+      const valueAtMill = openCh.reduce((s,c)=>s+Number(c.fabric_value||0),0);
+      const todayEntries = me.filter(e=>e.entry_date===today);
+      const totalProcessValue = me.reduce((s,e)=>s+Number(e.total_value||0),0);
+      setJobWorkStats({
+        challansOpen: openCh.length, challansTotal: ch.length,
+        valueAtMill, designsThisMonth: me.length,
+        mfgEntriesToday: todayEntries.length,
+        pendingMfgEntry: pc.length,
+        totalProcessValue,
+      });
     } catch (e) {
       console.error(e);
     } finally {
@@ -330,6 +356,68 @@ const AdminDashboard = () => {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* ── JOB WORK / MILL PROCESSING ── */}
+        <div style={{ marginTop:8 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:16 }}>🏭</span>
+              <span style={{ fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, color:'var(--text,#0B2E2B)' }}>
+                Job Work & Mill Processing
+              </span>
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              <button onClick={()=>navigate('/admin/challans')} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(43,168,152,.1)', color:'#2BA898', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                📦 Challans
+              </button>
+              <button onClick={()=>navigate('/admin/manufacturing')} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(110,68,200,.1)', color:'#6E44C8', fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                🏭 Mfg Entries
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:12 }}>
+            {[
+              { icon:'📦', label:'Challans Open', value:jobWorkStats.challansOpen, sub:`of ${jobWorkStats.challansTotal} total`, color:'#D4920A', link:'/admin/challans' },
+              { icon:'💰', label:'Fabric Value at Mill', value:`₹${Number(jobWorkStats.valueAtMill||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, sub:'Currently out for process', color:'#C9106E', link:'/admin/challans' },
+              { icon:'🎨', label:'Designs This Month', value:jobWorkStats.designsThisMonth, sub:'Design numbers generated', color:'#6E44C8', link:'/admin/manufacturing' },
+              { icon:'💎', label:'Process Value (Month)', value:`₹${Number(jobWorkStats.totalProcessValue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, sub:'Total value created', color:'#1E9E5A', link:'/admin/manufacturing' },
+            ].map((c,i)=>(
+              <div key={i} onClick={()=>navigate(c.link)} style={{ background:'var(--surface,#fff)', borderRadius:12, padding:'14px 16px', boxShadow:'0 2px 10px rgba(0,0,0,.07)', border:'1px solid rgba(43,168,152,.1)', cursor:'pointer', transition:'all .15s' }}
+                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'}
+                onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
+                <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8 }}>
+                  <div style={{ width:30, height:30, background:`${c.color}18`, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{c.icon}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color:'#6A9B95', textTransform:'uppercase', letterSpacing:'0.7px' }}>{c.label}</div>
+                </div>
+                <div style={{ fontSize:20, fontWeight:800, color:c.color, lineHeight:1 }}>{c.value}</div>
+                <div style={{ fontSize:10, color:'#94a3b8', marginTop:4 }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pending Manufacturing Entry Warning */}
+          {jobWorkStats.pendingMfgEntry > 0 && (
+            <div onClick={()=>navigate('/admin/manufacturing')} style={{ background:'linear-gradient(135deg,rgba(239,68,68,.08),rgba(239,68,68,.04))', border:'1px solid rgba(239,68,68,.2)', borderRadius:10, padding:'10px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ fontSize:20 }}>⚡</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, color:'#ef4444', fontSize:13 }}>
+                  {jobWorkStats.pendingMfgEntry} Challan{jobWorkStats.pendingMfgEntry>1?'s':''} Pending Manufacturing Entry
+                </div>
+                <div style={{ fontSize:11, color:'#ef4444', opacity:0.7, marginTop:2 }}>
+                  Manufacturing Entry is compulsory for these — without it, design values won't appear in reports. Click to add.
+                </div>
+              </div>
+              <div style={{ fontSize:12, fontWeight:700, color:'#ef4444' }}>→</div>
+            </div>
+          )}
+
+          {jobWorkStats.mfgEntriesToday > 0 && (
+            <div style={{ marginTop:8, background:'rgba(30,158,90,.06)', border:'1px solid rgba(30,158,90,.15)', borderRadius:8, padding:'8px 14px', fontSize:12, color:'#1E9E5A', fontWeight:600 }}>
+              ✅ {jobWorkStats.mfgEntriesToday} Manufacturing {jobWorkStats.mfgEntriesToday>1?'entries':'entry'} created today
+            </div>
+          )}
         </div>
 
       </div>

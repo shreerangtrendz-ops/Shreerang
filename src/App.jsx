@@ -100,6 +100,8 @@ import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
 import JobWorkersPage from '@/pages/admin/JobWorkersPage';
+import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
+import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
 import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
 import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
 import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
@@ -243,6 +245,8 @@ const App = () => {
                     <Route path="activity-logs" element={<ActivityLogsPage />} />
                     <Route path="media-library" element={<MediaLibraryPage />} />
                     <Route path="job-workers" element={<JobWorkersPage />} />
+                    <Route path="challans" element={<JobWorkChallansPage />} />
+                    <Route path="manufacturing" element={<ManufacturingEntryPage />} />
 
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

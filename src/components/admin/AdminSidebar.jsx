@@ -58,7 +58,8 @@ const NAV_GROUPS = [
     color: '#2BA898',
     items: [
       { icon: '📋', label: 'Sales Orders', to: '/admin/orders' },
-      { icon: '📄', label: 'Challans', to: '/admin/challans' },
+      { icon: '📦', label: 'Job Work Challans', to: '/admin/challans' },
+      { icon: '🏭', label: 'Manufacturing Entry', to: '/admin/manufacturing' },
       { icon: '🏭', label: 'Vendors', to: '/admin/settings/suppliers' },
       { icon: '👥', label: 'Customers', to: '/admin/customers' },
       { icon: '🤝', label: 'Job Workers', to: '/admin/job-workers' },

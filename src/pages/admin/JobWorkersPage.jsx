@@ -80,10 +80,13 @@ export default function JobWorkersPage() {
                   <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:600 }}>{w.rate?`₹${w.rate}/${w.rate_unit||'m'}`:'—'}</td>
                   <td style={{ padding:'9px 14px', fontSize:11, color:'#4A7A74' }}>{w.bank_name||'—'}</td>
                   <td style={{ padding:'9px 14px' }}>
-                    <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
-                      background:w.status==='active'?'#E8FFF4':'#f1f5f9', color:w.status==='active'?'#1E9E5A':'#94a3b8' }}>
-                      {w.status||'active'}
-                    </span>
+                    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                      <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
+                        background:w.status==='active'?'#E8FFF4':'#f1f5f9', color:w.status==='active'?'#1E9E5A':'#94a3b8' }}>
+                        {w.status||'active'}
+                      </span>
+                      {w.manufacturing_entry_required && <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:700, background:'rgba(239,68,68,.1)', color:'#ef4444' }}>⚡ MFG REQ</span>}
+                    </div>
                   </td>
                   <td style={{ padding:'9px 14px', display:'flex', gap:6 }}>
                     <button onClick={()=>openEdit(w)} style={BTN({ background:'#EEF6FF', color:'#2468C8', padding:'4px 10px', fontSize:11 })}>Edit</button>
@@ -120,6 +123,18 @@ export default function JobWorkersPage() {
                 <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>Notes</label>
                 <textarea value={form.notes||''} onChange={e=>setForm(p=>({...p,notes:e.target.value}))} rows={2}
                   style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+              </div>
+              <div style={{ gridColumn:'1/-1', background:'rgba(239,68,68,.05)', border:'1px solid rgba(239,68,68,.15)', borderRadius:8, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+                <input type="checkbox" id="mfg_req" checked={!!form.manufacturing_entry_required} onChange={e=>setForm(p=>({...p,manufacturing_entry_required:e.target.checked}))}
+                  style={{ width:18, height:18, accentColor:'#ef4444', cursor:'pointer' }} />
+                <div>
+                  <label htmlFor="mfg_req" style={{ fontWeight:700, fontSize:13, color:'#ef4444', cursor:'pointer' }}>
+                    ⚡ Manufacturing Entry Required (Compulsory)
+                  </label>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>
+                    When checked, the system will alert on dashboard until a Manufacturing Entry is created for every challan issued to this worker. Fabric values won't show in dashboard without it.
+                  </div>
+                </div>
               </div>
             </div>
             <div style={{ display:'flex', gap:10, marginTop:16 }}>

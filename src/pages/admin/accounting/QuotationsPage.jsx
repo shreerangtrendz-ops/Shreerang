@@ -7,7 +7,7 @@ export default function QuotationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ quotation_number:'', quotation_date:'', party_name:'', party_type:'customer', item_type:'fabric', item_name:'', design_number:'', quantity:'', rate:'', amount:'', valid_until:'', notes:'' });
+  const [form, setForm] = useState({ quotation_number:'', quotation_date:'', party_name:'', party_type:'', item_type:'', item_name:'', design_number:'', quantity:'', rate:'', amount:'', valid_until:'', notes:'' });
   const [saving, setSaving] = useState(false);
 
   useEffect(()=>{ fetchQuotes(); }, []);
@@ -20,7 +20,8 @@ export default function QuotationsPage() {
   async function saveQuote() {
     if (!form.quotation_number||!form.quotation_date||!form.party_name) { alert('Quote No, Date, Party required'); return; }
     setSaving(true);
-    const row = { ...form, quantity:parseFloat(form.quantity)||0, rate:parseFloat(form.rate)||0, amount:parseFloat(form.amount)||0, status:'pending' };
+    const rowRaw = { ...form, quantity:parseFloat(form.quantity)||0, rate:parseFloat(form.rate)||0, amount:parseFloat(form.amount)||0, status:'pending' };
+    const row = Object.fromEntries(Object.entries(rowRaw).filter(([k,v]) => v !== '' || !['party_type','item_type'].includes(k)));
     const { error } = await supabase.from('quotations').upsert(row,{onConflict:'quotation_number'});
     if (error) alert(error.message); else { setShowForm(false); fetchQuotes(); }
     setSaving(false);

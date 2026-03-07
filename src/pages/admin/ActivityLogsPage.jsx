@@ -44,7 +44,7 @@ export default function ActivityLogsPage() {
     return new Date(t).toLocaleDateString('en-IN');
   };
 
-  const statusColor = s => ({ success:'#E8FFF4','#1E9E5A', error:'#FFF3F3','#ef4444', pending:'#FFF8E8','#D4920A' }[s]||['#f1f5f9','#64748b']);
+  const statusColor = s => ({ success: '#E8FFF4', error: '#FFF3F3', pending: '#FFF8E8' }[s] || '#f1f5f9');
 
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>

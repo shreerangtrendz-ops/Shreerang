@@ -168,7 +168,10 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
     overflowY: 'auto',
     borderRight: '1px solid rgba(255,255,255,0.06)',
     flexShrink: 0,
-    position: 'relative',
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    bottom: 0,
     zIndex: 50,
   };
 

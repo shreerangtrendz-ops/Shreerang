@@ -1,7 +1,7 @@
 // api/tally-outstanding.js
 // Pulls Outstanding Receivable (Sundry Debtors) from Tally → Supabase outstanding_receivable table
 
-const TALLY_PROXY = 'https://www.shreerangtrendz.com/api/tally-proxy';
+const TALLY_EDGE = 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy';
 const SUPABASE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzQ0OTg1NSwiZXhwIjoyMDc5MDI1ODU1fQ.fcHpUL4HXJZyW64vtKhZHOPKtYXBIfGeUbBlkkz1oGg';
@@ -27,12 +27,18 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const r = await fetch(TALLY_PROXY, {
-      method: 'POST', headers: {'Content-Type':'text/xml'},
-      body: OUTSTANDING_XML, signal: AbortSignal.timeout(30000)
-    });
+    const r = fetch(TALLY_EDGE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'apikey': SUPABASE_KEY
+      },
+      body: JSON.stringify({xmlBody: OUTSTANDING_XML}),
+      signal: AbortSignal.timeout(30000)
+    })
     if (!r.ok) throw new Error(`Proxy ${r.status}`);
-    const xml = await r.text();
+    const rJson = await r.json(); const xml = rJson.data || rJson.xml || '';
 
     // Parse Ledger-wise outstanding
     const rows = [];

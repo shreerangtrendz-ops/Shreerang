@@ -755,7 +755,7 @@ export default function WhatsAppBotPage() {
             </div>
 
             {/* Middle panel: Chat window */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#ece5dd', backgroundImage: 'url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Ccircle cx='100' cy='100' r='40' fill='%23d1c4b8' fill-opacity='0.08'/%3E%3C/g%3E%3C/svg%3E")', overflow: 'hidden' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#ece5dd', backgroundImage: "none", overflow: 'hidden' }}>
               {selectedConv ? (
                 <>
                   {/* Chat header */}

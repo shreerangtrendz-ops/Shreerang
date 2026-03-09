@@ -29,10 +29,7 @@ async function postToTally(xml, company = '') {
 // ─── GET REAL COMPANY NAME FROM TALLY ─────────────────────
 export async function getCompanyName(company = '') {
   try {
-    const xml = \`<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER>
-  <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY>
-</ENVELOPE>\`;
+    const xml = \'<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY></ENVELOPE>';
     const responseXml = await postToTally(xml, company);
     // Try to extract BASICCOMPANYNAME or COMPANYNAME
     const m = responseXml.match(/<BASICCOMPANYNAME[^>]*>([^<]+)<\/BASICCOMPANYNAME>/i)

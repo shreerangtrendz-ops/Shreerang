@@ -364,3 +364,4 @@ function parseBillsFromXML(xml) {
 // Keep these for compatibility with existing code
 export { pullBillsChunk as pullSalesFromTally };
 export async function pullJobBillsFromTally() { return { success: false, error: 'Use Job Bills sync from dashboard' }; }
+// v2.1

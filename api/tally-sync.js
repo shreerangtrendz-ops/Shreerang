@@ -1,4 +1,4 @@
-// api/tally-sync.js v5 — Progressive One-Chunk-Per-Call Sync
+// api/tally-sync.js v6 — Progressive One-Chunk-Per-Call Sync (Fixed response key)
 // Each call processes ONE 7-day chunk and returns progress
 // Dashboard calls repeatedly until hasMore=false
 // Avoids ALL timeout issues (Vercel 10s + Tally slow response)
@@ -104,8 +104,8 @@ export default async function handler(req, res) {
 
     if(!proxyRes.ok){ const et=await proxyRes.text(); throw new Error('Proxy '+proxyRes.status+': '+et.slice(0,200)); }
     const proxyData=await proxyRes.json();
-    if(proxyData?.error) throw new Error('Tally: '+proxyData.error);
-    const tallyXml=proxyData?.xml||'';
+    if(proxyData?.success===false) throw new Error('Tally: '+(proxyData.error||'proxy error'));
+    const tallyXml=proxyData?.data||proxyData?.xml||'';
 
     // Detect Tally dialog open state
     if(tallyXml.includes('IMPORTFILE')||tallyXml.includes('File to Import')) {

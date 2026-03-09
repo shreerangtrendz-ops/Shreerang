@@ -1,10 +1,10 @@
 // api/tally-proxy.js
 // Vercel serverless function — proxies Tally XML requests
 // Routes through Supabase Edge Function (tally-proxy) which has correct FRP URL
-// v3: Fixed URL (http:9000), routes to Supabase edge function for reliability
+// v4: Fixed anon key (removed .placeholder suffix), routes to Supabase edge fn
 
 const SUPABASE_EDGE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.placeholder';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0';
 const TALLY_DIRECT = 'http://tally.shreerangtrendz.com:9000';
 const TIMEOUT_MS = 28000;
 

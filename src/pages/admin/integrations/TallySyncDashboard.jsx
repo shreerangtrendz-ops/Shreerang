@@ -213,22 +213,41 @@ export default function TallySyncDashboard() {
     }
     setBillsSyncing(true);
     try {
-      const res = await fetch('/api/tally-sync', { method:'POST', headers:{ 'Content-Type':'application/json', ...(activeCompany?{'X-Tally-Company':activeCompany}:{}) }, body:'{}' });
-      const json = await res.json();
-      if (json.success) {
-        toast({ title:'Bills Synced ✅', description:`Purchase: ${json.synced.purchase} | Sales: ${json.synced.sales} records` });
-        loadBillsCounts();
-        loadData();
-      } else {
-        toast({ variant:'destructive', title:'Sync Issues', description: json.errors?.join(', ') || 'Partial failure' });
-        loadBillsCounts();
+      let purchaseTotal = 0, salesTotal = 0;
+      // Progressive sync: keep calling until hasMore=false for both types
+      for (const syncType of ['purchase', 'sales']) {
+        let hasMore = true;
+        let chunks = 0;
+        while (hasMore && chunks < 100) {
+          const res = await fetch('/api/tally-sync?type=' + syncType, {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              ...(activeCompany ? {'X-Tally-Company': activeCompany} : {})
+            },
+            body:'{}'
+          });
+          const json = await res.json();
+          if (!json.success) {
+            toast({ variant:'destructive', title:'Sync Error', description: json.error || 'Unknown error' });
+            break;
+          }
+          if (syncType === 'purchase') purchaseTotal += (json.recordsThisChunk || 0);
+          else salesTotal += (json.recordsThisChunk || 0);
+          hasMore = json.hasMore || false;
+          chunks++;
+        }
       }
+      toast({ title:'Bills Synced', description:'Purchase: ' + purchaseTotal + ' | Sales: ' + salesTotal + ' records' });
+      loadBillsCounts();
+      loadData();
     } catch(e) {
       toast({ variant:'destructive', title:'Sync Error', description: e.message });
-    } finally { setBillsSyncing(false); }
+    } finally {
+      setBillsSyncing(false);
+    }
   }
-
-  /* ── counts map ── */
+    /* ── counts map ── */
   const countMap = { stock:counts.stock, purchases:counts.purchases, job_bills:counts.job_bills, customers:counts.customers, suppliers:counts.suppliers, agents:counts.agents, outstanding:counts.outstanding };
 
   const now = infra.lastChecked ? infra.lastChecked.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '--:--';
@@ -291,7 +310,7 @@ export default function TallySyncDashboard() {
           </button>
         </div>
 
-        {/* ── ROW 1: section label + 4 cards ── */}}
+        {/* ── ROW 1: section label + 4 cards ── */}
         <div>
           <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>📊 Data Sources — Pull Live from Tally ERP Prime</span>

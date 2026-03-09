@@ -58,3 +58,67 @@ customDomains = ["tally.shreerangtrendz.com"]
 | `dial tcp refused` | Tally Prime is closed — open it |
 | `login to server failed` | Check frps is running on KVM VPS |
 | `StartService FAILED 1053` | Use batch file, not sc create |
+
+
+---
+
+## Deploy Supabase Edge Functions
+
+After updating supabase/functions/ in the repo, you MUST redeploy them manually:
+
+```bash
+# On your local machine with Supabase CLI installed:
+supabase login
+supabase link --project-ref zdekydcscwhuusliwqaz
+
+# Deploy both functions:
+supabase functions deploy tally-proxy
+supabase functions deploy tally-health
+```
+
+Or use the one-liner:
+```bash
+supabase functions deploy tally-proxy && supabase functions deploy tally-health
+```
+
+**Note:** Edge functions must have `verify_jwt = false` in config.toml for the proxy to work.
+Check: `supabase/config.toml` → `[functions.tally-proxy]` → `verify_jwt = false`
+
+---
+
+## VPS Setup: frps + Nginx (Run Once on KVM VPS 72.61.249.86)
+
+```bash
+# SSH into VPS
+ssh root@72.61.249.86
+
+# Check frps is running
+systemctl status frps   # or: ps aux | grep frps
+
+# If frps is NOT running, start it:
+cd /opt/frp && ./frps -c frps.toml &
+
+# frps.toml should contain:
+# bindPort = 7000
+# vhostHTTPPort = 9000
+# auth.token = "ShreerangFRP2026"
+
+# Check Nginx config for tally vhost
+nginx -t && systemctl status nginx
+
+# Reload nginx if config was changed
+nginx -s reload
+```
+
+---
+
+## Vercel Environment Variables Check
+
+Make sure these are set in Vercel Dashboard → Settings → Environment Variables:
+
+| Variable | Required For |
+|----------|-------------|
+| SUPABASE_SERVICE_ROLE_KEY | tally-sync.js, tally-outstanding.js |
+| VITE_SUPABASE_URL | All frontend Supabase calls |
+| VITE_SUPABASE_ANON_KEY | All frontend Supabase calls |
+

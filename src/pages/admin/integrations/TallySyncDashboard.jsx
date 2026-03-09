@@ -310,7 +310,7 @@ export default function TallySyncDashboard() {
           </button>
         </div>
 
-        {/* ── ROW 1: section label + 4 cards ── */}}
+        {/* ── ROW 1: section label + 4 cards ── */}
         <div>
           <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>📊 Data Sources — Pull Live from Tally ERP Prime</span>

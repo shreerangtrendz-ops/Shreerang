@@ -1,7 +1,7 @@
 // supabase/functions/tally-health/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const TALLY_URL = "http://tally.shreerangtrendz.com:9000";
+const TALLY_URL = "https://tally.shreerangtrendz.com";
 
 const CORS = {
     "Access-Control-Allow-Origin": "*",

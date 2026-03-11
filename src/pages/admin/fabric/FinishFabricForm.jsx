@@ -1,239 +1,460 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
-import { FabricMasterService } from '@/services/FabricMasterService';
-import { ReferenceTables } from '@/components/admin/fabric/ReferenceTables';
-import { FINISH_WIDTHS, PROCESS_CODES, CLASS_CODES, TAG_CODES } from '@/lib/fabricMasterReferences';
+import { supabase } from '@/lib/customSupabaseClient';
+import {
+  FinishFabricService,
+  buildFinishFabricName,
+  buildFinishFabricSKU,
+  PROCESS_PATHS,
+  FINISH_WIDTHS,
+  FABRIC_TAGS,
+  TALLY_GROUPS,
+} from '@/services/FinishFabricService';
 
-const FinishFabricForm = () => {
-  const { toast } = useToast();
-  const [bases, setBases] = useState([]);
-  
-  const [formData, setFormData] = useState({
-    baseFabricId: '', baseFabricName: '', shortCode: '', finishWidth: '', 
-    process: '', printType: '', class: '', tags: '', inkType: '', 
-    finishTreatment: '', printConcept: '', jobWorkUnit: '', shortage: '',
-    design_image_url: ''
+const C = {
+  teal: '#2BA898', tealDark: '#0B2E2B', gold: '#D4920A',
+  surface: '#fff', surface2: '#EEF8F6', border: '#D6EEE9',
+  text: '#0D2E2B', muted: '#4A7A74', error: '#D93A3A',
+  green: '#1E9E5A', orange: '#C86020',
+};
+
+const BUNNY_ZONE = 'shreerang-s';
+const BUNNY_HOST = 'https://storage.bunnycdn.com';
+const CDN_URL    = 'https://shreerang.b-cdn.net';
+const BUNNY_KEY  = import.meta.env.VITE_BUNNY_API_KEY || '';
+
+async function uploadToBunny(file) {
+  const ext  = file.name.split('.').pop();
+  const path = `designs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const r = await fetch(`${BUNNY_HOST}/${BUNNY_ZONE}/${path}`, {
+    method: 'PUT',
+    headers: { AccessKey: BUNNY_KEY, 'Content-Type': file.type },
+    body: file,
   });
-  const [imageFile, setImageFile]     = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
-  const [uploading, setUploading]     = useState(false);
-  const fileInputRef = useRef(null);
+  if (!r.ok) throw new Error('Bunny CDN upload failed: ' + r.status);
+  return `${CDN_URL}/${path}`;
+}
 
-  async function uploadImageToBunny(file) {
-    const BUNNY_ZONE = 'shreerang-s';
-    const BUNNY_HOST = 'https://storage.bunnycdn.com';
-    const BUNNY_KEY  = import.meta.env.VITE_BUNNY_API_KEY || 'c63b3837-120a-46bf-b953-191f40f9059c5c9f12ae-f798-4293-abb2-359df5942b06';
-    const CDN_URL    = 'https://shreerang.b-cdn.net';
-    const ext = file.name.split('.').pop();
-    const fileName = `designs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const res = await fetch(`${BUNNY_HOST}/${BUNNY_ZONE}/${fileName}`, {
-      method: 'PUT',
-      headers: { AccessKey: BUNNY_KEY, 'Content-Type': file.type },
-      body: file,
-    });
-    if (!res.ok) throw new Error('Bunny upload failed: ' + res.status);
-    return `${CDN_URL}/${fileName}`;
-  }
+function useDebounce(value, delay = 350) {
+  const [dv, setDv] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDv(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return dv;
+}
 
-  async function handleImagePick(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  }
+export default function FinishFabricForm() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const isEdit = Boolean(id);
 
-  async function handleImageUpload() {
-    if (!imageFile) return;
-    setUploading(true);
-    try {
-      const url = await uploadImageToBunny(imageFile);
-      handleChange('design_image_url', url);
-      toast({ title: 'Image uploaded ✅', description: 'Bunny CDN link saved.' });
-    } catch(e) {
-      toast({ variant:'destructive', title:'Upload failed', description: e.message });
-    } finally { setUploading(false); }
-  }
+  const [nameSearch, setNameSearch]       = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching]         = useState(false);
+  const [mode, setMode]                   = useState('search');
+  const debouncedSearch = useDebounce(nameSearch, 400);
+
+  const [bases, setBases]                 = useState([]);
+
+  const [f, setF] = useState({
+    baseFabricId: '', baseFabricName: '', shortCode: '',
+    width: '', processPath: '', tag: 'Regular',
+    colourConcept: '', fabricClass: 'Regular',
+    hsnCode: '', gstRate: '', tallyGroup: 'Finish Fabrics',
+    jobWorkerId: '', jobWorkerCost: '', shortage: '',
+    notes: '', ecomVisible: false, status: 'active',
+    imageUrl: '', confirmName: '',
+  });
+
+  const [tallySynced, setTallySynced]     = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [tallyResult, setTallyResult]     = useState(null);
+  const [showConfirm, setShowConfirm]     = useState(false);
+  const [imgFile, setImgFile]             = useState(null);
+  const [imgPreview, setImgPreview]       = useState('');
+  const [uploading, setUploading]         = useState(false);
+  const fileRef = useRef(null);
 
   useEffect(() => {
-    FabricMasterService.getBaseFabrics().then(setBases).catch(console.error);
+    if (isEdit) {
+      FinishFabricService.getById(id).then(rec => {
+        setF({
+          baseFabricId:  rec.base_fabric_id   || '',
+          baseFabricName: rec.base_fabrics?.base_fabric_name || rec.fabric_name || '',
+          shortCode:     rec.base_fabrics?.short_code || '',
+          width:         rec.finish_width     || '',
+          processPath:   rec.process_type     || rec.process_path || '',
+          tag:           rec.tag              || 'Regular',
+          colourConcept: rec.design_concept   || '',
+          fabricClass:   rec.class            || 'Regular',
+          hsnCode:       rec.hsn_code         || '',
+          gstRate:       rec.gst_rate         || '',
+          tallyGroup:    rec.tally_group      || 'Finish Fabrics',
+          jobWorkerId:   rec.job_worker_id    || '',
+          jobWorkerCost: rec.job_worker_cost  || '',
+          shortage:      rec.shortage_percent || '',
+          notes:         rec.notes            || '',
+          ecomVisible:   rec.ecom_visible     || false,
+          status:        rec.status           || 'active',
+          imageUrl:      rec.design_image_url || '',
+          confirmName:   rec.finish_fabric_name || '',
+        });
+        setImgPreview(rec.design_image_url || '');
+        setTallySynced(rec.tally_synced || false);
+        setMode('builder');
+      }).catch(err => toast({ variant: 'destructive', title: 'Load error', description: err.message }));
+    }
+  }, [id, isEdit]);
+
+  useEffect(() => {
+    supabase
+      .from('base_fabrics')
+      .select('id, base_fabric_name, fabric_name, short_code, sku, hsn_code, gst_rate')
+      .eq('status', 'active')
+      .order('base_fabric_name')
+      .then(({ data }) => setBases(data || []));
   }, []);
 
-  const handleChange = (f, v) => setFormData(p => ({ ...p, [f]: v }));
+  const liveName = buildFinishFabricName(f);
+  const liveSKU  = buildFinishFabricSKU(f);
 
-  const handleBaseChange = (id) => {
-    const selected = bases.find(b => b.id === id);
-    if (selected) {
-      setFormData(p => ({
-        ...p, baseFabricId: id, baseFabricName: selected.fabric_name, shortCode: selected.short_code
-      }));
-    }
+  useEffect(() => {
+    if (!isEdit) setF(p => ({ ...p, confirmName: liveName }));
+  }, [liveName]);
+
+  useEffect(() => {
+    if (!debouncedSearch || mode !== 'search') return;
+    setSearching(true);
+    FinishFabricService.searchByName(debouncedSearch)
+      .then(setSearchResults).catch(console.error)
+      .finally(() => setSearching(false));
+  }, [debouncedSearch, mode]);
+
+  const up = (field, val) => setF(p => ({ ...p, [field]: val }));
+
+  const handleBaseSelect = (bId) => {
+    const b = bases.find(x => x.id === bId);
+    if (!b) return;
+    setF(p => ({
+      ...p,
+      baseFabricId:   b.id,
+      baseFabricName: b.base_fabric_name || b.fabric_name || '',
+      shortCode:      b.short_code || b.sku || '',
+      hsnCode:        p.hsnCode || b.hsn_code || '',
+      gstRate:        p.gstRate || b.gst_rate || '',
+    }));
   };
 
-  const liveName = FabricMasterService.generateFinishFabricName(formData.finishWidth, formData.baseFabricName, formData.class, formData.tags, formData.process);
-  const liveSKU = FabricMasterService.generateFinishFabricSKU(formData.finishWidth, formData.shortCode, formData.class, formData.tags, formData.process);
+  const handleImgPick = e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImgFile(file);
+    setImgPreview(URL.createObjectURL(file));
+  };
 
-  const handleSave = async (e) => {
-    e?.preventDefault();
+  const handleImgUpload = async () => {
+    if (!imgFile) return;
+    setUploading(true);
     try {
-      let formData = { ...formData };
-      if(!formData.baseFabricId) throw new Error("Select a Base Fabric first");
-      // Upload image first if pending
-      if (imageFile && !formData.design_image_url) {
-        const url = await uploadImageToBunny(imageFile);
-        formData = { ...formData, design_image_url: url };
-      }
-      await FabricMasterService.createFinishFabric(formData);
-      toast({ title: 'Success', description: 'Finish Fabric created successfully!' });
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Validation Error', description: error.message });
+      const url = await uploadToBunny(imgFile);
+      up('imageUrl', url);
+      toast({ title: 'Image uploaded' });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Upload failed', description: e.message });
+    } finally { setUploading(false); }
+  };
+
+  const handleSave = async (skipTally = false) => {
+    if (!f.confirmName.trim()) {
+      toast({ variant: 'destructive', title: 'Name required', description: 'Confirm the finish fabric name before saving.' });
+      return;
     }
+    setSaving(true);
+    try {
+      let imageUrl = f.imageUrl;
+      if (imgFile && !imageUrl) { imageUrl = await uploadToBunny(imgFile); up('imageUrl', imageUrl); }
+      const fields = { ...f, imageUrl };
+      let result;
+      if (isEdit) {
+        result = await FinishFabricService.updateWithTallyPush(id, fields, { skipTally });
+      } else {
+        result = await FinishFabricService.createWithTallyPush(fields, { skipTally });
+      }
+      const { tallyResult: tr } = result;
+      setTallyResult(tr);
+      if (tr.success) {
+        setTallySynced(true);
+        toast({ title: isEdit ? 'Updated + Tally synced' : 'Created + Tally synced', description: `"${f.confirmName}" is now in Tally.` });
+      } else if (skipTally) {
+        toast({ title: 'Saved', description: 'Tally sync skipped.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Saved to website, Tally push failed', description: tr.error || 'Ensure Tally is open and FRP is running.' });
+      }
+      setTimeout(() => navigate('/admin/fabric/finish'), 1200);
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Save failed', description: err.message });
+    } finally { setSaving(false); setShowConfirm(false); }
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Helmet><title>Finish Fabric Form</title></Helmet>
-      
-      <div className="lg:col-span-2 space-y-6">
-        <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded-md text-yellow-900 shadow-sm text-sm">
-          <strong className="block mb-1">CRITICAL NAMING RULES:</strong>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>Class = 'Regular' → OMIT from name AND SKU completely</li>
-            <li>Tags = 'Without Foil' → OMIT from name AND SKU completely</li>
-            <li>Finish Fabric Name = Width + Fabric Name + Class + Tags + Process</li>
-            <li>Finish Fabric SKU = Width + ShortCode + ClassCode + TagCode + ProcessCode</li>
-          </ul>
+    <div style={{ minHeight: '100vh', background: C.surface2, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      <div style={{ background: C.tealDark, color: '#fff', padding: '16px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 11, opacity: .6, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>Finish Fabric</div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>{isEdit ? `Edit: ${f.confirmName || '...'}` : 'New Finish Fabric'}</div>
         </div>
-
-        <form onSubmit={handleSave}>
-          <Card className="shadow-lg rounded-xl border-t-4 border-t-blue-500 mb-6">
-            <CardHeader className="bg-slate-50"><CardTitle>STEP 1 - SELECT BASE FABRIC</CardTitle></CardHeader>
-            <CardContent className="p-6 grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <Label>Base Fabric *</Label>
-                <Select required value={formData.baseFabricId} onValueChange={handleBaseChange}>
-                  <SelectTrigger><SelectValue placeholder="Select Base Fabric" /></SelectTrigger>
-                  <SelectContent>
-                    {bases.map(b => <SelectItem key={b.id} value={b.id}>{b.base_fabric_name} ({b.sku})</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2"><Label>Short Code (Auto-filled)</Label><Input value={formData.shortCode} readOnly className="bg-slate-100" /></div>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-lg rounded-xl border-t-4 border-t-purple-500 mb-6">
-            <CardHeader className="bg-slate-50"><CardTitle>STEP 2 - PROCESS SPECIFICATION</CardTitle></CardHeader>
-            <CardContent className="p-6 grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Finish Width *</Label>
-                <Select required value={formData.finishWidth} onValueChange={v=>handleChange('finishWidth', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select Width" /></SelectTrigger>
-                  <SelectContent>{FINISH_WIDTHS.map(k=><SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Process *</Label>
-                <Select required value={formData.process} onValueChange={v=>handleChange('process', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select Process" /></SelectTrigger>
-                  <SelectContent>{Object.keys(PROCESS_CODES).map(k=><SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2"><Label>Print Type (if applicable)</Label><Input value={formData.printType} onChange={e=>handleChange('printType', e.target.value)} /></div>
-              
-              <div className="space-y-2">
-                <Label>Class</Label>
-                <Select value={formData.class} onValueChange={v=>handleChange('class', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
-                  <SelectContent>{Object.keys(CLASS_CODES).map(k=><SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Tags</Label>
-                <Select value={formData.tags} onValueChange={v=>handleChange('tags', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select Tags" /></SelectTrigger>
-                  <SelectContent>{Object.keys(TAG_CODES).map(k=><SelectItem key={k} value={k}>{k}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2"><Label>Ink Type</Label><Input value={formData.inkType} onChange={e=>handleChange('inkType', e.target.value)} /></div>
-              <div className="space-y-2"><Label>Finish Treatment</Label><Input value={formData.finishTreatment} onChange={e=>handleChange('finishTreatment', e.target.value)} placeholder="e.g. Bio-wash" /></div>
-              <div className="space-y-2"><Label>Print Concept</Label><Input value={formData.printConcept} onChange={e=>handleChange('printConcept', e.target.value)} /></div>
-              <div className="space-y-2"><Label>Job Work Unit</Label><Input value={formData.jobWorkUnit} onChange={e=>handleChange('jobWorkUnit', e.target.value)} /></div>
-              <div className="space-y-2"><Label>Shortage % *</Label><Input type="number" step="0.01" min="0.01" required value={formData.shortage} onChange={e=>handleChange('shortage', e.target.value)} /></div>
-            </CardContent>
-          </Card>
-
-          {/* Design Image Upload */}
-          <Card>
-            <CardHeader><CardTitle className="text-sm font-semibold text-teal-800">📷 Design Image (Bunny CDN)</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-3 items-start">
-                {imagePreview ? (
-                  <img src={imagePreview} alt="preview" className="w-24 h-24 object-cover rounded-lg border" />
-                ) : formData.design_image_url ? (
-                  <img src={formData.design_image_url} alt="design" className="w-24 h-24 object-cover rounded-lg border" />
-                ) : (
-                  <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-3xl border cursor-pointer" onClick={()=>fileInputRef.current?.click()}>📷</div>
-                )}
-                <div className="flex-1 space-y-2">
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
-                  <Button type="button" variant="outline" size="sm" onClick={()=>fileInputRef.current?.click()} className="w-full">Choose Image</Button>
-                  {imageFile && !formData.design_image_url && (
-                    <Button type="button" size="sm" onClick={handleImageUpload} disabled={uploading} className="w-full bg-teal-600 hover:bg-teal-700 text-white">
-                      {uploading ? '⏳ Uploading…' : '☁ Upload to Bunny CDN'}
-                    </Button>
-                  )}
-                  {formData.design_image_url && (
-                    <p className="text-xs text-green-700 break-all">✅ {formData.design_image_url.split('/').pop()}</p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="bg-green-100 border border-green-300 p-4 rounded-xl shadow-sm text-green-900 mb-6">
-            <h3 className="text-sm font-bold uppercase text-green-700 mb-2">Live Preview</h3>
-            <p><strong>Finish Name:</strong> {liveName || '...'}</p>
-            <p><strong>SKU:</strong> <span className="font-mono bg-green-200 px-2 py-1 rounded">{liveSKU || '...'}</span></p>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl shadow-sm mb-6">
-            <h3 className="text-sm font-bold text-blue-800 mb-2">COMPLETE NAMING EXAMPLES</h3>
-            <table className="w-full text-xs text-left text-blue-900">
-              <thead><tr className="border-b border-blue-200"><th className="pb-1">Class + Tag</th><th className="pb-1">Name Example</th><th className="pb-1">SKU Example</th></tr></thead>
-              <tbody>
-                <tr><td className="py-1">Regular + Without Foil</td><td>44 Rayon Digital Print</td><td className="font-mono">44-0021-DP</td></tr>
-                <tr><td className="py-1">Regular + Foil</td><td>44 Rayon Foil Digital Print</td><td className="font-mono">44-0021-FOI-DP</td></tr>
-                <tr><td className="py-1">Regular + Gold</td><td>44 Rayon Gold Digital Print</td><td className="font-mono">44-0021-GLD-DP</td></tr>
-                <tr><td className="py-1">Premium + Without Foil</td><td>44 Rayon Premium Digital Print</td><td className="font-mono">44-0021-PRM-DP</td></tr>
-                <tr><td className="py-1">Premium + Foil</td><td>44 Rayon Premium Foil Digital Print</td><td className="font-mono">44-0021-PRM-FOI-DP</td></tr>
-                <tr><td className="py-1">Khadi + Without Foil</td><td>44 Rayon Khadi Digital Print</td><td className="font-mono">44-0021-KHD-DP</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <Button type="submit" className="bg-green-600 hover:bg-green-700">Save Finish Fabric</Button>
-            <Button type="button" onClick={() => toast({title: "Redirecting..."})} className="bg-purple-600 hover:bg-purple-700">-&gt; Create Fancy Finish</Button>
-            <Button type="button" onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">+ Add Another Width</Button>
-            <Button type="button" onClick={() => setFormData({})} variant="outline">Reset</Button>
-          </div>
-        </form>
+        <button onClick={() => navigate('/admin/fabric/finish')} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,.3)', borderRadius: 8, color: '#fff', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>Back to List</button>
       </div>
 
-      <div className="space-y-6">
-        <ReferenceTables />
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '28px 20px' }}>
+
+        {!isEdit && (
+          <Section title="Step 0 - Search or Create" accent={C.teal}>
+            <p style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>Search for an existing finish fabric. If not found, click Create New.</p>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+              <input style={{ ...inputStyle, flex: 1 }} placeholder="Search finish fabric name..." value={nameSearch}
+                onChange={e => { setNameSearch(e.target.value); setMode('search'); }} />
+              <Btn onClick={() => setMode('builder')} color={C.teal}>+ Create New</Btn>
+            </div>
+            {mode === 'search' && nameSearch && (
+              <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: C.surface, overflow: 'hidden' }}>
+                {searching && <div style={{ padding: 10, color: C.muted, fontSize: 13 }}>Searching...</div>}
+                {!searching && searchResults.length === 0 && nameSearch.length > 1 && (
+                  <div style={{ padding: '12px 16px', fontSize: 13, color: C.muted }}>
+                    No match.{' '}
+                    <span style={{ color: C.teal, cursor: 'pointer', fontWeight: 600 }}
+                      onClick={() => { setF(p => ({ ...p, confirmName: nameSearch })); setMode('builder'); }}>
+                      Create "{nameSearch}"
+                    </span>
+                  </div>
+                )}
+                {searchResults.map(r => (
+                  <div key={r.id}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: `1px solid ${C.border}`, cursor: 'pointer' }}
+                    onClick={() => navigate(`/admin/fabric/finish/${r.id}/edit`)}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{r.finish_fabric_name}</div>
+                      <div style={{ fontSize: 11, color: C.muted }}>{r.process_type} - {r.base_fabrics?.base_fabric_name || 'No base'}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {r.tally_synced
+                        ? <Badge color={C.green}>Tally OK</Badge>
+                        : <Badge color={C.orange}>Not in Tally</Badge>}
+                      <Badge color={C.teal}>Edit</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {(mode === 'builder' || isEdit) && (
+          <>
+            <Section title="Step 1 - Base Fabric (Optional)" accent={C.teal}>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Map to a base/grey fabric. Skip and map later if needed.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Base Fabric">
+                  <select style={selectStyle} value={f.baseFabricId} onChange={e => handleBaseSelect(e.target.value)}>
+                    <option value="">None / Skip for now</option>
+                    {bases.map(b => (
+                      <option key={b.id} value={b.id}>{b.base_fabric_name || b.fabric_name} {b.sku ? `(${b.sku})` : ''}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Short Code">
+                  <input style={{ ...inputStyle, background: C.surface2 }} value={f.shortCode} readOnly />
+                </Field>
+              </div>
+              {!f.baseFabricId && (
+                <Field label="Or type base fabric name manually">
+                  <input style={inputStyle} placeholder="e.g. Cotton Camric" value={f.baseFabricName}
+                    onChange={e => up('baseFabricName', e.target.value)} />
+                </Field>
+              )}
+            </Section>
+
+            <Section title="Step 2 - Process Path" accent={C.teal}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                {PROCESS_PATHS.map(p => (
+                  <PathCard key={p.value} p={p} selected={f.processPath === p.value} onClick={() => up('processPath', p.value)} />
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Step 3 - Fabric Details" accent={C.teal}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+                <Field label="Finish Width">
+                  <select style={selectStyle} value={f.width} onChange={e => up('width', e.target.value)}>
+                    <option value="">Select</option>
+                    {FINISH_WIDTHS.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Quality Tag">
+                  <select style={selectStyle} value={f.tag} onChange={e => up('tag', e.target.value)}>
+                    {FABRIC_TAGS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Colour / Concept">
+                  <input style={inputStyle} placeholder="e.g. Blue Floral" value={f.colourConcept}
+                    onChange={e => up('colourConcept', e.target.value)} />
+                </Field>
+                <Field label="HSN Code">
+                  <input style={inputStyle} placeholder="5208" value={f.hsnCode}
+                    onChange={e => up('hsnCode', e.target.value)} />
+                </Field>
+                <Field label="GST Rate (%)">
+                  <input style={inputStyle} type="number" placeholder="5" value={f.gstRate}
+                    onChange={e => up('gstRate', e.target.value)} />
+                </Field>
+                <Field label="Tally Stock Group">
+                  <select style={selectStyle} value={f.tallyGroup} onChange={e => up('tallyGroup', e.target.value)}>
+                    {TALLY_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </Field>
+                <Field label="Shortage (%)">
+                  <input style={inputStyle} type="number" placeholder="5" value={f.shortage}
+                    onChange={e => up('shortage', e.target.value)} />
+                </Field>
+                <Field label="Job Worker Cost">
+                  <input style={inputStyle} type="number" placeholder="12" value={f.jobWorkerCost}
+                    onChange={e => up('jobWorkerCost', e.target.value)} />
+                </Field>
+                <Field label="Status">
+                  <select style={selectStyle} value={f.status} onChange={e => up('status', e.target.value)}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="discontinued">Discontinued</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Notes">
+                <textarea style={{ ...inputStyle, height: 72, resize: 'vertical' }} value={f.notes}
+                  onChange={e => up('notes', e.target.value)} />
+              </Field>
+            </Section>
+
+            <Section title="Step 4 - Design Image (optional)" accent={C.gold}>
+              <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                {imgPreview && <img src={imgPreview} alt="preview" style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, border: `2px solid ${C.border}` }} />}
+                <div style={{ flex: 1 }}>
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImgPick} />
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <Btn onClick={() => fileRef.current?.click()} color={C.muted}>Pick Image</Btn>
+                    {imgFile && !f.imageUrl && (
+                      <Btn onClick={handleImgUpload} color={C.teal} disabled={uploading}>
+                        {uploading ? 'Uploading...' : 'Upload to CDN'}
+                      </Btn>
+                    )}
+                  </div>
+                  {f.imageUrl && <div style={{ fontSize: 12, color: C.green, marginTop: 8 }}>Uploaded: {f.imageUrl.split('/').pop()}</div>}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13 }}>
+                    <input type="checkbox" checked={f.ecomVisible} onChange={e => up('ecomVisible', e.target.checked)} />
+                    Show on ecommerce catalogue
+                  </label>
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Step 5 - Confirm Name and Push to Tally" accent={tallySynced ? C.green : C.orange}>
+              <p style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>This exact name will be the stock item name in Tally Prime. Edit if needed.</p>
+              <div style={{ background: C.tealDark, borderRadius: 10, padding: '14px 20px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,.5)', marginBottom: 4, textTransform: 'uppercase' }}>Live Name Preview</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{liveName || '—'}</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>SKU: {liveSKU || '—'}</div>
+              </div>
+              <Field label="Confirm / Edit Item Name (sent to Tally exactly as written)">
+                <input style={{ ...inputStyle, fontWeight: 700, fontSize: 15 }} value={f.confirmName}
+                  onChange={e => up('confirmName', e.target.value)} placeholder="Edit if needed..." />
+              </Field>
+              {tallySynced && (
+                <div style={{ background: '#d4edda', border: '1px solid #c3e6cb', borderRadius: 8, padding: '10px 16px', color: C.green, fontSize: 13, marginTop: 8 }}>
+                  Already synced to Tally as "{f.confirmName}"
+                </div>
+              )}
+              {tallyResult && !tallyResult.success && !tallyResult.skipped && (
+                <div style={{ background: '#fdecea', border: '1px solid #f5c6cb', borderRadius: 8, padding: '10px 16px', color: C.error, fontSize: 13, marginTop: 8 }}>
+                  Last Tally push failed: {tallyResult.error}
+                </div>
+              )}
+            </Section>
+
+            <div style={{ display: 'flex', gap: 14, justifyContent: 'flex-end', marginTop: 24, flexWrap: 'wrap' }}>
+              <Btn onClick={() => navigate('/admin/fabric/finish')} color={C.muted}>Cancel</Btn>
+              <Btn onClick={() => handleSave(true)} color={C.muted} disabled={saving}>Save Only (skip Tally)</Btn>
+              <Btn onClick={() => setShowConfirm(true)} color={C.teal} disabled={saving}>
+                {saving ? 'Saving...' : (isEdit ? 'Update + Push to Tally' : 'Create + Push to Tally')}
+              </Btn>
+            </div>
+
+            {showConfirm && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                <div style={{ background: C.surface, borderRadius: 14, padding: 28, maxWidth: 440, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Confirm Tally Push</div>
+                  <p style={{ fontSize: 14, color: C.muted, marginBottom: 16 }}>This will create the following stock item in Tally Prime:</p>
+                  <div style={{ background: C.surface2, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{f.confirmName}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Group: {f.tallyGroup} | Unit: Mtr{f.hsnCode ? ` | HSN: ${f.hsnCode}` : ''}</div>
+                  </div>
+                  <p style={{ fontSize: 12, color: C.orange, marginBottom: 20 }}>Once in Tally, renaming requires manual correction inside Tally.</p>
+                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <Btn onClick={() => setShowConfirm(false)} color={C.muted}>Cancel</Btn>
+                    <Btn onClick={() => handleSave(false)} color={C.teal} disabled={saving}>
+                      {saving ? 'Pushing...' : 'Confirm & Push'}
+                    </Btn>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
-};
-export default FinishFabricForm;
+}
+
+function Section({ title, accent = C.teal, children }) {
+  return (
+    <div style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, borderTop: `4px solid ${accent}`, padding: '20px 24px', marginBottom: 20 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, color: accent, marginBottom: 16 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, color: C.muted, marginBottom: 5 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Badge({ color, children }) {
+  return <span style={{ background: color + '22', color, border: `1px solid ${color}44`, borderRadius: 10, padding: '2px 9px', fontSize: 11, fontWeight: 600 }}>{children}</span>;
+}
+
+function Btn({ onClick, color, disabled, children }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ background: disabled ? '#ccc' : color, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? .7 : 1 }}>
+      {children}
+    </button>
+  );
+}
+
+function PathCard({ p, selected, onClick }) {
+  return (
+    <div onClick={onClick} style={{ border: `2px solid ${selected ? C.teal : C.border}`, borderRadius: 10, padding: '12px 14px', cursor: 'pointer', background: selected ? C.surface2 : C.surface, transition: 'all .15s' }}>
+      <div style={{ fontWeight: 700, fontSize: 12, color: selected ? C.teal : C.text }}>{p.label}</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Code: {p.code}</div>
+    </div>
+  );
+}
+
+const inputStyle = { width: '100%', border: `1px solid #D6EEE9`, borderRadius: 7, padding: '8px 12px', fontSize: 13, outline: 'none', background: '#fff', color: C.text, boxSizing: 'border-box' };
+const selectStyle = { ...inputStyle, appearance: 'none', cursor: 'pointer' };

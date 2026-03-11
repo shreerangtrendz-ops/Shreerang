@@ -103,7 +103,7 @@ CREATE TABLE public.process_charges (
 - **Tally Office PC:** `https://tally.shreerangtrendz.com` (FRP tunnel must be running)
 - **Tally Test PC:** `https://tally-test.shreerangtrendz.com`
 - **VPS IP:** `72.61.249.86` | FRP token: `ShreerangFRP2026`
-- **Vercel Token:** `vcp_126ZDC4ocV32uC1cBa6u5kkwUdmYXX6peKNMb4A759KBYs1Hn71c493R`
+- **Vercel Token:** `vcp_XXXX_REDACTED_SEE_VERCEL_DASHBOARD`
 - **n8n:** `https://airtribe.app.n8n.cloud` (38-node workflow active)
 - **WhatsApp Number:** +91 78742 00033
 - **Admin WhatsApp:** +91 75678 70000
@@ -152,3 +152,4 @@ Admin creates Finish Fabric on website
 WhatsApp bot reads finish_fabrics to answer customer queries
 E-commerce ShopPage reads finish_fabrics WHERE ecom_visible=true
 ```
+

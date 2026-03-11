@@ -159,7 +159,7 @@ const App = () => {
                     <Route path="fabric/finish" element={<FinishFabricDashboard />} />
                     <Route path="fabric/finish/new" element={<FinishFabricForm />} />
                     <Route path="fabric/finish/:id/edit" element={<FinishFabricForm />} />
-                    <Route path="fabric/fancy-finish-fabric-form" element={<FancyFinishFabricForm />} />
+                    <Route path="fabric/fancy-finish-fabric-form" element={<Navigate to="/admin/fabric/finish-fabric-form" replace />} />
                     <Route path="fabric/fancy-base-fabric-form" element={<FancyBaseFabricForm />} />
                     <Route path="fabric-master/bulk-import" element={<BulkImportPage />} />
 
@@ -267,4 +267,5 @@ const App = () => {
 };
 
 export default App;
+
 

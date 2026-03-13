@@ -105,7 +105,7 @@ const Navbar = () => {
             {/* User / Login */}
             {user ? (
               <>
-                <Link to={profile?.role === 'admin' ? '/admin' : '/my-account'} style={{ ...iconBtn }}>
+                <Link to={profile?.role === 'admin' ? '/admin/dashboard' : '/customer/dashboard'} style={{ ...iconBtn }}>
                   <User style={{ width: 16, height: 16, color: '#6A9B95' }} />
                 </Link>
                 <button onClick={handleSignOut} style={{ ...iconBtn }}>

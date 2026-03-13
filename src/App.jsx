@@ -39,6 +39,7 @@ import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
 import FinishFabricDashboard from '@/pages/admin/fabric/FinishFabricDashboard';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Images Ã¢â€â‚¬Ã¢â€â‚¬
+import JobCardsList from '@/pages/admin/challans/JobCardsList';
 import JobWorkersPage from '@/pages/admin/vendors/JobWorkersPage';
 import ProductionTracker from '@/pages/admin/manufacturing/ProductionTracker';
 import PaymentRemindersPage from '@/pages/admin/marketing/PaymentRemindersPage';

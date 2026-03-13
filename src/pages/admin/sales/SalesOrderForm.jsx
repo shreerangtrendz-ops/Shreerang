@@ -206,6 +206,36 @@ const SalesOrderForm = () => {
 
   const totals = calculateTotals();
 
+  const [generatingCards, setGeneratingCards] = useState(false);
+  const [jobCardsGenerated, setJobCardsGenerated] = useState(false);
+
+  const generateJobCards = async () => {
+    const orderId = params?.id;
+    if (!orderId) {
+      toast({ variant: 'destructive', description: 'Save the order first before generating job cards.' });
+      return;
+    }
+    setGeneratingCards(true);
+    try {
+      const res = await fetch('/api/generate-job-cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setJobCardsGenerated(true);
+        toast({ description: `✅ ${json.message}` });
+      } else {
+        toast({ variant: 'destructive', description: json.error || 'Failed to generate job cards' });
+      }
+    } catch (err) {
+      toast({ variant: 'destructive', description: err.message });
+    } finally {
+      setGeneratingCards(false);
+    }
+  };
+
   const handleSubmit = async (status = 'draft') => {
     setLoading(true);
     try {
@@ -404,12 +434,19 @@ const SalesOrderForm = () => {
         </Card>
 
         {/* Actions */}
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-3 justify-end flex-wrap">
           <Button variant="outline" onClick={() => navigate('/admin/orders')}><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
           <Button variant="outline" onClick={() => handleSubmit('draft')} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
             Save Draft
           </Button>
+          {params?.id && (
+            <Button variant="outline" onClick={generateJobCards} disabled={generatingCards || jobCardsGenerated}
+              className={jobCardsGenerated ? "border-green-500 text-green-700" : "border-teal-600 text-teal-700 hover:bg-teal-50"}>
+              {generatingCards ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <span className="mr-1">📦</span>}
+              {jobCardsGenerated ? '✅ Job Cards Generated' : 'Generate Job Cards'}
+            </Button>
+          )}
           <Button onClick={() => handleSubmit('confirmed')} disabled={loading}
             className="bg-green-700 hover:bg-green-800 text-white">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}

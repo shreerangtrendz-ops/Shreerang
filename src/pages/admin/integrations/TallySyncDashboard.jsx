@@ -13,11 +13,10 @@ import { RefreshCcw } from 'lucide-react';
 import { useToast } from '../../../components/ui/use-toast';
 
 /* ─── tiny helpers ─────────────────────────────── */
-const S = ({ on, warn }) => {
+const S = ({ on }) => {
   const base = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border';
-  if (warn) return <span className={`${base} bg-amber-50 text-amber-700 border-amber-200`}><span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />Offline</span>;
-  if (on)   return <span className={`${base} bg-green-50 text-green-700 border-green-200`}><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse" />Online</span>;
-  return         <span className={`${base} bg-red-50 text-red-700 border-red-200`}><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Offline</span>;
+  if (on)  return <span className={`${base} bg-green-50 text-green-700 border-green-200`}><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse" />Online</span>;
+  return        <span className={`${base} bg-red-50 text-red-700 border-red-200`}><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Offline</span>;
 };
 
 const CARDS = [
@@ -44,31 +43,49 @@ export default function TallySyncDashboard() {
 
   const [infra, setInfra] = useState({
     frps:'checking', frpc:'checking', tally:'checking',
-    nginx:'checking', n8n:'checking', domain:'checking',
+    nginx:'checking', domain:'checking',
+    activeEndpoint:'none',
     lastChecked:null, tallyCompany:'', stockItems:0,
   });
 
-  /* ── infra health ── */
+  /* ── infra health — no n8n dependency ── */
   async function checkInfrastructure() {
     setInfra(p => ({ ...p, frps:'checking', frpc:'checking', tally:'checking', nginx:'checking', domain:'checking' }));
     try {
       const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
         method:'GET',
-        headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
-        signal: AbortSignal.timeout(12000)
+        headers:{
+          'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY
+        },
+        signal: AbortSignal.timeout(20000),  // 20s — edge fn tries 2 endpoints x 8s each
       });
       const json = await r.json();
-      let n8nOk = false;
-      try { const nr = await fetch('http://72.61.249.86:32771/healthz',{ signal:AbortSignal.timeout(5000) }); n8nOk = nr.ok; } catch {}
-      setInfra({ frps:json.frps||'offline', frpc:json.frpc||'offline', nginx:json.nginx||'offline',
-        tally:json.tally||'offline', domain:json.domain||'offline', n8n:n8nOk?'online':'offline',
-        lastChecked:new Date(), tallyCompany:json.tallyCompany||'', stockItems:json.stockItems||0 });
+      setInfra({
+        frps:           json.frps    || 'offline',
+        frpc:           json.frpc    || 'offline',
+        nginx:          json.nginx   || 'offline',
+        tally:          json.tally   || 'offline',
+        domain:         json.domain  || 'offline',
+        activeEndpoint: json.activeEndpoint || 'none',
+        lastChecked:    new Date(),
+        tallyCompany:   json.tallyCompany || '',
+        stockItems:     json.stockItems   || 0,
+      });
     } catch {
-      setInfra(p => ({ ...p, frps:'offline', frpc:'offline', nginx:'offline', tally:'offline', domain:'offline', lastChecked:new Date() }));
+      setInfra(p => ({
+        ...p, frps:'offline', frpc:'offline', nginx:'offline',
+        tally:'offline', domain:'offline', activeEndpoint:'none',
+        lastChecked: new Date(),
+      }));
     }
   }
 
-  useEffect(() => { checkInfrastructure(); const iv = setInterval(checkInfrastructure, 60000); return () => clearInterval(iv); }, []);
+  useEffect(() => {
+    checkInfrastructure();
+    const iv = setInterval(checkInfrastructure, 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   /* ── dashboard data ── */
   useEffect(() => { loadData(); }, []);
@@ -113,7 +130,7 @@ export default function TallySyncDashboard() {
     await syncBills();
   }
 
-  /* ── sync purchase_bills + sales_bills via /api/tally-sync ── */
+  /* ── sync purchase_bills + sales_bills ── */
   const [billsSyncing, setBillsSyncing] = useState(false);
   const [billsCounts, setBillsCounts]   = useState({ purchase: 0, sales: 0, lastSync: null });
 
@@ -146,7 +163,7 @@ export default function TallySyncDashboard() {
       const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
         method:'GET',
         headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
-        signal: AbortSignal.timeout(12000)
+        signal: AbortSignal.timeout(20000)
       });
       const json = await r.json();
       if (json.tallyCompany) {
@@ -196,11 +213,7 @@ export default function TallySyncDashboard() {
           .order('synced_at',{ascending:false})
           .limit(1),
       ]);
-      setBillsCounts({
-        purchase: pc || 0,
-        sales: sc || 0,
-        lastSync: lastLog?.[0]?.synced_at || null,
-      });
+      setBillsCounts({ purchase: pc || 0, sales: sc || 0, lastSync: lastLog?.[0]?.synced_at || null });
     } catch(e) { console.error('loadBillsCounts:', e); }
   }
 
@@ -214,24 +227,16 @@ export default function TallySyncDashboard() {
     setBillsSyncing(true);
     try {
       let purchaseTotal = 0, salesTotal = 0;
-      // Progressive sync: keep calling until hasMore=false for both types
       for (const syncType of ['purchase', 'sales']) {
-        let hasMore = true;
-        let chunks = 0;
+        let hasMore = true, chunks = 0;
         while (hasMore && chunks < 100) {
           const res = await fetch('/api/tally-sync?type=' + syncType, {
             method:'POST',
-            headers:{
-              'Content-Type':'application/json',
-              ...(activeCompany ? {'X-Tally-Company': activeCompany} : {})
-            },
+            headers:{ 'Content-Type':'application/json', ...(activeCompany ? {'X-Tally-Company': activeCompany} : {}) },
             body:'{}'
           });
           const json = await res.json();
-          if (!json.success) {
-            toast({ variant:'destructive', title:'Sync Error', description: json.error || 'Unknown error' });
-            break;
-          }
+          if (!json.success) { toast({ variant:'destructive', title:'Sync Error', description: json.error || 'Unknown error' }); break; }
           if (syncType === 'purchase') purchaseTotal += (json.recordsThisChunk || 0);
           else salesTotal += (json.recordsThisChunk || 0);
           hasMore = json.hasMore || false;
@@ -243,14 +248,18 @@ export default function TallySyncDashboard() {
       loadData();
     } catch(e) {
       toast({ variant:'destructive', title:'Sync Error', description: e.message });
-    } finally {
-      setBillsSyncing(false);
-    }
+    } finally { setBillsSyncing(false); }
   }
-    /* ── counts map ── */
-  const countMap = { stock:counts.stock, purchases:counts.purchases, job_bills:counts.job_bills, customers:counts.customers, suppliers:counts.suppliers, agents:counts.agents, outstanding:counts.outstanding };
 
+  const countMap = { stock:counts.stock, purchases:counts.purchases, job_bills:counts.job_bills, customers:counts.customers, suppliers:counts.suppliers, agents:counts.agents, outstanding:counts.outstanding };
   const now = infra.lastChecked ? infra.lastChecked.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+
+  /* ── active endpoint label ── */
+  const endpointLabel = {
+    'office-pc': '🏢 Office PC',
+    'test-pc':   '🏠 Test PC (Fallback)',
+    'none':      '⚠ No Tally',
+  }[infra.activeEndpoint] || '⚠ No Tally';
 
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>
@@ -270,6 +279,7 @@ export default function TallySyncDashboard() {
           {[
             { label:`🏢 ${activeCompany || 'No Company'}`, c:'rgba(232,168,0,.12)', b:'rgba(232,168,0,.3)', t:'#E8A800' },
             { label:infra.tally==='online'?'● Tally Live':'○ Tally Offline', c:'rgba(61,191,174,.14)', b:'rgba(61,191,174,.3)', t:'#3DBFAE' },
+            { label: endpointLabel, c:'rgba(110,68,200,.14)', b:'rgba(110,68,200,.3)', t:'#8B5CF6' },
             { label:`⏱ ${now}`, c:'rgba(255,255,255,.06)', b:'rgba(255,255,255,.1)', t:'#94a3b8' },
           ].map((p,i) => (
             <span key={i} style={{ background:p.c, border:`1px solid ${p.b}`, color:p.t, padding:'5px 12px', borderRadius:100, fontSize:11, fontWeight:600 }}>{p.label}</span>
@@ -310,7 +320,7 @@ export default function TallySyncDashboard() {
           </button>
         </div>
 
-        {/* ── ROW 1: section label + 4 cards ── */}
+        {/* ── ROW 1: 4 cards ── */}
         <div>
           <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>📊 Data Sources — Pull Live from Tally ERP Prime</span>
@@ -326,7 +336,7 @@ export default function TallySyncDashboard() {
           {CARDS.slice(4).map(c => <SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
         </div>
 
-        {/* ── BILLS ACCOUNTING ROW ── */}
+        {/* ── BILLS ROW ── */}
         <div>
           <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>💰 Bills Accounting — Tally Vouchers ↔ Supabase</span>
@@ -334,37 +344,30 @@ export default function TallySyncDashboard() {
             {billsCounts.lastSync && <span style={{ fontSize:10, color:'#6A9B95' }}>Last sync: {new Date(billsCounts.lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
-            <div style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:'1px solid rgba(36,104,200,.18)', display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <div style={{ width:38, height:38, background:'linear-gradient(135deg,#2468C8,#0E96A0)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🛒</div>
-                  <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>Purchase Bills</div><div style={{ fontSize:11, color:'#6A9B95' }}>Tally purchase vouchers → DB</div></div>
+            {[
+              { label:'Purchase Bills', sub:'Tally purchase vouchers → DB', icon:'🛒', color:'#2468C8', grad:'linear-gradient(135deg,#2468C8,#0E96A0)', count: billsCounts.purchase },
+              { label:'Sales Bills',    sub:'Tally sales vouchers → DB',    icon:'💹', color:'#1E9E5A', grad:'linear-gradient(135deg,#1E9E5A,#0E9E6A)', count: billsCounts.sales   },
+            ].map(b => (
+              <div key={b.label} style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:`1px solid ${b.color}30`, display:'flex', flexDirection:'column', gap:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:38, height:38, background:b.grad, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{b.icon}</div>
+                    <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>{b.label}</div><div style={{ fontSize:11, color:'#6A9B95' }}>{b.sub}</div></div>
+                  </div>
+                  <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:b.color, lineHeight:1 }}>{b.count}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
                 </div>
-                <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:'#2468C8', lineHeight:1 }}>{billsCounts.purchase}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
+                <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':b.grad, border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
+                  {billsSyncing ? '⏳ Syncing…' : `↻ Pull ${b.label}`}
+                </button>
               </div>
-              <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':'linear-gradient(135deg,#2468C8,#0E96A0)', border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
-                {billsSyncing ? '⏳ Syncing…' : '↻ Pull Purchase Bills'}
-              </button>
-            </div>
-            <div style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:'1px solid rgba(30,158,90,.18)', display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <div style={{ width:38, height:38, background:'linear-gradient(135deg,#1E9E5A,#0E9E6A)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💹</div>
-                  <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>Sales Bills</div><div style={{ fontSize:11, color:'#6A9B95' }}>Tally sales vouchers → DB</div></div>
-                </div>
-                <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:'#1E9E5A', lineHeight:1 }}>{billsCounts.sales}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
-              </div>
-              <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':'linear-gradient(135deg,#1E9E5A,#0E9E6A)', border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
-                {billsSyncing ? '⏳ Syncing…' : '↻ Pull Sales Bills'}
-              </button>
-            </div>
+            ))}
           </div>
         </div>
 
         {/* ── ROW 3: Infra + Log ── */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1.7fr', gap:18 }}>
 
-          {/* Infra */}
+          {/* Infra — no n8n row */}
           <div style={{ background:'#fff', border:'1px solid var(--border,rgba(43,168,152,.18))', borderRadius:12, padding:18, borderTop:'3px solid #3DBFAE', boxShadow:'0 1px 4px rgba(43,168,152,.05)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
               <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.8px', color:'var(--text,#0D2E2B)' }}>⚡ Infrastructure Health</span>
@@ -376,14 +379,14 @@ export default function TallySyncDashboard() {
               {[
                 ['Tally Prime',      infra.tally],
                 ['FRP Tunnel (Win)', infra.frpc],
-                ['FRP Server (KVM)', infra.frps],
+                ['FRP Server (VPS)', infra.frps],
                 ['Domain Gateway',   infra.domain],
-                ['Nginx Router',     infra.nginx],
-                ['n8n Automation',   infra.n8n],
+                ['Nginx / SSL',      infra.nginx],
+                ['Active Endpoint',  infra.activeEndpoint !== 'none' ? 'online' : 'offline'],
               ].map(([lbl, st]) => (
                 <div key={lbl} style={{ background:'var(--surface2,#EEF8F6)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <span style={{ fontSize:10.5, color:'var(--text-muted,#4A7A74)', fontWeight:500 }}>{lbl}</span>
-                  <S on={st==='online'} warn={lbl==='n8n Automation' && st!=='online'} />
+                  <S on={st==='online'} />
                 </div>
               ))}
             </div>
@@ -391,13 +394,14 @@ export default function TallySyncDashboard() {
             <div style={{ background:'#0B2E2B', border:'1px solid rgba(61,191,174,.2)', borderRadius:8, padding:'12px 14px', marginTop:11, fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, lineHeight:1.9 }}>
               {infra.tally==='online' ? <>
                 <div style={{ color:'#34d399' }}>▶ Connected · Tally ERP Prime</div>
-                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany || activeCompany || 'Unknown'} | Items: {infra.stockItems||12}</div>
+                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany || activeCompany || 'Unknown'}</div>
+                <div style={{ color:'#C8E8E4' }}>→ Via: {endpointLabel}</div>
               </> : <>
-                <div style={{ color:'#f87171' }}>▶ Cannot connect to Tally endpoint</div>
-                <div style={{ color:'#6A9B95' }}>→ Check: Tally Prime open + Port 9000 enabled</div>
+                <div style={{ color:'#f87171' }}>▶ Cannot connect to Tally</div>
+                <div style={{ color:'#6A9B95' }}>→ Check: Tally Prime open on office or test PC</div>
+                <div style={{ color:'#6A9B95' }}>→ Check: frpc running on that PC</div>
               </>}
               <div style={{ color:'#6A9B95' }}>→ Supabase Seoul (t4g.nano) ✓ healthy</div>
-              <div style={{ color:infra.n8n==='online'?'#34d399':'#fbbf24' }}>→ n8n: {infra.n8n==='online'?'running':'not running on KVM-1'}</div>
               <div style={{ color:'#475569' }}>→ Last checked: {infra.lastChecked ? infra.lastChecked.toLocaleTimeString() : 'never'}</div>
             </div>
           </div>
@@ -412,7 +416,6 @@ export default function TallySyncDashboard() {
               </span>
             </div>
             <div style={{ maxHeight:260, overflowY:'auto' }}>
-              {/* Unresolved errors */}
               {errors.map(err => (
                 <div key={err.id} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface2,#EEF8F6)', marginBottom:6 }}>
                   <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:800, background:'rgba(217,58,58,.1)', color:'#D93A3A', border:'1px solid rgba(217,58,58,.2)', whiteSpace:'nowrap' }}>ERROR</span>
@@ -421,7 +424,6 @@ export default function TallySyncDashboard() {
                   <span style={{ fontSize:9.5, color:'var(--text-dim)', whiteSpace:'nowrap' }}>{new Date(err.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
                 </div>
               ))}
-              {/* Success logs */}
               {logItems.filter(l=>l.status==='success').slice(0,6).map((l,i) => (
                 <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface2,#EEF8F6)', marginBottom:6 }}>
                   <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:800, background:'rgba(30,158,90,.1)', color:'#1E9E5A', border:'1px solid rgba(30,158,90,.2)', whiteSpace:'nowrap' }}>SUCCESS</span>
@@ -431,10 +433,9 @@ export default function TallySyncDashboard() {
                 </div>
               ))}
             </div>
-            {/* Stats footer */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, background:'var(--surface2,#EEF8F6)', borderRadius:9, padding:'13px 14px', marginTop:12 }}>
               {[
-                { num:logItems.length+errors.length, lbl:'Total Syncs', c:'var(--teal-light,#1D8A7C)' },
+                { num:logItems.length+errors.length, lbl:'Total Syncs',   c:'var(--teal-light,#1D8A7C)' },
                 { num:logItems.filter(l=>l.status==='success').length, lbl:'Successful', c:'#1E9E5A' },
                 { num:errors.length, lbl:'Errors', c:'#D93A3A' },
                 { num:(counts.suppliers||0).toLocaleString(), lbl:'Suppliers Live', c:'#E8A800' },
@@ -446,7 +447,6 @@ export default function TallySyncDashboard() {
               ))}
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -461,7 +461,6 @@ function SyncCard({ card, count, loading, onSync }) {
       onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.borderColor='rgba(43,168,152,.35)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(43,168,152,.1)'; }}
       onMouseLeave={e=>{ e.currentTarget.style.transform=''; e.currentTarget.style.borderColor='var(--border,rgba(43,168,152,.18))'; e.currentTarget.style.boxShadow='0 1px 4px rgba(43,168,152,.05)'; }}
     >
-      {/* top stripe */}
       <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${card.stripe})`, borderRadius:'12px 12px 0 0' }} />
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10 }}>
         <div style={{ width:36, height:36, borderRadius:9, background:card.ib, border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{card.icon}</div>

@@ -1,11 +1,35 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const TALLY_URL = "https://tally.shreerangtrendz.com";
+// Try office PC first, fall back to test PC
+const TALLY_URLS = [
+  "https://tally.shreerangtrendz.com",       // Office PC — port 19000
+  "https://tally-test.shreerangtrendz.com",  // Test PC — port 9000
+];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tally-company",
 };
+
+async function fetchTally(url: string, xmlBody: string, timeoutMs = 10000): Promise<{ ok: boolean; text: string; timedOut: boolean }> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/xml" },
+      body: xmlBody,
+      signal: controller.signal,
+    });
+    clearTimeout(t);
+    const text = await r.text();
+    return { ok: r.ok && text.length > 10, text, timedOut: false };
+  } catch (err) {
+    clearTimeout(t);
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return { ok: false, text: "", timedOut };
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -22,76 +46,81 @@ serve(async (req) => {
       company = body.company || "";
     } catch (_) {
       return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (!xmlBody) {
       return new Response(JSON.stringify({ success: false, error: "Missing xmlBody in request" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const url = new URL(req.url);
     const companyParam = url.searchParams.get("company") || req.headers.get("x-tally-company") || company;
-    const tallyUrl = companyParam
-      ? `${TALLY_URL}?company=${encodeURIComponent(companyParam)}`
-      : TALLY_URL;
 
-    console.log(`[tally-proxy] Forwarding XML to Tally at ${tallyUrl} (${xmlBody.length} bytes)`);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
-
+    // Try each Tally endpoint in order
     let responseText = "";
-    try {
-      const tallyResponse = await fetch(tallyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/xml" },
-        body: xmlBody,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      responseText = await tallyResponse.text();
-      console.log(`[tally-proxy] Received from Tally: Status ${tallyResponse.status}, Length ${responseText.length}`);
-    } catch (fetchErr) {
-      clearTimeout(timeout);
-      const isTimeout = fetchErr instanceof Error && fetchErr.name === "AbortError";
+    let lastError = "";
+    let activeEndpoint = "";
+
+    for (const baseUrl of TALLY_URLS) {
+      const tallyUrl = companyParam
+        ? `${baseUrl}?company=${encodeURIComponent(companyParam)}`
+        : baseUrl;
+
+      console.log(`[tally-proxy] Trying ${tallyUrl}`);
+      const result = await fetchTally(tallyUrl, xmlBody, 10000);
+
+      if (result.ok) {
+        responseText = result.text;
+        activeEndpoint = baseUrl;
+        console.log(`[tally-proxy] Success from ${tallyUrl} (${responseText.length} bytes)`);
+        break;
+      }
+
+      lastError = result.timedOut
+        ? `${baseUrl} timed out`
+        : `${baseUrl} connection failed`;
+      console.log(`[tally-proxy] Failed: ${lastError}`);
+    }
+
+    if (!responseText) {
       return new Response(JSON.stringify({
         success: false,
-        error: isTimeout
-          ? "Tally request timed out after 25 seconds - check if Tally HTTP server is running on port 9000"
-          : `Tally connection failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+        error: `All Tally endpoints unreachable. Last error: ${lastError}. Is Tally Prime open?`,
       }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (responseText.includes("IMPORTFILE") || responseText.includes("File to Import") || responseText.includes("LONGPROMPT")) {
+    if (
+      responseText.includes("IMPORTFILE") ||
+      responseText.includes("File to Import") ||
+      responseText.includes("LONGPROMPT")
+    ) {
       return new Response(JSON.stringify({
         success: false,
         error: "TALLY_IMPORT_DIALOG_OPEN",
         hint: "Press ESC in Tally to return to Gateway of Tally main screen, then retry sync",
       }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(JSON.stringify({ success: true, data: responseText }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({
+      success: true,
+      data: responseText,
+      activeEndpoint,
+    }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[tally-proxy] Unhandled error: ${msg}`);
     return new Response(JSON.stringify({ success: false, error: msg }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

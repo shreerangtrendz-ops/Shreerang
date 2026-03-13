@@ -37,8 +37,6 @@ import AdminDashboard from '@/pages/admin/AdminDashboard';
 import BaseFabricForm from '@/pages/admin/fabric/BaseFabricForm';
 import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
 import FinishFabricDashboard from '@/pages/admin/fabric/FinishFabricDashboard';
-import FancyFinishFabricForm from '@/pages/admin/fabric/FancyFinishFabricForm';
-import FancyBaseFabricForm from '@/pages/admin/fabric/FancyBaseFabricForm';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Images Ã¢â€â‚¬Ã¢â€â‚¬
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
@@ -160,7 +158,6 @@ const App = () => {
                     <Route path="fabric/finish/new" element={<FinishFabricForm />} />
                     <Route path="fabric/finish/:id/edit" element={<FinishFabricForm />} />
                     <Route path="fabric/fancy-finish-fabric-form" element={<Navigate to="/admin/fabric/finish-fabric-form" replace />} />
-                    <Route path="fabric/fancy-base-fabric-form" element={<FancyBaseFabricForm />} />
                     <Route path="fabric-master/bulk-import" element={<BulkImportPage />} />
 
                     {/* Design Catalogue */}

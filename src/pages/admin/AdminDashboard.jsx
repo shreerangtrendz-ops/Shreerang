@@ -124,6 +124,13 @@ const AdminDashboard = () => {
           </div>
         </div>
         <div className="topbar-right">
+          <button
+            onClick={() => navigate('/')}
+            style={{ padding: '7px 14px', background: 'rgba(43,168,152,0.08)', border: '1px solid rgba(43,168,152,0.25)', borderRadius: 8, color: '#2BA898', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+            title="Go to Homepage"
+          >
+            🏠 Homepage
+          </button>
           <div className="wa-live">
             <div className="wa-dot"></div>WA Bot Live
           </div>

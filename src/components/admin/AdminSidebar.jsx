@@ -58,13 +58,13 @@ const NAV_GROUPS = [
     items: [
       { icon: '📋', label: 'Sales Orders', to: '/admin/orders' },
       { icon: '📦', label: 'Job Work Challans', to: '/admin/challans' },
-      { icon: '🏭', label: 'Manufacturing Entry', to: '/admin/manufacturing' },
-      { icon: '🏭', label: 'Vendors', to: '/admin/settings/suppliers' },
-      { icon: '👥', label: 'Customers', to: '/admin/customers' },
+      { icon: '🏭', label: 'Production Tracker', to: '/admin/manufacturing' },
       { icon: '🤝', label: 'Job Workers', to: '/admin/job-workers' },
+      { icon: '👥', label: 'Customers', to: '/admin/customers' },
       { icon: '🎯', label: 'Make-to-Order', to: '/admin/mto-orders', badge: 'NEW' },
+      { icon: '💬', label: 'Payment Reminders', to: '/admin/payment-reminders' },
+      { icon: '📱', label: 'WhatsApp Bot', to: '/admin/whatsapp', badge: 'ON', badgeClass: 'ok' },
       { icon: '🛒', label: 'Store / Ecom', to: '/admin/ecom' },
-      { icon: '💬', label: 'WhatsApp Bot', to: '/admin/whatsapp', badge: 'ON', badgeClass: 'ok' },
     ]
   },
   {

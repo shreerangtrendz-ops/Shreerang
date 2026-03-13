@@ -1,31 +1,28 @@
 {
-        "rewrites": [
-                {
-                        "source": "/api/(.*)",
-                        "destination": "/api/$1"
-                },
-                {
-                        "source": "/(.*)",
-                        "destination": "/index.html"
-                }
-        ],
-        "headers": [
-                {
-                        "source": "/(.*)",
-                        "headers": [
-                                {
-                                        "key": "X-Content-Type-Options",
-                                        "value": "nosniff"
-                                },
-                                {
-                                        "key": "X-Frame-Options",
-                                        "value": "SAMEORIGIN"
-                                },
-                                {
-                                        "key": "X-XSS-Protection",
-                                        "value": "1; mode=block"
-                                }
-                        ]
-                }
-        ]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/tally-nightly?run=1&secret=shreerang_cron_2026",
+      "schedule": "30 17 * * *"
+    }
+  ]
 }

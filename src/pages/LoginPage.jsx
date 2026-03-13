@@ -20,13 +20,34 @@ const LoginPage = () => {
       return;
     }
     setLoading(true);
-    const { error } = await signInWithEmail(email, password);
-    setLoading(false);
+    const { data: authData, error } = await signInWithEmail(email, password);
     if (error) {
+      setLoading(false);
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message });
-    } else {
-      navigate('/');
+      return;
     }
+    // Check role and redirect
+    try {
+      const userId = authData?.user?.id || authData?.session?.user?.id;
+      if (userId) {
+        const { supabase } = await import('@/lib/customSupabaseClient');
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        const role = profile?.role || 'customer';
+        setLoading(false);
+        if (role === 'admin') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/customer/dashboard');
+        }
+        return;
+      }
+    } catch (_) {}
+    setLoading(false);
+    navigate('/');
   };
 
   const inputStyle = {
@@ -110,6 +131,11 @@ const LoginPage = () => {
           <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 20 }}>
             Don't have an account?{' '}
             <Link to="/register" style={{ color: 'var(--teal)', fontWeight: 600, textDecoration: 'none' }}>Create Account</Link>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <Link to="/" style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              ← Back to Homepage
+            </Link>
           </div>
 
           {/* Bottom brand strip */}

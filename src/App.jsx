@@ -246,7 +246,7 @@ const App = () => {
                     <Route path="activity-logs" element={<ActivityLogsPage />} />
                     <Route path="media-library" element={<MediaLibraryPage />} />
                     <Route path="job-workers" element={<JobWorkersPage />} />
-                    <Route path="challans" element={<JobWorkChallansPage />} />
+                    <Route path="challans" element={<JobCardsList />} />
                     <Route path="manufacturing" element={<ManufacturingEntryPage />} />
 
                     {/* Admin catch-all */}

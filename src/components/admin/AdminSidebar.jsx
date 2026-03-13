@@ -23,7 +23,6 @@ const NAV_GROUPS = [
     items: [
       { icon: '🧵', label: 'Base Fabric', to: '/admin/fabric/base-fabric-form' },
       { icon: '🔄', label: 'Finish Fabric', to: '/admin/fabric/finish-fabric-form' },
-      { icon: '✨', label: 'Fancy Finish', to: '/admin/fabric/fancy-finish-fabric-form' },
       { icon: '🎨', label: 'Design Upload', to: '/admin/design/upload', badge: 'NEW' },
       { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity', badge: 'AI' },
       { icon: '📦', label: 'Bulk Import', to: '/admin/fabric-master/bulk-import' },
@@ -325,6 +324,30 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
           })}
         </div>
 
+        {/* ── HOMEPAGE LINK ── */}
+        <div style={{
+          padding: '8px 10px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          flexShrink: 0,
+        }}>
+          <NavLink
+            to="/"
+            style={{ display: 'flex', alignItems: 'center', gap: 8,
+              padding: collapsed ? '8px' : '8px 10px',
+              borderRadius: 7, textDecoration: 'none',
+              color: 'rgba(255,255,255,0.55)',
+              fontSize: 12, fontWeight: 500,
+              transition: 'background 0.15s',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+            }}
+            title={collapsed ? 'Homepage' : undefined}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: 16 }}>🏠</span>
+            {!collapsed && <span>Back to Homepage</span>}
+          </NavLink>
+        </div>
         {/* ── INTEGRATION STATUS BAR ── */}
         {!collapsed && (
           <div style={{

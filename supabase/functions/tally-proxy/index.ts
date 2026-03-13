@@ -4,6 +4,7 @@ const TALLY_URL = "https://tally.shreerangtrendz.com";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tally-company",
 };
 
@@ -40,7 +41,7 @@ serve(async (req) => {
       ? `${TALLY_URL}?company=${encodeURIComponent(companyParam)}`
       : TALLY_URL;
 
-    console.log(`[tally-proxy] Forwarding XML to Tally at ${tallyUrl} (${xmlBody.length} bytes)`);
+    console.log(`[tally-proxy] Forwarding to ${tallyUrl} (${xmlBody.length} bytes)`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
@@ -55,30 +56,33 @@ serve(async (req) => {
       });
       clearTimeout(timeout);
       responseText = await tallyResponse.text();
-      console.log(`[tally-proxy] Received from Tally: Status ${tallyResponse.status}, Length ${responseText.length}`);
+      console.log(`[tally-proxy] Tally: ${tallyResponse.status}, ${responseText.length} bytes`);
     } catch (fetchErr) {
       clearTimeout(timeout);
       const isTimeout = fetchErr instanceof Error && fetchErr.name === "AbortError";
       return new Response(JSON.stringify({
         success: false,
         error: isTimeout
-          ? "Tally request timed out after 25 seconds - check if Tally HTTP server is running on port 9000"
+          ? "Tally request timed out after 25s — is Tally open with HTTP port 9000 enabled?"
           : `Tally connection failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (responseText.includes("IMPORTFILE") || responseText.includes("File to Import") || responseText.includes("LONGPROMPT")) {
       return new Response(JSON.stringify({
         success: false,
         error: "TALLY_IMPORT_DIALOG_OPEN",
-        hint: "Press ESC in Tally to return to Gateway of Tally main screen, then retry sync",
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+        hint: "Press ESC in Tally to return to Gateway of Tally, then retry sync",
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (responseText.includes("<LINEERROR>")) {
+      const errMatch = responseText.match(/<LINEERROR>([^<]+)<\/LINEERROR>/i);
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Tally returned error: " + (errMatch ? errMatch[1] : "Check Tally logs"),
+        rawResponse: responseText.slice(0, 500),
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     return new Response(JSON.stringify({ success: true, data: responseText }), {

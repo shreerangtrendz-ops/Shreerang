@@ -76,6 +76,7 @@ const NAV_GROUPS = [
       { icon: '🔧', label: 'Field Config', to: '/admin/settings/dropdown-manager' },
       { icon: '🔢', label: 'HSN Codes', to: '/admin/settings/hsn-codes' },
       { icon: '🏭', label: 'Job Work Units', to: '/admin/settings/job-units' },
+      { icon: '🔖', label: 'SKU Formula', to: '/admin/settings/sku-formula' },
       { icon: '☁️', label: 'Cloud Storage', to: '/admin/cloud-sync' },
       { icon: '🛡', label: 'Access Control', to: '/admin/access-control' },
       { icon: '💾', label: 'Backup', to: '/admin/backup-control' },

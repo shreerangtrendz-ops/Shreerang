@@ -59,6 +59,7 @@ import DropdownManager from '@/pages/admin/settings/DropdownManager';
 import JobUnitsPage from '@/pages/admin/unit-management/JobUnitsPage';
 import SuppliersManager from '@/pages/admin/settings/SuppliersManager';
 import HSNCodeMaster from '@/pages/admin/settings/HSNCodeMaster';
+import SKUFormulaSettings from '@/pages/admin/settings/SKUFormulaSettings';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Sales & Orders Ã¢â€â‚¬Ã¢â€â‚¬
 import QuickPriceCheckPage from '@/pages/admin/sales/QuickPriceCheckPage';
 import StoreManagerOrders from '@/pages/admin/orders/StoreManagerOrders';
@@ -223,6 +224,7 @@ const App = () => {
                     <Route path="settings/job-units" element={<JobUnitsPage />} />
                     <Route path="settings/suppliers" element={<SuppliersManager />} />
                     <Route path="settings/hsn-codes" element={<HSNCodeMaster />} />
+                    <Route path="settings/sku-formula" element={<SKUFormulaSettings />} />
                     <Route path="sales/quick-price" element={<QuickPriceCheckPage />} />
 
                     {/* Sales Orders */}

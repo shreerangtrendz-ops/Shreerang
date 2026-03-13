@@ -495,6 +495,7 @@ export default function FinishFabricForm(){
       let imageUrl=f2.imageUrl;
       if(imgFile){setUploading(true);imageUrl=await uploadToBunny(imgFile);setUploading(false);up2('imageUrl',imageUrl);}
       const dbRecord={
+        base_fabric_id:f1.baseFabricId||null,
         design_no:f2.designNo||null,
         design_image_url:imageUrl||null,
         process_costs:Object.keys(f2.processCosts||{}).length>0?JSON.stringify(f2.processCosts):null,
@@ -619,13 +620,6 @@ export default function FinishFabricForm(){
                 </Section>
                 <Section title="Core Identity" icon="\u{1F4CB}" accent={C.teal}>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-                    <div>
-                      <label style={labelStyle}>Base Fabric <span style={{color:C.muted,fontWeight:400,textTransform:'none',fontSize:10}}>(optional \u2014 map anytime, even after saving)</span></label>
-                      <select style={inputStyle} value={f1.baseFabricId} onChange={e=>handleBaseSelect(e.target.value)}>
-                        <option value="">\u2014 Select Base Fabric \u2014</option>
-                        {bases.map(b=><option key={b.id} value={b.id}>{b.base_fabric_name||b.fabric_name}</option>)}
-                      </select>
-                      {f1.baseFabricName&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>\u2192 {f1.baseFabricName} \xb7 SKU prefix: {f1.shortCode}</div>}
                     </div>
                     <div>
                       <label style={labelStyle}>Width</label>
@@ -774,7 +768,20 @@ export default function FinishFabricForm(){
                     \u2190 Edit Name
                   </button>
                 </div>
-                <Section title={isSolidDyed?'Colour Number':'Design Number'} icon="\u{1F3A8}" accent={C.gold}>
+                <Section title="Base Fabric Mapping" icon="\u{1F9F6}" accent={C.teal}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                    <div style={{gridColumn:'1/-1'}}>
+                      <label style={labelStyle}>Base Fabric <span style={{color:C.green,fontWeight:400,textTransform:'none',fontSize:10}}>(map now that the finish fabric name is set)</span></label>
+                      <select style={inputStyle} value={f1.baseFabricId} onChange={e=>handleBaseSelect(e.target.value)}>
+                        <option value="">\u2014 Select Base Fabric \u2014</option>
+                        {bases.map(b=><option key={b.id} value={b.id}>{b.base_fabric_name||b.fabric_name}</option>)}
+                      </select>
+                      {f1.baseFabricName&&<div style={{fontSize:11,color:C.green,marginTop:5,fontWeight:600}}>\u2714 {f1.baseFabricName} \xb7 SKU prefix: {f1.shortCode}</div>}
+                      {!f1.baseFabricName&&<div style={{fontSize:11,color:C.muted,marginTop:4}}>Optional \u2014 leave blank if base fabric not registered yet</div>}
+                    </div>
+                  </div>
+                </Section>
+<Section title={isSolidDyed?'Colour Number':'Design Number'} icon="\u{1F3A8}" accent={C.gold}>
                   <label style={labelStyle}>{isSolidDyed?'Colour Number (for this dye lot)':'Design Number / Design Code'}</label>
                   <input style={{...inputStyle,fontSize:15,fontWeight:600}}
                     value={f2.designNo} onChange={e=>up2('designNo',e.target.value)}

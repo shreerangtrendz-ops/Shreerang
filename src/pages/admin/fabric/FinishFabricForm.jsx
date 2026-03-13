@@ -393,14 +393,11 @@ export default function FinishFabricForm() {
           model:'claude-sonnet-4-20250514',
           max_tokens:400,
           messages:[{ role:'user', content:
-            `You are a textile naming expert for Shreerang Trendz, a fabric converter business in Surat, India.
-Context: ${JSON.stringify(context)}
-Field to suggest: ${field}
-
-${field === 'item_name' ? `Suggest a Tally stock item name for finish fabric. Format: "[Width] [Base Fabric] [Class] [Process/VA] Fabrics". Examples: "44\" Rayon Premium Foil Printed Fabrics", "58\" Cotton Mul Hakoba Fabrics", "44\" Capsule Rayon Digital Print Fabrics". Just the name, no explanation.` : ''}
-${field === 'print_concept' ? 'Suggest 3 print concept options for this fabric type. Just comma-separated values.' : ''}
-${field === 'ecom_name' ? 'Suggest a customer-friendly eCommerce display name for this fabric. Short and appealing.' : ''}
-Respond with ONLY the suggestion, no explanation.`
+            'You are a textile naming expert for Shreerang Trendz, Surat, India. Context: ' + JSON.stringify(context) + '. Field: ' + field + '. ' +
+            (field === 'item_name' ? 'Suggest Tally stock item name. Format: Width + Base Fabric + Class + Process + Fabrics. E.g. 44" Rayon Premium Foil Printed Fabrics. Just the name.' : '') +
+            (field === 'print_concept' ? 'Suggest 3 print concept options comma-separated.' : '') +
+            (field === 'ecom_name' ? 'Suggest a customer-friendly eCommerce name. Short and appealing.' : '') +
+            ' Respond ONLY with the suggestion, no explanation.
           }]
         })
       });
@@ -690,7 +687,7 @@ Respond with ONLY the suggestion, no explanation.`
             {manageBtn('FABRIC_MOVEMENT','Fabric Movement Options')}
           </div>
           <DropField value={form.fabric_movement} onChange={v => setF('fabric_movement',v)}
-            options={(()=>{ try { const mv = []; (JSON.parse((dl.fabric_movement||[]).map?.(o=>o.value)||'[]')||[]).forEach(m=>mv.push(m)); return mv.length?mv:['Grey → Jobworker','Grey → Dyer → Printer','Grey → Schiffli → Dyer','Grey → RFD → Printer']; } catch { return ['Grey → Jobworker','Grey → Dyer → Printer','Grey → Schiffli → Dyer','Grey → RFD → Printer']; } })()}
+            options={(dl.fabric_movement||[]).length > 0 ? dl.fabric_movement : ['Grey → Jobworker','Grey → Dyer → Printer','Grey → Schiffli → Dyer','Grey → RFD → Printer','Grey → Dyer → Schiffli','Grey → Washer → Printer','In-house']}
             placeholder="— select movement path —" />
         </div>
       </div>

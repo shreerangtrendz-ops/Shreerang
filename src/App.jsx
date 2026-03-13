@@ -72,7 +72,6 @@ import BunnyNetPage from '@/pages/admin/integrations/BunnyNetPage';
 import CustomerMasterPage from '@/pages/admin/CustomerMasterPage';
 import ChallansPage from '@/pages/admin/ChallansPage';
 import DesignVelocityPage from '@/pages/admin/DesignVelocityPage';
-import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
 import OutstandingReceivable from '@/pages/reports/OutstandingReceivable';
 import OutstandingPayable from '@/pages/reports/OutstandingPayable';
 import CashBankBalance from '@/pages/reports/CashBankBalance';
@@ -103,7 +102,6 @@ import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
-import JobWorkersPage from '@/pages/admin/JobWorkersPage';
 import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
 const App = () => {

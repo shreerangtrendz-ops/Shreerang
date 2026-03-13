@@ -39,6 +39,9 @@ import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
 import FinishFabricDashboard from '@/pages/admin/fabric/FinishFabricDashboard';
 import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Images Ã¢â€â‚¬Ã¢â€â‚¬
+import JobWorkersPage from '@/pages/admin/vendors/JobWorkersPage';
+import ProductionTracker from '@/pages/admin/manufacturing/ProductionTracker';
+import PaymentRemindersPage from '@/pages/admin/marketing/PaymentRemindersPage';
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
 import DesignUploadPage from '@/pages/admin/design/DesignUploadPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Cost Engine Ã¢â€â‚¬Ã¢â€â‚¬

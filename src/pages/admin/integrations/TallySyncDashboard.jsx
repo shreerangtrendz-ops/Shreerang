@@ -9,268 +9,127 @@ import {
   syncAgentsFromTally,
   syncOutstandingFromTally
 } from '../../../services/TallySyncService';
-import { RefreshCcw } from 'lucide-react';
 import { useToast } from '../../../components/ui/use-toast';
 
 /* ─── tiny helpers ─────────────────────────────── */
-<<<<<<< HEAD
-const S = ({ on }) => {
+const S = ({ on, warn }) => {
   const base = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border';
-  if (on)  return <span className={`${base} bg-green-50 text-green-700 border-green-200`}><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse" />Online</span>;
-  return        <span className={`${base} bg-red-50 text-red-700 border-red-200`}><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Offline</span>;
-=======
-const S = ({ status }) => {
-  const base = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border';
-  if (status === 'checking') return <span className={`${base} bg-slate-50 text-slate-500 border-slate-200`}><span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block animate-pulse" />Checking</span>;
-  if (status === 'online')   return <span className={`${base} bg-green-50 text-green-700 border-green-200`}><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse" />Online</span>;
-  if (status === 'disabled') return <span className={`${base} bg-slate-50 text-slate-400 border-slate-200`}><span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />Disabled</span>;
-  return                            <span className={`${base} bg-red-50 text-red-700 border-red-200`}><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Offline</span>;
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
+  if (warn) return <span className={`${base} bg-amber-50 text-amber-700 border-amber-200`}><span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />Offline</span>;
+  if (on)   return <span className={`${base} bg-green-50 text-green-700 border-green-200`}><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse" />Online</span>;
+  return          <span className={`${base} bg-red-50 text-red-700 border-red-200`}><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Offline</span>;
 };
 
 const CARDS = [
-  { key:"stock",       icon:"📦", label:"Live Stock",           sub:"Items synced today",      stripe:"#3DBFAE,#0E96A0", ib:"rgba(61,191,174,.12)",  btnC:"#1D8A7C", badge:"LIVE",      badgeC:"#1E9E5A" },
-  { key:"purchases",   icon:"🛒", label:"Purchases",            sub:"Bills last 30 days",       stripe:"#2468C8,#0E96A0", ib:"rgba(36,104,200,.10)",  btnC:"#2468C8", badge:"30D",       badgeC:"#2468C8" },
-  { key:"job_bills",   icon:"🧾", label:"Job Bills",            sub:"Job worker bills 30d",     stripe:"#E8A800,#D4780A", ib:"rgba(232,168,0,.10)",   btnC:"#D4920A", badge:"30D",       badgeC:"#D4920A" },
-  { key:"customers",   icon:"👥", label:"Customers",            sub:"Sundry debtors in DB",     stripe:"#1E9E5A,#0E9E6A", ib:"rgba(30,158,90,.10)",   btnC:"#1E9E5A", badge:"DEBTORS",   badgeC:"#1E9E5A" },
-  { key:"suppliers",   icon:"🏭", label:"Suppliers",            sub:"Sundry creditors in DB",   stripe:"#C86020,#E87040", ib:"rgba(200,96,32,.10)",   btnC:"#C86020", badge:"CREDITORS", badgeC:"#C86020" },
-  { key:"agents",      icon:"🤝", label:"Sales Agents",         sub:"Active field agents",      stripe:"#C9106E,#E01878", ib:"rgba(201,16,110,.10)",  btnC:"#C9106E", badge:"AGENTS",    badgeC:"#C9106E" },
-  { key:"outstanding", icon:"💰", label:"Outstanding Bills",    sub:"Bills tracked live",       stripe:"#6E44C8,#8B5CF6", ib:"rgba(110,68,200,.10)",  btnC:"#6E44C8", badge:"LIVE",      badgeC:"#6E44C8" },
+  { key:'stock',       icon:'📦', label:'Live Stock',        sub:'Items synced today',    stripe:'#3DBFAE,#0E96A0', ib:'rgba(61,191,174,.12)',  btnC:'#1D8A7C', badge:'LIVE',      badgeC:'#1E9E5A' },
+  { key:'purchases',   icon:'🛒', label:'Purchases',         sub:'Bills last 30 days',    stripe:'#2468C8,#0E96A0', ib:'rgba(36,104,200,.10)',  btnC:'#2468C8', badge:'30D',       badgeC:'#2468C8' },
+  { key:'job_bills',   icon:'🧾', label:'Job Bills',         sub:'Job worker bills 30d',  stripe:'#E8A800,#D4780A', ib:'rgba(232,168,0,.10)',   btnC:'#D4920A', badge:'30D',       badgeC:'#D4920A' },
+  { key:'customers',   icon:'👥', label:'Customers',         sub:'Sundry debtors in DB',  stripe:'#1E9E5A,#0E9E6A', ib:'rgba(30,158,90,.10)',   btnC:'#1E9E5A', badge:'DEBTORS',   badgeC:'#1E9E5A' },
+  { key:'suppliers',   icon:'🏭', label:'Suppliers',         sub:'Sundry creditors in DB',stripe:'#C86020,#E87040', ib:'rgba(200,96,32,.10)',   btnC:'#C86020', badge:'CREDITORS', badgeC:'#C86020' },
+  { key:'agents',      icon:'🤝', label:'Sales Agents',      sub:'Active field agents',   stripe:'#C9106E,#E01878', ib:'rgba(201,16,110,.10)',  btnC:'#C9106E', badge:'AGENTS',    badgeC:'#C9106E' },
+  { key:'outstanding', icon:'💰', label:'Outstanding Bills', sub:'Bills tracked live',    stripe:'#6E44C8,#8B5CF6', ib:'rgba(110,68,200,.10)',  btnC:'#6E44C8', badge:'LIVE',      badgeC:'#6E44C8' },
 ];
 
 const BTN_LABELS = {
-  stock:"↻ Sync Stock", purchases:"↻ Sync Purchases", job_bills:"↻ Sync Job Bills",
-  customers:"↻ Pull Debtors", suppliers:"↻ Pull Creditors", agents:"↻ Pull Agents", outstanding:"↻ Pull Outstanding"
+  stock:'↻ Sync Stock', purchases:'↻ Sync Purchases', job_bills:'↻ Sync Job Bills',
+  customers:'↻ Pull Debtors', suppliers:'↻ Pull Creditors', agents:'↻ Pull Agents', outstanding:'↻ Pull Outstanding'
 };
 
-// Infrastructure systems with fix hints
-const INFRA_SYSTEMS = [
-  {
-    key: "tally",
-    icon: "🧾",
-    label: "Tally Prime",
-    sub: "Office PC · Port 9000",
-    fixHints: [
-      "Open Tally Prime on Office PC",
-      "Enable TDL Gateway: F12 → Advanced Config → Enable ODBC → Port 9000",
-      "Check Windows Firewall allows port 9000",
-    ]
-  },
-  {
-    key: "frpc",
-    icon: "🔗",
-    label: "FRP Client (Win PC)",
-    sub: "Tunnel to VPS on port 7000",
-    fixHints: [
-      "Run CMD as Admin in FRP folder on Office PC",
-      'Execute: frpc.exe -c frpc.toml',
-      'Look for: [tally] start proxy success in output',
-      "frpc.toml: serverAddr=72.61.249.86, serverPort=7000, localPort=9000",
-    ]
-  },
-  {
-    key: "frps",
-    icon: "🖥️",
-    label: "FRP Server (VPS)",
-    sub: "KVM VPS · Port 7000/8080",
-    fixHints: [
-      "SSH into VPS: ssh root@72.61.249.86",
-      "Restart: kill $(pgrep frps); nohup /opt/frp/frps -c /opt/frp/frps.toml > /opt/frp/frps.log 2>&1 &",
-      "Verify: netstat -tunlp | grep 8080",
-    ]
-  },
-  {
-    key: "domain",
-    icon: "🌐",
-    label: "HTTPS Gateway",
-    sub: "tally.shreerangtrendz.com",
-    fixHints: [
-      "Check Nginx: sudo systemctl status nginx",
-      "Restart Nginx: sudo systemctl restart nginx",
-      "Verify SSL cert not expired: certbot certificates",
-      "Test: curl -I https://tally.shreerangtrendz.com",
-    ]
-  },
-];
-
-<<<<<<< HEAD
-  const [infra, setInfra] = useState({
-    frps:'checking', frpc:'checking', tally:'checking',
-    nginx:'checking', domain:'checking',
-    activeEndpoint:'none',
-    lastChecked:null, tallyCompany:'', stockItems:0,
-=======
 export default function TallySyncDashboard() {
   const [loading,      setLoading]      = useState({});
   const [errors,       setErrors]       = useState([]);
-  const [logItems,     setLogItems]     = useState([]);
   const [counts,       setCounts]       = useState({ stock:0, purchases:0, job_bills:0, customers:0, suppliers:0, agents:0, outstanding:0 });
-  const [activeCompany, setActiveCompany] = useState("");
-  const [expandedFix,  setExpandedFix]  = useState(null);
-  const [infra,        setInfra]        = useState({
-    tally:"checking", frpc:"checking", frps:"checking", domain:"checking",
-    lastChecked:null, tallyCompany:"", stockItems:0,
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
-  });
+  const [logItems,     setLogItems]     = useState([]);
+  const [billsSyncing, setBillsSyncing] = useState(false);
+  const [billsCounts,  setBillsCounts]  = useState({ purchase:0, sales:0, lastSync:null });
+  const [companies,    setCompanies]    = useState([]);
+  const [activeCompany,setActiveCompany]= useState('');
+  const [detectingCompany, setDetectingCompany] = useState(false);
   const { toast } = useToast();
 
-  /* ── infra health — no n8n dependency ── */
+  const [infra, setInfra] = useState({
+    frps:'checking', frpc:'checking', tally:'checking',
+    nginx:'checking', n8n:'checking', domain:'checking',
+    lastChecked:null, tallyCompany:'', stockItems:0,
+  });
+
+  /* ── infra health ── */
   async function checkInfrastructure() {
-    setInfra(p => ({ ...p, tally:"checking", frpc:"checking", frps:"checking", domain:"checking" }));
+    setInfra(p => ({ ...p, frps:'checking', frpc:'checking', tally:'checking', nginx:'checking', domain:'checking' }));
     try {
-<<<<<<< HEAD
       const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
         method:'GET',
-        headers:{
-          'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY
-        },
-        signal: AbortSignal.timeout(20000),  // 20s — edge fn tries 2 endpoints x 8s each
+        headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
+        signal: AbortSignal.timeout(12000)
       });
       const json = await r.json();
+      let n8nOk = false;
+      try { const nr = await fetch('http://72.61.249.86:32771/healthz',{ signal:AbortSignal.timeout(5000) }); n8nOk = nr.ok; } catch {}
       setInfra({
-        frps:           json.frps    || 'offline',
-        frpc:           json.frpc    || 'offline',
-        nginx:          json.nginx   || 'offline',
-        tally:          json.tally   || 'offline',
-        domain:         json.domain  || 'offline',
-        activeEndpoint: json.activeEndpoint || 'none',
-        lastChecked:    new Date(),
-        tallyCompany:   json.tallyCompany || '',
-        stockItems:     json.stockItems   || 0,
+        frps:json.frps||'offline', frpc:json.frpc||'offline', nginx:json.nginx||'offline',
+        tally:json.tally||'offline', domain:json.domain||'offline',
+        n8n:n8nOk?'online':'offline',
+        lastChecked:new Date(), tallyCompany:json.tallyCompany||'', stockItems:json.stockItems||0
       });
     } catch {
-      setInfra(p => ({
-        ...p, frps:'offline', frpc:'offline', nginx:'offline',
-        tally:'offline', domain:'offline', activeEndpoint:'none',
-        lastChecked: new Date(),
-=======
-      // 1. Hit the Supabase edge function for frps/frpc/nginx/domain checks
-      const r = await fetch("https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health", {
-        method:"GET",
-        headers:{ "Authorization":`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, "apikey":import.meta.env.VITE_SUPABASE_ANON_KEY },
-        signal: AbortSignal.timeout(15000)
-      });
-      const json = await r.json();
-
-      // 2. Also try the actual tally HTTPS endpoint to verify end-to-end
-      let tallyDirect = "offline";
-      try {
-        const tr = await fetch("https://tally.shreerangtrendz.com", { signal: AbortSignal.timeout(8000) });
-        const txt = await tr.text();
-        if (txt.includes("TallyPrime") || txt.includes("Tally") || tr.ok) tallyDirect = "online";
-      } catch {}
-
-      // Use direct check for tally; edge function results for infrastructure
-      const tallyStatus = (json.tally === "online" || tallyDirect === "online") ? "online" : "offline";
-
-      setInfra({
-        frps:    json.frps   || "offline",
-        frpc:    json.frpc   || "offline",
-        domain:  json.domain || (tallyDirect === "online" ? "online" : "offline"),
-        tally:   tallyStatus,
-        lastChecked: new Date(),
-        tallyCompany: json.tallyCompany || "",
-        stockItems: json.stockItems || 0,
-      });
-    } catch {
-      // Edge function failed — try direct tally check at minimum
-      let tallyDirect = "offline";
-      try {
-        const tr = await fetch("https://tally.shreerangtrendz.com", { signal: AbortSignal.timeout(8000) });
-        const txt = await tr.text();
-        if (txt.includes("TallyPrime") || txt.includes("Tally") || tr.ok) tallyDirect = "online";
-      } catch {}
-      setInfra(p => ({
-        ...p,
-        frps:"offline", frpc:"offline",
-        domain: tallyDirect === "online" ? "online" : "offline",
-        tally: tallyDirect,
-        lastChecked: new Date()
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
-      }));
+      setInfra(p => ({ ...p, frps:'offline', frpc:'offline', nginx:'offline', tally:'offline', domain:'offline', lastChecked:new Date() }));
     }
   }
 
   useEffect(() => {
     checkInfrastructure();
-<<<<<<< HEAD
     const iv = setInterval(checkInfrastructure, 60000);
-=======
-    const iv = setInterval(checkInfrastructure, 30000);
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
     return () => clearInterval(iv);
   }, []);
 
   /* ── dashboard data ── */
   useEffect(() => { loadData(); }, []);
   async function loadData() {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split('T')[0];
     const [
-      { count: sc }, { count: pc }, { count: jc },
-      { count: cc }, { count: supc }, { count: ac }, { count: oc },
-      { data: errData }, { data: logData }
+      { count:sc }, { count:pc }, { count:jc },
+      { count:cc }, { count:supc }, { count:ac }, { count:oc },
+      { data:errData }, { data:logData }
     ] = await Promise.all([
-      supabase.from("fabric_stock_live").select("*",{count:"exact",head:true}).eq("sync_date",today),
-      supabase.from("purchase_fabric").select("*",{count:"exact",head:true}),
-      supabase.from("process_charges").select("*",{count:"exact",head:true}),
-      supabase.from("customers").select("*",{count:"exact",head:true}).neq("business_type","supplier"),
-      supabase.from("customers").select("*",{count:"exact",head:true}).eq("business_type","supplier"),
-      supabase.from("sales_team").select("*",{count:"exact",head:true}),
-      supabase.from("payment_followups").select("*",{count:"exact",head:true}),
-      supabase.from("tally_sync_errors").select("*").eq("resolved",false).order("created_at",{ascending:false}).limit(8),
-      supabase.from("tally_sync_log").select("sync_type,status,created_at").order("created_at",{ascending:false}).limit(12),
+      supabase.from('fabric_stock_live').select('*',{count:'exact',head:true}).eq('sync_date',today),
+      supabase.from('purchase_bills').select('*',{count:'exact',head:true}),
+      supabase.from('process_charges').select('*',{count:'exact',head:true}),
+      supabase.from('customers').select('*',{count:'exact',head:true}).neq('business_type','supplier'),
+      supabase.from('customers').select('*',{count:'exact',head:true}).eq('business_type','supplier'),
+      supabase.from('sales_team').select('*',{count:'exact',head:true}),
+      supabase.from('payment_followups').select('*',{count:'exact',head:true}),
+      supabase.from('tally_sync_errors').select('*').eq('resolved',false).order('created_at',{ascending:false}).limit(8),
+      supabase.from('tally_sync_log').select('sync_type,status,created_at').order('created_at',{ascending:false}).limit(12),
     ]);
     setCounts({ stock:sc||0, purchases:pc||0, job_bills:jc||0, customers:cc||0, suppliers:supc||0, agents:ac||0, outstanding:oc||0 });
     setErrors(errData||[]);
     setLogItems(logData||[]);
   }
 
-  /* ── sync handler ── */
-  async function handleSync(type) {
-<<<<<<< HEAD
-    setLoading(p => ({ ...p, [type]:true }));
-    const today = new Date().toISOString().split('T')[0];
-    const ago30 = new Date(Date.now()-30*864e5).toISOString().split('T')[0];
+  /* ── bills counts ── */
+  useEffect(() => { loadBillsCounts(); }, []);
+  async function loadBillsCounts() {
     try {
-      const fns = { stock:pullStockFromTally, purchases:()=>pullPurchasesFromTally(ago30,today), job_bills:()=>pullJobBillsFromTally(ago30,today), customers:syncCustomersFromTally, suppliers:syncSuppliersFromTally, agents:syncAgentsFromTally, outstanding:syncOutstandingFromTally };
-      const res = await fns[type]();
-      if (res?.success) { toast({ title:'Sync Successful', description:`Synced ${res.count} records.` }); loadData(); }
-      else toast({ variant:'destructive', title:'Sync Failed', description:res?.error||'Unknown error' });
-    } catch (e) { toast({ variant:'destructive', title:'Error', description:e.message }); }
-    finally { setLoading(p => ({ ...p, [type]:false })); }
+      const [{ count:pc }, { count:sc }, { data:lastLog }] = await Promise.all([
+        supabase.from('purchase_bills').select('*',{count:'exact',head:true}),
+        supabase.from('sales_bills').select('*',{count:'exact',head:true}),
+        supabase.from('tally_sync_log').select('synced_at,records_synced').in('sync_type',['purchase_vouchers','sales_vouchers']).eq('status','success').order('synced_at',{ascending:false}).limit(1),
+      ]);
+      setBillsCounts({ purchase:pc||0, sales:sc||0, lastSync:lastLog?.[0]?.synced_at||null });
+    } catch(e) { console.error('loadBillsCounts:', e); }
   }
 
-  async function syncAll() {
-    for (const k of CARDS.map(c=>c.key)) { await handleSync(k); }
-    await syncBills();
-  }
-
-  /* ── sync purchase_bills + sales_bills ── */
-  const [billsSyncing, setBillsSyncing] = useState(false);
-  const [billsCounts, setBillsCounts]   = useState({ purchase: 0, sales: 0, lastSync: null });
-
-  /* ── Company Selector ── */
-  const [companies, setCompanies] = useState([]);
-  const [activeCompany, setActiveCompany] = useState('');
-  const [detectingCompany, setDetectingCompany] = useState(false);
-
+  /* ── companies ── */
   useEffect(() => {
-    async function loadCompanies() {
+    (async () => {
       try {
-        const { data } = await supabase
-          .from('tally_companies')
-          .select('*')
-          .eq('is_active', true)
-          .order('is_default', { ascending: false });
+        const { data } = await supabase.from('tally_companies').select('*').eq('is_active',true);
         if (data?.length) {
           setCompanies(data);
           const def = data.find(c => c.is_default);
           if (def) setActiveCompany(def.company_name);
         }
-      } catch (e) { console.warn('Could not load tally_companies:', e.message); }
-    }
-    loadCompanies();
+      } catch(e) { console.warn('tally_companies:', e.message); }
+    })();
   }, []);
 
   async function detectActiveCompany() {
@@ -279,509 +138,286 @@ export default function TallySyncDashboard() {
       const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
         method:'GET',
         headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(12000)
       });
       const json = await r.json();
       if (json.tallyCompany) {
         setActiveCompany(json.tallyCompany);
-        toast({ description: `Detected active company: ${json.tallyCompany}` });
-        await supabase.from('tally_companies').upsert(
-          { company_name: json.tallyCompany, is_active: true, last_synced_at: new Date().toISOString() },
-          { onConflict: 'company_name' }
-        );
+        toast({ description:`Detected: ${json.tallyCompany}` });
+        await supabase.from('tally_companies').upsert({ company_name:json.tallyCompany, is_active:true, last_synced_at:new Date().toISOString() }, { onConflict:'company_name' });
       } else {
-        toast({ variant:'destructive', description: 'Could not detect company — is Tally open?' });
+        toast({ variant:'destructive', description:'Could not detect company — is Tally open?' });
       }
-    } catch(e) {
-      toast({ variant:'destructive', description: e.message });
-    } finally { setDetectingCompany(false); }
+    } catch(e) { toast({ variant:'destructive', description:e.message }); }
+    finally { setDetectingCompany(false); }
   }
 
-  async function syncOutstanding() {
-    if (infra.tally !== 'online') {
-      toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime and the FRP tunnel first.' });
-=======
-    if (infra.tally !== "online") {
-      toast({ title:"Tally Offline", description:"Cannot sync — Tally Prime is not reachable.", variant:"destructive" });
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
-      return;
-    }
+  /* ── sync handler ── */
+  async function handleSync(type) {
     setLoading(p => ({ ...p, [type]:true }));
+    const ago30 = new Date(Date.now()-30*864e5).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
     try {
-      const fn = { stock:pullStockFromTally, purchases:pullPurchasesFromTally, job_bills:pullJobBillsFromTally,
-                   customers:syncCustomersFromTally, suppliers:syncSuppliersFromTally,
-                   agents:syncAgentsFromTally, outstanding:syncOutstandingFromTally }[type];
-      const r = await fn();
-      if (r?.success) {
-        toast({ title:"Sync Complete ✓", description:`${type} synced successfully.` });
-        loadData();
-      } else {
-        toast({ title:"Sync Error", description:r?.error || "Unknown error", variant:"destructive" });
-      }
-    } catch(e) {
-<<<<<<< HEAD
-      toast({ variant:'destructive', title:'Sync Error', description: e.message });
-    } finally { setBillsSyncing(false); }
+      const fns = {
+        stock:pullStockFromTally,
+        purchases:()=>pullPurchasesFromTally(ago30,today),
+        job_bills:()=>pullJobBillsFromTally(ago30,today),
+        customers:syncCustomersFromTally,
+        suppliers:syncSuppliersFromTally,
+        agents:syncAgentsFromTally,
+        outstanding:syncOutstandingFromTally
+      };
+      const res = await fns[type]();
+      if (res?.success) { toast({ title:'Sync OK', description:`Synced ${res.count||0} records.` }); loadData(); }
+      else toast({ variant:'destructive', title:'Sync Failed', description:res?.error||'Unknown error' });
+    } catch(e) { toast({ variant:'destructive', title:'Error', description:e.message }); }
+    finally { setLoading(p => ({ ...p, [type]:false })); }
   }
 
-  async function loadBillsCounts() {
-    try {
-      const [{ count: pc }, { count: sc }, { data: lastLog }] = await Promise.all([
-        supabase.from('purchase_bills').select('*', { count: 'exact', head: true }),
-        supabase.from('sales_bills').select('*', { count: 'exact', head: true }),
-        supabase.from('tally_sync_log')
-          .select('synced_at,records_synced')
-          .in('sync_type', ['purchase_vouchers','sales_vouchers'])
-          .eq('status','success')
-          .order('synced_at',{ascending:false})
-          .limit(1),
-      ]);
-      setBillsCounts({ purchase: pc || 0, sales: sc || 0, lastSync: lastLog?.[0]?.synced_at || null });
-    } catch(e) { console.error('loadBillsCounts:', e); }
+  async function syncAll() {
+    for (const k of CARDS.map(c=>c.key)) await handleSync(k);
+    await syncBills();
   }
-
-  useEffect(() => { loadBillsCounts(); }, []);
 
   async function syncBills() {
     if (infra.tally !== 'online') {
-      toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime and the FRP tunnel first.' });
+      toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime + FRP tunnel first.' });
       return;
     }
     setBillsSyncing(true);
     try {
-      let purchaseTotal = 0, salesTotal = 0;
-      for (const syncType of ['purchase', 'sales']) {
-        let hasMore = true, chunks = 0;
-        while (hasMore && chunks < 100) {
-          const res = await fetch('/api/tally-sync?type=' + syncType, {
+      let purchaseTotal=0, salesTotal=0;
+      for (const syncType of ['purchase','sales']) {
+        let hasMore=true, chunks=0;
+        while (hasMore && chunks<100) {
+          const res = await fetch('/api/tally-sync?type='+syncType, {
             method:'POST',
-            headers:{ 'Content-Type':'application/json', ...(activeCompany ? {'X-Tally-Company': activeCompany} : {}) },
+            headers:{ 'Content-Type':'application/json', ...(activeCompany?{'X-Tally-Company':activeCompany}:{}) },
             body:'{}'
           });
           const json = await res.json();
-          if (!json.success) { toast({ variant:'destructive', title:'Sync Error', description: json.error || 'Unknown error' }); break; }
-          if (syncType === 'purchase') purchaseTotal += (json.recordsThisChunk || 0);
-          else salesTotal += (json.recordsThisChunk || 0);
-          hasMore = json.hasMore || false;
+          if (!json.success) { toast({ variant:'destructive', title:'Sync Error', description:json.error||'Unknown error' }); break; }
+          if (syncType==='purchase') purchaseTotal += (json.recordsThisChunk||0);
+          else salesTotal += (json.recordsThisChunk||0);
+          hasMore = json.hasMore||false;
           chunks++;
         }
       }
-      toast({ title:'Bills Synced', description:'Purchase: ' + purchaseTotal + ' | Sales: ' + salesTotal + ' records' });
-      loadBillsCounts();
-      loadData();
-    } catch(e) {
-      toast({ variant:'destructive', title:'Sync Error', description: e.message });
-    } finally { setBillsSyncing(false); }
+      toast({ title:'Bills Synced', description:`Purchase: ${purchaseTotal} | Sales: ${salesTotal}` });
+      loadBillsCounts(); loadData();
+    } catch(e) { toast({ variant:'destructive', title:'Sync Error', description:e.message }); }
+    finally { setBillsSyncing(false); }
+  }
+
+  async function syncOutstanding() {
+    if (infra.tally !== 'online') { toast({ variant:'destructive', title:'Tally Offline', description:'Start Tally Prime first.' }); return; }
+    setBillsSyncing(true);
+    try {
+      const res = await fetch('/api/tally-outstanding', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const json = await res.json();
+      if (json.success) { toast({ title:'Outstanding Synced ✅', description:`Synced ${json.synced} records` }); loadData(); }
+      else toast({ variant:'destructive', title:'Sync Failed', description:json.error||'Unknown error' });
+    } catch(e) { toast({ variant:'destructive', title:'Sync Error', description:e.message }); }
+    finally { setBillsSyncing(false); }
   }
 
   const countMap = { stock:counts.stock, purchases:counts.purchases, job_bills:counts.job_bills, customers:counts.customers, suppliers:counts.suppliers, agents:counts.agents, outstanding:counts.outstanding };
   const now = infra.lastChecked ? infra.lastChecked.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) : '--:--';
-=======
-      toast({ title:"Sync Failed", description:e.message, variant:"destructive" });
-    } finally {
-      setLoading(p => ({ ...p, [type]:false }));
-    }
-  }
-
-  const allOnline = INFRA_SYSTEMS.every(s => infra[s.key] === "online");
-  const anyOffline = INFRA_SYSTEMS.some(s => infra[s.key] === "offline");
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
-
-  /* ── active endpoint label ── */
-  const endpointLabel = {
-    'office-pc': '🏢 Office PC',
-    'test-pc':   '🏠 Test PC (Fallback)',
-    'none':      '⚠ No Tally',
-  }[infra.activeEndpoint] || '⚠ No Tally';
 
   return (
-    <div style={{ minHeight:"100vh", background:"var(--bg,#F4FAF8)", padding:"24px 28px", fontFamily:"'DM Sans',system-ui,sans-serif" }}>
-      {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:22 }}>
+    <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>
+
+      {/* HEADER */}
+      <div style={{ background:'linear-gradient(135deg,#0B2E2B 0%,#0E3835 55%,#143F3C 100%)', padding:'18px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid rgba(61,191,174,.22)', flexWrap:'wrap', gap:12, position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:-80, right:-80, width:280, height:280, background:'radial-gradient(circle,rgba(61,191,174,.1) 0%,transparent 70%)', pointerEvents:'none' }} />
         <div>
-          <h1 style={{ margin:0, fontSize:20, fontWeight:700, color:"var(--text,#0D2E2B)", display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:18 }}>⚡</span> Tally Sync · BizAnalyst
-          </h1>
-          <p style={{ margin:"4px 0 0", fontSize:12, color:"var(--text-muted,#4A7A74)" }}>
-            Live infrastructure status + Supabase data sync for Shreerang Trendz
-          </p>
+          <div style={{ fontSize:20, fontWeight:700, color:'#fff', marginBottom:3, display:'flex', alignItems:'center', gap:9 }}>
+            <div style={{ width:30, height:30, background:'linear-gradient(135deg,#3DBFAE,#E8A800)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>⚡</div>
+            Tally Sync Control Centre
+          </div>
+          <p style={{ fontSize:11.5, color:'#6A9B95', margin:0 }}>Tally ERP Prime ↔ Supabase · Shreerang Trendz Pvt Ltd · GSTIN: 24AAUCS2915F1Z8</p>
         </div>
-<<<<<<< HEAD
-        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', position:'relative' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           {[
-            { label:`🏢 ${activeCompany || 'No Company'}`, c:'rgba(232,168,0,.12)', b:'rgba(232,168,0,.3)', t:'#E8A800' },
+            { label:`🏢 ${activeCompany||'No Company'}`, c:'rgba(232,168,0,.12)', b:'rgba(232,168,0,.3)', t:'#E8A800' },
             { label:infra.tally==='online'?'● Tally Live':'○ Tally Offline', c:'rgba(61,191,174,.14)', b:'rgba(61,191,174,.3)', t:'#3DBFAE' },
-            { label: endpointLabel, c:'rgba(110,68,200,.14)', b:'rgba(110,68,200,.3)', t:'#8B5CF6' },
             { label:`⏱ ${now}`, c:'rgba(255,255,255,.06)', b:'rgba(255,255,255,.1)', t:'#94a3b8' },
           ].map((p,i) => (
             <span key={i} style={{ background:p.c, border:`1px solid ${p.b}`, color:p.t, padding:'5px 12px', borderRadius:100, fontSize:11, fontWeight:600 }}>{p.label}</span>
           ))}
-          <button onClick={syncAll} style={{ padding:'9px 18px', background:'linear-gradient(135deg,#3DBFAE,#2BA898)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', boxShadow:'0 3px 14px rgba(43,168,152,.35)', fontFamily:"'DM Sans',sans-serif" }}>
-            ⚡ Sync All Now
+          <button onClick={syncAll} style={{ padding:'9px 18px', background:'linear-gradient(135deg,#3DBFAE,#2BA898)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', boxShadow:'0 3px 14px rgba(43,168,152,.35)' }}>⚡ Sync All</button>
+          <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'9px 18px', background:billsSyncing?'#555':'linear-gradient(135deg,#E8A800,#D4920A)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:billsSyncing?'wait':'pointer' }}>
+            {billsSyncing?'⏳ Syncing Bills…':'💰 Sync Bills'}
           </button>
-          <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'9px 18px', background: billsSyncing ? '#555' : 'linear-gradient(135deg,#E8A800,#D4920A)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor: billsSyncing ? 'wait':'pointer', boxShadow:'0 3px 14px rgba(212,146,10,.35)', fontFamily:"'DM Sans',sans-serif", marginLeft:6 }}>
-            {billsSyncing ? '⏳ Syncing Bills…' : '💰 Sync Bills Now'}
+          <button onClick={syncOutstanding} disabled={billsSyncing} style={{ padding:'9px 18px', background:billsSyncing?'#555':'linear-gradient(135deg,#6E44C8,#8B5CF6)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor:billsSyncing?'wait':'pointer' }}>
+            {billsSyncing?'⏳…':'📊 Outstanding'}
           </button>
-          <button onClick={syncOutstanding} disabled={billsSyncing} style={{ padding:'9px 18px', background: billsSyncing ? '#555' : 'linear-gradient(135deg,#6E44C8,#8B5CF6)', border:'none', borderRadius:9, color:'#fff', fontSize:12, fontWeight:700, cursor: billsSyncing ? 'wait':'pointer', boxShadow:'0 3px 14px rgba(110,68,200,.3)', fontFamily:"'DM Sans',sans-serif", marginLeft:6 }}>
-            {billsSyncing ? '⏳…' : '📊 Sync Outstanding'}
-          </button>
-=======
-        <button onClick={() => { checkInfrastructure(); loadData(); }}
-          style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:8, background:"rgba(43,168,152,.1)", border:"1px solid rgba(43,168,152,.3)", color:"#1D8A7C", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>
-          <RefreshCcw size={13} /> Refresh All
-        </button>
-      </div>
-
-      {/* ── Infrastructure Status Banner ── */}
-      <div style={{ background:"#fff", border:`1px solid ${anyOffline ? "rgba(220,38,38,.2)" : "rgba(43,168,152,.18)"}`, borderRadius:14, padding:"16px 18px", marginBottom:22, borderTop:`3px solid ${anyOffline ? "#DC2626" : "#3DBFAE"}`, boxShadow:"0 1px 4px rgba(43,168,152,.05)" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-          <span style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".8px", color:"var(--text,#0D2E2B)" }}>
-            {allOnline ? "✅ All Systems Online" : anyOffline ? "🔴 Infrastructure Issues Detected" : "⏳ Checking Systems..."}
-          </span>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:10, color:"var(--text-dim,#8AAEAA)" }}>
-              {infra.lastChecked ? `Checked ${infra.lastChecked.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}` : "Checking..."}
-            </span>
-            <button onClick={checkInfrastructure}
-              style={{ padding:"4px 11px", borderRadius:7, background:"rgba(43,168,152,.1)", border:"1px solid rgba(43,168,152,.3)", color:"#1D8A7C", fontSize:10, fontWeight:600, cursor:"pointer" }}>
-              ↻ Recheck
-            </button>
-          </div>
-        </div>
-
-        {/* 4 system tiles */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-          {INFRA_SYSTEMS.map(sys => {
-            const st = infra[sys.key];
-            const isOff = st === "offline";
-            const expanded = expandedFix === sys.key;
-            return (
-              <div key={sys.key}
-                style={{ background: isOff ? "rgba(220,38,38,.04)" : "var(--surface2,#EEF8F6)", border:`1px solid ${isOff ? "rgba(220,38,38,.2)" : "var(--border,rgba(43,168,152,.18))"}`, borderRadius:10, padding:"12px 13px", cursor: isOff ? "pointer" : "default", transition:"all .2s" }}
-                onClick={() => isOff && setExpandedFix(expanded ? null : sys.key)}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-                  <span style={{ fontSize:20 }}>{sys.icon}</span>
-                  <S status={st} />
-                </div>
-                <div style={{ fontSize:11, fontWeight:700, color:"var(--text,#0D2E2B)", marginBottom:2 }}>{sys.label}</div>
-                <div style={{ fontSize:10, color:"var(--text-muted,#4A7A74)" }}>{sys.sub}</div>
-                {isOff && (
-                  <div style={{ marginTop:8, fontSize:10, color:"#DC2626", fontWeight:600 }}>
-                    {expanded ? "▲ Hide fix steps" : "▼ Show fix steps"}
-                  </div>
-                )}
-                {/* Tally extra info when online */}
-                {sys.key === "tally" && st === "online" && infra.tallyCompany && (
-                  <div style={{ marginTop:6, fontSize:9.5, color:"#1D8A7C", fontWeight:500 }}>
-                    ✓ {infra.tallyCompany}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Fix hints panel - shown when a system tile is expanded */}
-        {expandedFix && (
-          <div style={{ marginTop:12, background:"#FEF2F2", border:"1px solid rgba(220,38,38,.2)", borderRadius:10, padding:"13px 15px" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#DC2626", marginBottom:8 }}>
-              🔧 Fix Steps: {INFRA_SYSTEMS.find(s=>s.key===expandedFix)?.label}
-            </div>
-            {INFRA_SYSTEMS.find(s=>s.key===expandedFix)?.fixHints.map((hint, i) => (
-              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:8, marginBottom:5 }}>
-                <span style={{ background:"#DC2626", color:"#fff", fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:100, whiteSpace:"nowrap", marginTop:1 }}>
-                  {i+1}
-                </span>
-                <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, color:"#7F1D1D", lineHeight:1.5 }}>{hint}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Terminal strip */}
-        <div style={{ background:"#0B2E2B", border:"1px solid rgba(61,191,174,.2)", borderRadius:8, padding:"11px 14px", marginTop:12, fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, lineHeight:1.9 }}>
-          {infra.tally === "online" ? (
-            <>
-              <div style={{ color:"#34d399" }}>▶ Connected · https://tally.shreerangtrendz.com</div>
-              <div style={{ color:"#C8E8E4" }}>→ Company: {infra.tallyCompany || activeCompany || "Shreerang Trendz"} | Items in stock: {infra.stockItems || "—"}</div>
-            </>
-          ) : (
-            <>
-              <div style={{ color:"#f87171" }}>▶ Tally endpoint unreachable — check chain below</div>
-              <div style={{ color:"#6A9B95" }}>→ Chain: Office PC:9000 → frpc → VPS:7000 → frps → nginx → tally.shreerangtrendz.com</div>
-            </>
-          )}
-          <div style={{ color:"#6A9B95" }}>→ Supabase zdekydcscwhuusliwqaz (ap-southeast-1) ✓ healthy</div>
-          <div style={{ color:"#475569" }}>→ Auto-refresh every 30s · Last: {infra.lastChecked ? infra.lastChecked.toLocaleTimeString() : "pending"}</div>
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
         </div>
       </div>
 
-      {/* ── Sync Cards Grid ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:14, marginBottom:22 }}>
-        {CARDS.map(card => (
-          <SyncCard key={card.key} card={card} count={counts[card.key]} loading={loading[card.key]}
-            onSync={() => handleSync(card.key)} tallyOnline={infra.tally === "online"} />
-        ))}
-      </div>
+      <div style={{ padding:'22px 26px', display:'flex', flexDirection:'column', gap:20 }}>
 
-      {/* ── Bottom Panel (2-col) ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-
-        {/* Sync Log */}
-        <div style={{ background:"#fff", border:"1px solid var(--border)", borderRadius:12, padding:18, borderTop:"3px solid #E8A800", boxShadow:"0 1px 4px rgba(43,168,152,.05)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-            <span style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".8px", color:"var(--text,#0D2E2B)" }}>📋 Sync Activity Log</span>
-            <span style={{ fontSize:10, color:"var(--text-dim,#8AAEAA)", display:"flex", alignItems:"center", gap:5 }}>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#3DBFAE", display:"inline-block" }} />
-              Live · 30s refresh
-            </span>
-<<<<<<< HEAD
-          )}
-          <button onClick={detectActiveCompany} disabled={detectingCompany || infra.tally!=='online'}
+        {/* COMPANY SELECTOR */}
+        <div style={{ background:'#fff', borderRadius:12, padding:'12px 18px', border:'1px solid rgba(43,168,152,.2)', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', boxShadow:'0 2px 8px rgba(0,0,0,.05)' }}>
+          <span style={{ fontSize:14 }}>🏢</span>
+          <div style={{ fontWeight:700, fontSize:12, color:'#0B2E2B' }}>Tally Company:</div>
+          <select value={activeCompany} onChange={e=>setActiveCompany(e.target.value)}
+            style={{ padding:'5px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, background:'#F4FBFA', color:'#0B2E2B', cursor:'pointer', minWidth:200 }}>
+            <option value="">— Select Company —</option>
+            {companies.map(c=><option key={c.id} value={c.company_name}>{c.company_name}{c.is_default?' (Default)':''}</option>)}
+          </select>
+          {activeCompany && <span style={{ padding:'3px 10px', borderRadius:100, background:'rgba(43,168,152,.12)', color:'#2BA898', fontSize:11, fontWeight:700 }}>✓ {activeCompany}</span>}
+          <button onClick={detectActiveCompany} disabled={detectingCompany||infra.tally!=='online'}
             style={{ marginLeft:'auto', padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(110,68,200,.1)', color:'#6E44C8', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-            {detectingCompany ? '⏳ Detecting…' : '🔍 Detect Active Company'}
+            {detectingCompany?'⏳ Detecting…':'🔍 Detect Company'}
           </button>
         </div>
 
-        {/* ── ROW 1: 4 cards ── */}
+        {/* ROW 1: 4 cards */}
         <div>
-          <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
-            <span>📊 Data Sources — Pull Live from Tally ERP Prime</span>
-            <span style={{ flex:1, height:1, background:'var(--border,rgba(43,168,152,.18))', display:'block' }} />
+          <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'#4A7A74', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+            <span>📊 Data Sources — Pull Live from Tally</span>
+            <span style={{ flex:1, height:1, background:'rgba(43,168,152,.18)', display:'block' }} />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:13 }}>
-            {CARDS.slice(0,4).map(c => <SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
+            {CARDS.slice(0,4).map(c=><SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
           </div>
         </div>
 
-        {/* ── ROW 2: 3 cards ── */}
+        {/* ROW 2: 3 cards */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:13 }}>
-          {CARDS.slice(4).map(c => <SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
+          {CARDS.slice(4).map(c=><SyncCard key={c.key} card={c} count={countMap[c.key]} loading={loading[c.key]} onSync={()=>handleSync(c.key)} />)}
         </div>
 
-        {/* ── BILLS ROW ── */}
+        {/* BILLS ROW */}
         <div>
-          <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'var(--text-muted,#4A7A74)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1.2px', color:'#4A7A74', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
             <span>💰 Bills Accounting — Tally Vouchers ↔ Supabase</span>
-            <span style={{ flex:1, height:1, background:'var(--border,rgba(43,168,152,.18))', display:'block' }} />
+            <span style={{ flex:1, height:1, background:'rgba(43,168,152,.18)', display:'block' }} />
             {billsCounts.lastSync && <span style={{ fontSize:10, color:'#6A9B95' }}>Last sync: {new Date(billsCounts.lastSync).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</span>}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
             {[
-              { label:'Purchase Bills', sub:'Tally purchase vouchers → DB', icon:'🛒', color:'#2468C8', grad:'linear-gradient(135deg,#2468C8,#0E96A0)', count: billsCounts.purchase },
-              { label:'Sales Bills',    sub:'Tally sales vouchers → DB',    icon:'💹', color:'#1E9E5A', grad:'linear-gradient(135deg,#1E9E5A,#0E9E6A)', count: billsCounts.sales   },
-            ].map(b => (
-              <div key={b.label} style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:`1px solid ${b.color}30`, display:'flex', flexDirection:'column', gap:12 }}>
+              { label:'Purchase Bills', sub:'Tally purchase vouchers → DB', count:billsCounts.purchase, icon:'🛒', grad:'#2468C8,#0E96A0', border:'rgba(36,104,200,.18)', c:'#2468C8' },
+              { label:'Sales Bills',    sub:'Tally sales vouchers → DB',    count:billsCounts.sales,    icon:'💹', grad:'#1E9E5A,#0E9E6A', border:'rgba(30,158,90,.18)',  c:'#1E9E5A' },
+            ].map((b,i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:'18px 20px', boxShadow:'0 2px 12px rgba(0,0,0,.07)', border:`1px solid ${b.border}`, display:'flex', flexDirection:'column', gap:12 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:38, height:38, background:b.grad, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{b.icon}</div>
-                    <div><div style={{ fontWeight:700, fontSize:15, color:'var(--text,#0D2E2B)' }}>{b.label}</div><div style={{ fontSize:11, color:'#6A9B95' }}>{b.sub}</div></div>
+                    <div style={{ width:38, height:38, background:`linear-gradient(135deg,${b.grad})`, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{b.icon}</div>
+                    <div><div style={{ fontWeight:700, fontSize:15 }}>{b.label}</div><div style={{ fontSize:11, color:'#6A9B95' }}>{b.sub}</div></div>
                   </div>
-                  <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:b.color, lineHeight:1 }}>{b.count}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
+                  <div style={{ textAlign:'right' }}><div style={{ fontSize:26, fontWeight:800, color:b.c, lineHeight:1 }}>{b.count}</div><div style={{ fontSize:10, color:'#6A9B95' }}>records</div></div>
                 </div>
-                <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background: billsSyncing?'#e2e8f0':b.grad, border:'none', borderRadius:8, color: billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor: billsSyncing?'wait':'pointer', width:'100%' }}>
-                  {billsSyncing ? '⏳ Syncing…' : `↻ Pull ${b.label}`}
+                <button onClick={syncBills} disabled={billsSyncing} style={{ padding:'8px', background:billsSyncing?'#e2e8f0':`linear-gradient(135deg,${b.grad})`, border:'none', borderRadius:8, color:billsSyncing?'#94a3b8':'#fff', fontSize:12, fontWeight:600, cursor:billsSyncing?'wait':'pointer', width:'100%' }}>
+                  {billsSyncing?'⏳ Syncing…':'↻ Pull Bills'}
                 </button>
               </div>
             ))}
-=======
-          </div>
-          <div style={{ maxHeight:260, overflowY:"auto" }}>
-            {errors.map(err => (
-              <div key={err.id} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 11px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface2,#EEF8F6)", marginBottom:6 }}>
-                <span style={{ padding:"2px 8px", borderRadius:100, fontSize:9, fontWeight:800, background:"rgba(217,58,58,.1)", color:"#D93A3A", border:"1px solid rgba(217,58,58,.2)", whiteSpace:"nowrap" }}>ERROR</span>
-                <span style={{ fontSize:11, fontWeight:600, color:"var(--text)", minWidth:120, fontFamily:"'JetBrains Mono',monospace" }}>{err.sync_type}</span>
-                <span style={{ fontSize:11, color:"var(--text-muted)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{err.error_message}</span>
-                <span style={{ fontSize:9.5, color:"var(--text-dim)", whiteSpace:"nowrap" }}>{new Date(err.created_at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</span>
-              </div>
-            ))}
-            {logItems.filter(l=>l.status==="success").slice(0,8).map((l,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:9, padding:"9px 11px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface2,#EEF8F6)", marginBottom:6 }}>
-                <span style={{ padding:"2px 8px", borderRadius:100, fontSize:9, fontWeight:800, background:"rgba(30,158,90,.1)", color:"#1E9E5A", border:"1px solid rgba(30,158,90,.2)", whiteSpace:"nowrap" }}>OK</span>
-                <span style={{ fontSize:11, fontWeight:600, color:"var(--text)", minWidth:120, fontFamily:"'JetBrains Mono',monospace" }}>{l.sync_type}</span>
-                <span style={{ fontSize:11, color:"var(--text-muted)", flex:1 }}>Synced from Tally Prime</span>
-                <span style={{ fontSize:9.5, color:"var(--text-dim)", whiteSpace:"nowrap" }}>{new Date(l.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</span>
-              </div>
-            ))}
-            {errors.length === 0 && logItems.length === 0 && (
-              <div style={{ textAlign:"center", padding:30, color:"var(--text-dim,#8AAEAA)", fontSize:12 }}>No sync activity yet</div>
-            )}
-          </div>
-          {/* Stats footer */}
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, background:"var(--surface2,#EEF8F6)", borderRadius:9, padding:"13px 14px", marginTop:12 }}>
-            {[
-              { num:logItems.length+errors.length, lbl:"Total Syncs",    c:"var(--teal-light,#1D8A7C)" },
-              { num:logItems.filter(l=>l.status==="success").length, lbl:"Successful", c:"#1E9E5A" },
-              { num:errors.length,                 lbl:"Errors",         c:"#D93A3A" },
-              { num:(counts.suppliers||0).toLocaleString(), lbl:"Suppliers", c:"#E8A800" },
-            ].map((s,i) => (
-              <div key={i} style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"'Playfair Display',serif", fontSize:21, fontWeight:700, color:s.c, lineHeight:1 }}>{s.num}</div>
-                <div style={{ fontSize:9.5, color:"var(--text-dim,#8AAEAA)", marginTop:2, fontWeight:500 }}>{s.lbl}</div>
-              </div>
-            ))}
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
           </div>
         </div>
 
-        {/* Quick Actions / Diagnostics */}
-        <div style={{ background:"#fff", border:"1px solid var(--border)", borderRadius:12, padding:18, borderTop:"3px solid #6E44C8", boxShadow:"0 1px 4px rgba(43,168,152,.05)" }}>
-          <span style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".8px", color:"var(--text,#0D2E2B)", display:"block", marginBottom:14 }}>🔌 Diagnostics & Quick Links</span>
-
-<<<<<<< HEAD
-          {/* Infra — no n8n row */}
-          <div style={{ background:'#fff', border:'1px solid var(--border,rgba(43,168,152,.18))', borderRadius:12, padding:18, borderTop:'3px solid #3DBFAE', boxShadow:'0 1px 4px rgba(43,168,152,.05)' }}>
+        {/* INFRA + LOG ROW */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1.7fr', gap:18 }}>
+          {/* Infra */}
+          <div style={{ background:'#fff', border:'1px solid rgba(43,168,152,.18)', borderRadius:12, padding:18, borderTop:'3px solid #3DBFAE' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-              <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.8px', color:'var(--text,#0D2E2B)' }}>⚡ Infrastructure Health</span>
-              <button onClick={checkInfrastructure} style={{ padding:'5px 12px', borderRadius:7, background:'rgba(43,168,152,.1)', border:'1px solid rgba(43,168,152,.3)', color:'#1D8A7C', fontSize:10.5, fontWeight:600, cursor:'pointer', fontFamily:"'DM Sans',sans-serif" }}>
-                ↻ Refresh
-              </button>
+              <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.8px' }}>⚡ Infrastructure Health</span>
+              <button onClick={checkInfrastructure} style={{ padding:'5px 12px', borderRadius:7, background:'rgba(43,168,152,.1)', border:'1px solid rgba(43,168,152,.3)', color:'#1D8A7C', fontSize:10.5, fontWeight:600, cursor:'pointer' }}>↻ Refresh</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7 }}>
               {[
-                ['Tally Prime',      infra.tally],
-                ['FRP Tunnel (Win)', infra.frpc],
+                ['Tally Prime', infra.tally],
+                ['FRP Client (Win)', infra.frpc],
                 ['FRP Server (VPS)', infra.frps],
-                ['Domain Gateway',   infra.domain],
-                ['Nginx / SSL',      infra.nginx],
-                ['Active Endpoint',  infra.activeEndpoint !== 'none' ? 'online' : 'offline'],
-              ].map(([lbl, st]) => (
-                <div key={lbl} style={{ background:'var(--surface2,#EEF8F6)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                  <span style={{ fontSize:10.5, color:'var(--text-muted,#4A7A74)', fontWeight:500 }}>{lbl}</span>
-                  <S on={st==='online'} />
+                ['Domain Gateway', infra.domain],
+                ['Nginx Router', infra.nginx],
+                ['n8n Automation', infra.n8n],
+              ].map(([lbl,st]) => (
+                <div key={lbl} style={{ background:'#EEF8F6', border:'1px solid rgba(43,168,152,.18)', borderRadius:8, padding:'10px 12px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ fontSize:10.5, color:'#4A7A74', fontWeight:500 }}>{lbl}</span>
+                  <S on={st==='online'} warn={lbl==='n8n Automation' && st!=='online'} />
                 </div>
               ))}
             </div>
-            {/* Terminal */}
-            <div style={{ background:'#0B2E2B', border:'1px solid rgba(61,191,174,.2)', borderRadius:8, padding:'12px 14px', marginTop:11, fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, lineHeight:1.9 }}>
+            <div style={{ background:'#0B2E2B', border:'1px solid rgba(61,191,174,.2)', borderRadius:8, padding:'12px 14px', marginTop:11, fontFamily:'monospace', fontSize:10.5, lineHeight:1.9 }}>
               {infra.tally==='online' ? <>
                 <div style={{ color:'#34d399' }}>▶ Connected · Tally ERP Prime</div>
-                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany || activeCompany || 'Unknown'}</div>
-                <div style={{ color:'#C8E8E4' }}>→ Via: {endpointLabel}</div>
+                <div style={{ color:'#C8E8E4' }}>→ Company: {infra.tallyCompany||activeCompany||'Unknown'}</div>
               </> : <>
                 <div style={{ color:'#f87171' }}>▶ Cannot connect to Tally</div>
-                <div style={{ color:'#6A9B95' }}>→ Check: Tally Prime open on office or test PC</div>
-                <div style={{ color:'#6A9B95' }}>→ Check: frpc running on that PC</div>
+                <div style={{ color:'#6A9B95' }}>→ Check: Tally open + Port 9000 + FRP running</div>
               </>}
-              <div style={{ color:'#6A9B95' }}>→ Supabase Seoul (t4g.nano) ✓ healthy</div>
-              <div style={{ color:'#475569' }}>→ Last checked: {infra.lastChecked ? infra.lastChecked.toLocaleTimeString() : 'never'}</div>
+              <div style={{ color:'#6A9B95' }}>→ Supabase (ap-northeast-2) ✓ healthy</div>
+              <div style={{ color:infra.n8n==='online'?'#34d399':'#fbbf24' }}>→ n8n: {infra.n8n==='online'?'running':'disabled'}</div>
+              <div style={{ color:'#475569' }}>→ Last checked: {infra.lastChecked?infra.lastChecked.toLocaleTimeString():'never'}</div>
             </div>
           </div>
 
           {/* Sync Log */}
-          <div style={{ background:'#fff', border:'1px solid var(--border)', borderRadius:12, padding:18, borderTop:'3px solid #E8A800', boxShadow:'0 1px 4px rgba(43,168,152,.05)' }}>
+          <div style={{ background:'#fff', border:'1px solid rgba(43,168,152,.18)', borderRadius:12, padding:18, borderTop:'3px solid #E8A800' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-              <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.8px', color:'var(--text,#0D2E2B)' }}>📋 Sync Activity Log</span>
-              <span style={{ fontSize:10, color:'var(--text-dim,#8AAEAA)', display:'flex', alignItems:'center', gap:5 }}>
-                <span style={{ width:5, height:5, borderRadius:'50%', background:'#3DBFAE', display:'inline-block', animation:'pulse 2s infinite' }} />
-                Live · Auto-refresh 60s
-              </span>
+              <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.8px' }}>📋 Sync Activity Log</span>
+              <span style={{ fontSize:10, color:'#8AAEAA' }}>Live · Auto-refresh 60s</span>
             </div>
             <div style={{ maxHeight:260, overflowY:'auto' }}>
-              {errors.map(err => (
-                <div key={err.id} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface2,#EEF8F6)', marginBottom:6 }}>
+              {errors.map(err=>(
+                <div key={err.id} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid rgba(43,168,152,.18)', background:'#EEF8F6', marginBottom:6 }}>
                   <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:800, background:'rgba(217,58,58,.1)', color:'#D93A3A', border:'1px solid rgba(217,58,58,.2)', whiteSpace:'nowrap' }}>ERROR</span>
-                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text)', minWidth:140, fontFamily:"'JetBrains Mono',monospace" }}>{err.sync_type}</span>
-                  <span style={{ fontSize:11, color:'var(--text-muted)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{err.error_message}</span>
-                  <span style={{ fontSize:9.5, color:'var(--text-dim)', whiteSpace:'nowrap' }}>{new Date(err.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
+                  <span style={{ fontSize:11, fontWeight:600, fontFamily:'monospace', minWidth:120 }}>{err.sync_type}</span>
+                  <span style={{ fontSize:11, color:'#4A7A74', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{err.error_message}</span>
+                  <span style={{ fontSize:9.5, color:'#8AAEAA', whiteSpace:'nowrap' }}>{new Date(err.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
                 </div>
               ))}
-              {logItems.filter(l=>l.status==='success').slice(0,6).map((l,i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface2,#EEF8F6)', marginBottom:6 }}>
-                  <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:800, background:'rgba(30,158,90,.1)', color:'#1E9E5A', border:'1px solid rgba(30,158,90,.2)', whiteSpace:'nowrap' }}>SUCCESS</span>
-                  <span style={{ fontSize:11, fontWeight:600, color:'var(--text)', minWidth:140, fontFamily:"'JetBrains Mono',monospace" }}>{l.sync_type}</span>
-                  <span style={{ fontSize:11, color:'var(--text-muted)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>Synced successfully from Tally ERP Prime</span>
-                  <span style={{ fontSize:9.5, color:'var(--text-dim)', whiteSpace:'nowrap' }}>{new Date(l.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
+              {logItems.filter(l=>l.status==='success').slice(0,8).map((l,i)=>(
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px', borderRadius:8, border:'1px solid rgba(43,168,152,.18)', background:'#EEF8F6', marginBottom:6 }}>
+                  <span style={{ padding:'2px 8px', borderRadius:100, fontSize:9, fontWeight:800, background:'rgba(30,158,90,.1)', color:'#1E9E5A', border:'1px solid rgba(30,158,90,.2)', whiteSpace:'nowrap' }}>OK</span>
+                  <span style={{ fontSize:11, fontWeight:600, fontFamily:'monospace', minWidth:120 }}>{l.sync_type}</span>
+                  <span style={{ fontSize:9.5, color:'#8AAEAA', whiteSpace:'nowrap' }}>{new Date(l.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
                 </div>
               ))}
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, background:'var(--surface2,#EEF8F6)', borderRadius:9, padding:'13px 14px', marginTop:12 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, background:'#EEF8F6', borderRadius:9, padding:'13px 14px', marginTop:12 }}>
               {[
-                { num:logItems.length+errors.length, lbl:'Total Syncs',   c:'var(--teal-light,#1D8A7C)' },
+                { num:logItems.length+errors.length, lbl:'Total Syncs', c:'#1D8A7C' },
                 { num:logItems.filter(l=>l.status==='success').length, lbl:'Successful', c:'#1E9E5A' },
                 { num:errors.length, lbl:'Errors', c:'#D93A3A' },
-                { num:(counts.suppliers||0).toLocaleString(), lbl:'Suppliers Live', c:'#E8A800' },
-              ].map((s,i) => (
+                { num:(counts.suppliers||0).toLocaleString(), lbl:'Suppliers', c:'#E8A800' },
+              ].map((s,i)=>(
                 <div key={i} style={{ textAlign:'center' }}>
-                  <div style={{ fontFamily:"'Playfair Display',serif", fontSize:21, fontWeight:700, color:s.c, lineHeight:1 }}>{s.num}</div>
-                  <div style={{ fontSize:9.5, color:'var(--text-dim,#8AAEAA)', marginTop:2, fontWeight:500 }}>{s.lbl}</div>
+                  <div style={{ fontSize:21, fontWeight:700, color:s.c, lineHeight:1 }}>{s.num}</div>
+                  <div style={{ fontSize:9.5, color:'#8AAEAA', marginTop:2, fontWeight:500 }}>{s.lbl}</div>
                 </div>
               ))}
-=======
-          {/* Live endpoint test */}
-          <div style={{ background:"#0B2E2B", borderRadius:8, padding:"11px 14px", fontFamily:"'JetBrains Mono',monospace", fontSize:10.5, lineHeight:1.9, marginBottom:14 }}>
-            <div style={{ color:"#94a3b8" }}>// Tally HTTPS endpoint</div>
-            <div style={{ color:"#34d399" }}>curl https://tally.shreerangtrendz.com</div>
-            <div style={{ color:"#94a3b8" }}>// Expected: &lt;RESPONSE&gt;TallyPrime Server is Running&lt;/RESPONSE&gt;</div>
-          </div>
-
-          {/* Quick links */}
-          {[
-            { label:"🌐 Open Tally Endpoint", href:"https://tally.shreerangtrendz.com", desc:"Verify tunnel is live" },
-            { label:"🔍 Supabase Edge Logs", href:"https://supabase.com/dashboard/project/zdekydcscwhuusliwqaz/functions", desc:"tally-health + tally-proxy logs" },
-            { label:"📊 Supabase Tables", href:"https://supabase.com/dashboard/project/zdekydcscwhuusliwqaz/editor", desc:"fabric_stock_live, purchase_fabric" },
-          ].map((link,i) => (
-            <a key={i} href={link.href} target="_blank" rel="noopener noreferrer"
-              style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface2,#EEF8F6)", marginBottom:8, textDecoration:"none", transition:"all .2s" }}
-              onMouseEnter={e=>e.currentTarget.style.borderColor="rgba(43,168,152,.4)"}
-              onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:"var(--text,#0D2E2B)" }}>{link.label}</div>
-                <div style={{ fontSize:10.5, color:"var(--text-muted,#4A7A74)" }}>{link.desc}</div>
-              </div>
-              <span style={{ color:"var(--text-muted,#4A7A74)", fontSize:12 }}>→</span>
-            </a>
-          ))}
-
-          {/* FRP VPS instructions */}
-          <div style={{ background:"var(--surface2,#EEF8F6)", borderRadius:8, padding:"11px 13px", marginTop:4 }}>
-            <div style={{ fontSize:10, fontWeight:700, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:".6px", marginBottom:7 }}>VPS Quick Restart</div>
-            <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:9.5, color:"#1D8A7C", lineHeight:1.8 }}>
-              <div>kill $(pgrep frps)</div>
-              <div>nohup /opt/frp/frps -c /opt/frp/frps.toml &gt; /opt/frp/frps.log 2&gt;&amp;1 &amp;</div>
-              <div>sudo systemctl restart nginx</div>
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
 }
 
-/* ── Sync Card Component ── */
-function SyncCard({ card, count, loading, onSync, tallyOnline }) {
-  const liveCount = count > 0;
+function SyncCard({ card, count, loading, onSync }) {
+  const live = count > 0;
   return (
-<<<<<<< HEAD
-    <div style={{ background:'#fff', border:'1px solid var(--border,rgba(43,168,152,.18))', borderRadius:12, padding:'17px 16px 14px', position:'relative', overflow:'hidden', transition:'all .25s', display:'flex', flexDirection:'column', boxShadow:'0 1px 4px rgba(43,168,152,.05)', cursor:'default' }}
-      onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.borderColor='rgba(43,168,152,.35)'; e.currentTarget.style.boxShadow='0 6px 20px rgba(43,168,152,.1)'; }}
-      onMouseLeave={e=>{ e.currentTarget.style.transform=''; e.currentTarget.style.borderColor='var(--border,rgba(43,168,152,.18))'; e.currentTarget.style.boxShadow='0 1px 4px rgba(43,168,152,.05)'; }}
-    >
+    <div style={{ background:'#fff', border:'1px solid rgba(43,168,152,.18)', borderRadius:12, padding:'17px 16px 14px', position:'relative', overflow:'hidden', transition:'all .25s', display:'flex', flexDirection:'column', boxShadow:'0 1px 4px rgba(43,168,152,.05)', cursor:'default' }}
+      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 6px 20px rgba(43,168,152,.1)';}}
+      onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 1px 4px rgba(43,168,152,.05)';}}>
       <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${card.stripe})`, borderRadius:'12px 12px 0 0' }} />
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10 }}>
-        <div style={{ width:36, height:36, borderRadius:9, background:card.ib, border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{card.icon}</div>
-        <span style={{ background:`${card.ib}`, color:card.badgeC, border:`1px solid ${card.badgeC}33`, fontSize:9, fontWeight:800, padding:'2px 8px', borderRadius:100, textTransform:'uppercase', letterSpacing:'.4px' }}>{card.badge}</span>
-=======
-    <div style={{ background:"#fff", border:"1px solid var(--border,rgba(43,168,152,.18))", borderRadius:12, padding:"17px 16px 14px", position:"relative", overflow:"hidden", transition:"all .25s", display:"flex", flexDirection:"column", boxShadow:"0 1px 4px rgba(43,168,152,.05)", cursor:"default" }}
-      onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 20px rgba(43,168,152,.1)"; }}
-      onMouseLeave={e=>{ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 4px rgba(43,168,152,.05)"; }}>
-      <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:`linear-gradient(90deg,${card.stripe})`, borderRadius:"12px 12px 0 0" }} />
-      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
-        <div style={{ width:36, height:36, borderRadius:9, background:card.ib, border:"1px solid var(--border)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>{card.icon}</div>
-        <span style={{ background:`${card.ib}`, color:card.badgeC, border:`1px solid ${card.badgeC}33`, fontSize:9, fontWeight:800, padding:"2px 8px", borderRadius:100, textTransform:"uppercase" }}>{card.badge}</span>
->>>>>>> 00051653989becfb6229d83c8b1812dbab649d94
+        <div style={{ width:36, height:36, borderRadius:9, background:card.ib, border:'1px solid rgba(43,168,152,.18)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16 }}>{card.icon}</div>
+        <span style={{ background:card.ib, color:card.badgeC, border:`1px solid ${card.badgeC}33`, fontSize:9, fontWeight:800, padding:'2px 8px', borderRadius:100 }}>{card.badge}</span>
       </div>
-      <div style={{ fontSize:10, fontWeight:600, color:"var(--text-muted,#4A7A74)", textTransform:"uppercase", letterSpacing:".8px", marginBottom:2 }}>{card.label}</div>
-      <div style={{ fontFamily:"'Playfair Display',serif", fontSize:32, fontWeight:700, lineHeight:1, letterSpacing:"-1px", marginBottom:1,
-        ...(liveCount ? { background:"linear-gradient(135deg,#1D8A7C,#3DBFAE)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" } : { color:"var(--text,#0D2E2B)" })
+      <div style={{ fontSize:10, fontWeight:600, color:'#4A7A74', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:2 }}>{card.label}</div>
+      <div style={{ fontSize:32, fontWeight:700, lineHeight:1, letterSpacing:'-1px', marginBottom:1,
+        ...(live?{background:'linear-gradient(135deg,#1D8A7C,#3DBFAE)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}:{color:'#0D2E2B'})
       }}>{(count||0).toLocaleString()}</div>
-      <div style={{ fontSize:11, color:"var(--text-dim,#8AAEAA)", marginBottom:13, flex:1 }}>{card.sub}</div>
-      <button onClick={onSync} disabled={loading || !tallyOnline}
-        title={!tallyOnline ? "Tally is offline" : ""}
-        style={{ width:"100%", padding:"8px 0", borderRadius:7, fontSize:10, fontWeight:700, cursor:(loading||!tallyOnline)?"not-allowed":"pointer", textTransform:"uppercase", letterSpacing:".6px", fontFamily:"'DM Sans',sans-serif", border:`1px solid ${card.btnC}55`, background:loading?`rgba(232,168,0,.1)`:!tallyOnline?"rgba(0,0,0,.04)":`${card.btnC}14`, color:loading?"#D4920A":!tallyOnline?"#aaa":card.btnC, transition:"all .2s" }}>
-        {loading ? "⟳ Syncing..." : !tallyOnline ? "⚠ Tally Offline" : (BTN_LABELS[card.key]||"↻ Sync")}
+      <div style={{ fontSize:11, color:'#8AAEAA', marginBottom:13, flex:1 }}>{card.sub}</div>
+      <button onClick={onSync} disabled={loading} style={{ width:'100%', padding:'8px 0', borderRadius:7, fontSize:10, fontWeight:700, cursor:loading?'not-allowed':'pointer', textTransform:'uppercase', letterSpacing:'.6px', border:`1px solid ${card.btnC}55`, background:loading?'rgba(232,168,0,.1)':`${card.btnC}14`, color:loading?'#D4920A':card.btnC, transition:'all .2s' }}
+        onMouseEnter={e=>!loading&&(e.target.style.background=`${card.btnC}25`)}
+        onMouseLeave={e=>!loading&&(e.target.style.background=`${card.btnC}14`)}>
+        {loading?'⟳ Syncing...':(BTN_LABELS[card.key]||'↻ Sync')}
       </button>
     </div>
   );

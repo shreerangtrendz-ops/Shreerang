@@ -392,13 +392,14 @@ export default function FinishFabricForm() {
         body: JSON.stringify({
           model:'claude-sonnet-4-20250514',
           max_tokens:400,
-          messages:[{ role:'user', content:
-            'You are a textile naming expert for Shreerang Trendz, Surat, India. Context: ' + JSON.stringify(context) + '. Field: ' + field + '. ' +
-            (field === 'item_name' ? 'Suggest Tally stock item name. Format: Width + Base Fabric + Class + Process + Fabrics. E.g. 44" Rayon Premium Foil Printed Fabrics. Just the name.' : '') +
-            (field === 'print_concept' ? 'Suggest 3 print concept options comma-separated.' : '') +
-            (field === 'ecom_name' ? 'Suggest a customer-friendly eCommerce name. Short and appealing.' : '') +
-            ' Respond ONLY with the suggestion, no explanation.
-          }]
+          messages:[{ role:'user', content: [
+            'You are a textile naming expert for Shreerang Trendz, Surat, India.',
+            'Context: ' + JSON.stringify(context),
+            field === 'item_name' ? 'Suggest Tally stock item name. Format: Width + Base Fabric + Class + Process + Fabrics. Just the name, no explanation.' : '',
+            field === 'print_concept' ? 'Suggest 3 print concepts comma-separated.' : '',
+            field === 'ecom_name' ? 'Suggest short customer-friendly eCommerce display name.' : '',
+            'Respond with ONLY the suggestion.',
+          ].filter(Boolean).join(' ') }]
         })
       });
       const data = await resp.json();

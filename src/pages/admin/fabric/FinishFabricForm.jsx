@@ -521,7 +521,7 @@ export default function FinishFabricForm() {
             <AISuggest label="AI Suggest Name" onSuggest={() => aiSuggest('item_name')} loading={aiLoading.item_name} />
           </div>
           <input value={form.item_name} onChange={e => setF('item_name', e.target.value)}
-            placeholder="e.g. 44\" Rayon Premium Foil Printed Fabrics"
+            placeholder={'e.g. 44" Rayon Premium Foil Printed Fabrics'}
             style={{ ...inp, fontSize:15, fontWeight:600, borderColor:form.item_name?C.teal:C.border }} />
           <div style={{ fontSize:10, color:C.muted, marginTop:3 }}>
             Auto-generated from: Finish Width + Base Fabric + Class + Process + Tags · 

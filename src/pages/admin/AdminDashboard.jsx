@@ -1,435 +1,244 @@
 import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { useNavigate, useOutletContext } from 'react-router-dom';
-import { format } from 'date-fns';
-import { DashboardService } from '@/services/DashboardService';
-import { supabase } from '@/lib/supabase';
-import { ensureArray } from '@/lib/arrayValidation';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/customSupabaseClient';
 
-const TALLY_URL = 'https://tally.shreerangtrendz.com/';
-
-const AdminDashboard = () => {
-  const navigate = useNavigate();
-  const ctx = useOutletContext() || {};
-  const setSidebarOpen = ctx.setSidebarOpen || (() => { });
-
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ totalFabrics: 0, totalDesigns: 0, totalOrders: 0, pendingOrders: 0, purchaseThisMonth: 0, salesThisMonth: 0, outstandingReceivable: 0, outstandingPayable: 0, lastTallySync: null });
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [tallyOnline, setTallyOnline] = useState(null); // null=checking, true=online, false=offline
-  const [billsSyncing, setBillsSyncing] = useState(false);
-  const [jobWorkStats, setJobWorkStats] = useState({ challansOpen:0, challansTotal:0, valueAtMill:0, designsThisMonth:0, mfgEntriesToday:0, pendingMfgEntry:0, totalProcessValue:0 });
-
-  async function syncBillsNow(e) {
-    e.stopPropagation();
-    if (billsSyncing) return;
-    if (!tallyOnline) { alert('Tally is offline. Start Tally Prime and the FRP tunnel first.'); return; }
-    setBillsSyncing(true);
-    try {
-      const res = await fetch('/api/tally-sync', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
-      const json = await res.json();
-      if (json.success) {
-        alert(`✅ Synced! Purchase: ${json.synced.purchase} | Sales: ${json.synced.sales} bills`);
-        fetchData();
-      } else {
-        alert('Sync issues: ' + (json.errors?.join(', ') || 'Unknown error'));
-      }
-    } catch(err) {
-      alert('Sync error: ' + err.message);
-    } finally { setBillsSyncing(false); }
-  }
-
-  useEffect(() => {
-    fetchData();
-    // Quick Tally ping on dashboard load
-    fetch('/api/tally-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml' },
-      body: '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER><BODY><DESC></DESC></BODY></ENVELOPE>'
-    }).then(r => setTallyOnline(r.ok)).catch(() => setTallyOnline(false));
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const monthStart = new Date(); monthStart.setDate(1);
-      const monthStr = monthStart.toISOString().split('T')[0];
-
-      const [kpis, recentOrdersData,
-        { data: challans }, { data: mfgEntries }, { data: pendingChallans }
-      ] = await Promise.allSettled([
-        DashboardService.getDashboardKPIs(),
-        DashboardService.getRecentOrders(5),
-        supabase.from('challans').select('id,status,fabric_value'),
-        supabase.from('manufacturing_entries').select('id,entry_date,total_value').gte('entry_date', monthStr),
-        supabase.from('challans').select('id,party_name').in('status',['open','in_transit']),
-      ]);
-
-      if (kpis.status === 'fulfilled' && kpis.value) setStats(kpis.value);
-      const v = (r, d) => r.status === 'fulfilled' && r.value ? r.value : d;
-      setRecentOrders(ensureArray(v(recentOrdersData, [])));
-
-      // Job Work KPIs
-      const ch = challans?.value?.data || [];
-      const me = mfgEntries?.value?.data || [];
-      const pc = pendingChallans?.value?.data || [];
-      const openCh = ch.filter(c=>c.status==='open'||c.status==='in_transit');
-      const valueAtMill = openCh.reduce((s,c)=>s+Number(c.fabric_value||0),0);
-      const todayEntries = me.filter(e=>e.entry_date===today);
-      const totalProcessValue = me.reduce((s,e)=>s+Number(e.total_value||0),0);
-      setJobWorkStats({
-        challansOpen: openCh.length, challansTotal: ch.length,
-        valueAtMill, designsThisMonth: me.length,
-        mfgEntriesToday: todayEntries.length,
-        pendingMfgEntry: pc.length,
-        totalProcessValue,
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const statusBadge = (status) => {
-    const s = (status || '').toLowerCase();
-    if (s === 'paid' || s === 'completed' || s === 'delivered') return <span className="badge bgreen">✓ Paid</span>;
-    if (s === 'overdue') return <span className="badge bred">⚠ Overdue</span>;
-    if (s === 'pending' || s === 'processing') return <span className="badge borg">Pending Pay</span>;
-    if (s === 'dispatched') return <span className="badge borg">Dispatched</span>;
-    return <span className="badge bblue">{status || 'Unknown'}</span>;
-  };
-
-  const today = format(new Date(), 'dd MMM yyyy');
-
-  return (
-    <div className="screen active">
-      <Helmet><title>Dashboard — Shreerang Admin</title></Helmet>
-
-      {/* ── TOPBAR ── */}
-      <div className="topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Mobile hamburger */}
-          <button
-            className="btn-icon"
-            style={{ display: 'none' }}
-            id="sidebar-toggle"
-            onClick={() => setSidebarOpen(true)}
-          >☰</button>
-          <style>{`@media(max-width:1023px){#sidebar-toggle{display:inline-flex!important}}`}</style>
-          <div>
-            <div className="page-title">Dashboard</div>
-            <div className="breadcrumb">Good morning, Admin · {today}</div>
-          </div>
-        </div>
-        <div className="topbar-right">
-          <button
-            onClick={() => navigate('/')}
-            style={{ padding: '7px 14px', background: 'rgba(43,168,152,0.08)', border: '1px solid rgba(43,168,152,0.25)', borderRadius: 8, color: '#2BA898', fontWeight: 600, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-            title="Go to Homepage"
-          >
-            🏠 Homepage
-          </button>
-          <div className="wa-live">
-            <div className="wa-dot"></div>WA Bot Live
-          </div>
-          <span
-            className="sync-pill sp-tally"
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => navigate('/admin/tally-prime')}
-            title={tallyOnline === true ? 'Tally Online' : tallyOnline === false ? 'Tally Offline — click for details' : 'Checking Tally…'}
-          >
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
-              background: tallyOnline === true ? '#22c55e' : tallyOnline === false ? '#ef4444' : '#d1d5db',
-              boxShadow: tallyOnline === true ? '0 0 6px #22c55e' : tallyOnline === false ? '0 0 6px #ef4444' : 'none'
-            }} />
-            {tallyOnline === true ? 'Tally Synced' : tallyOnline === false ? 'Tally Offline' : 'Tally…'}
-          </span>
-          <span className="sync-pill sp-drive">🔵 Drive OK</span>
-          <button className="btn btn-teal" onClick={() => navigate('/admin/cost/cost-sheet')}>
-            + New Cost Sheet
-          </button>
-        </div>
-      </div>
-
-      {/* ── CONTENT ── */}
-      <div className="content">
-
-        {/* Alerts */}
-        <div className="alert a-warn">
-          ⚠️ <b>Pricing Alert:</b> D10374 (58" PC Dyed Schiffli) @ ₹125/mtr — margin ~5% after rate hike.{' '}
-          <a onClick={() => navigate('/admin/price-database')} style={{ color: 'var(--gold)', cursor: 'pointer', textDecoration: 'underline' }}>Review Price →</a>
-        </div>
-        <div className="alert a-info">
-          ℹ️ <b>14 designs</b> pending AI description &amp; SKU mapping. Tally auto-sync ran 2 min ago (34 vouchers imported).{' '}
-          <a onClick={() => window.open(TALLY_URL, '_blank')} style={{ color: 'var(--blue)', cursor: 'pointer', textDecoration: 'underline' }}>View Tally Log →</a>
-        </div>
-        <div className="alert a-gold">
-          🔔 <b>4 supplier price updates</b> detected from WhatsApp — Shivam Syndicate &amp; Vandanam rates changed.{' '}
-          <a onClick={() => navigate('/admin/supplier-price-ai')} style={{ color: 'var(--gold)', cursor: 'pointer', textDecoration: 'underline' }}>Review &amp; Approve →</a>
-        </div>
-        <div className="alert a-red">
-          ⏰ <b>7 payment reminders</b> pending — Ananya Textiles overdue ₹31,000 (17 days).{' '}
-          <a onClick={() => navigate('/admin/payment-reminders')} style={{ color: 'var(--red)', cursor: 'pointer', textDecoration: 'underline' }}>Send Reminders →</a>
-        </div>
-
-        {/* KPI Grid — Real Data from Supabase */}
-        <div className="kpi-grid">
-          {/* Row 1: Catalogue */}
-          <div className="kpi-card" style={{ '--accent': 'var(--teal)', '--accent-glow': 'rgba(61,191,174,0.10)' }}>
-            <div className="kpi-label">Active Designs</div>
-            <div className="kpi-value" style={{ color: 'var(--teal)' }}>{loading ? '—' : stats.totalDesigns.toLocaleString()}</div>
-            <div className="kpi-sub">Schiffli · Digital · Mill Print</div>
-          </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--green)', '--accent-glow': 'rgba(60,181,115,0.08)' }}>
-            <div className="kpi-label">Fabric SKUs Live</div>
-            <div className="kpi-value" style={{ color: 'var(--green)' }}>{loading ? '—' : stats.totalFabrics.toLocaleString()}</div>
-            <div className="kpi-sub">Base + Finish + Fancy</div>
-          </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--blue)', '--accent-glow': 'rgba(74,124,240,0.08)' }}>
-            <div className="kpi-label">Open Orders</div>
-            <div className="kpi-value" style={{ color: 'var(--blue)' }}>{loading ? '—' : stats.pendingOrders}</div>
-            <div className="kpi-sub">Pending · Processing</div>
-            {!loading && stats.pendingOrders > 0 && <div className="kpi-change up">Total: {stats.totalOrders}</div>}
-          </div>
-          {/* Row 2: Accounting — REAL DATA FROM TALLY */}
-          <div className="kpi-card" style={{ '--accent': 'var(--green)', '--accent-glow': 'rgba(60,181,115,0.08)', cursor: 'pointer' }}
-            onClick={() => navigate('/admin/accounting/sales-bills')}>
-            <div className="kpi-label">Sales This Month 💰</div>
-            <div className="kpi-value" style={{ color: 'var(--green)' }}>
-              {loading ? '—' : `₹${(stats.salesThisMonth / 100000).toFixed(1)}L`}
-            </div>
-            <div className="kpi-sub">{loading ? '…' : `₹${stats.salesThisMonth.toLocaleString()}`}</div>
-            <div className="kpi-change up">→ Sales Bills</div>
-          </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--orange)', '--accent-glow': 'rgba(224,120,66,0.08)', cursor: 'pointer' }}
-            onClick={() => navigate('/admin/accounting/purchase-bills')}>
-            <div className="kpi-label">Purchase This Month 📥</div>
-            <div className="kpi-value" style={{ color: 'var(--orange)' }}>
-              {loading ? '—' : `₹${(stats.purchaseThisMonth / 100000).toFixed(1)}L`}
-            </div>
-            <div className="kpi-sub">{loading ? '…' : `₹${stats.purchaseThisMonth.toLocaleString()}`}</div>
-            <div className="kpi-change dn">→ Purchase Bills</div>
-          </div>
-          {/* Row 3: Outstanding */}
-          <div className="kpi-card" style={{ '--accent': 'var(--red)', '--accent-glow': 'rgba(239,68,68,0.08)', cursor: 'pointer', border: stats.outstandingReceivable > 0 ? '1px solid rgba(239,68,68,0.2)' : undefined }}
-            onClick={() => navigate('/admin/outstanding-receivable')}>
-            <div className="kpi-label">Outstanding Receivable ⚠</div>
-            <div className="kpi-value" style={{ color: stats.outstandingReceivable > 0 ? 'var(--red, #ef4444)' : 'var(--green)' }}>
-              {loading ? '—' : `₹${(stats.outstandingReceivable / 100000).toFixed(1)}L`}
-            </div>
-            <div className="kpi-sub">Customers owe you</div>
-            <div className="kpi-change">{stats.outstandingReceivable > 0 ? '→ Collect Now' : '✓ All Clear'}</div>
-          </div>
-          <div className="kpi-card" style={{ '--accent': 'var(--orange)', '--accent-glow': 'rgba(224,120,66,0.08)', cursor: 'pointer' }}
-            onClick={() => navigate('/admin/outstanding-payable')}>
-            <div className="kpi-label">Outstanding Payable 📤</div>
-            <div className="kpi-value" style={{ color: 'var(--orange)' }}>
-              {loading ? '—' : `₹${(stats.outstandingPayable / 100000).toFixed(1)}L`}
-            </div>
-            <div className="kpi-sub">You owe suppliers</div>
-            <div className="kpi-change">→ Pay Bills</div>
-          </div>
-          {/* Tally Sync Status */}
-          <div className="kpi-card" style={{ '--accent': 'var(--teal)', '--accent-glow': 'rgba(43,168,152,0.08)', cursor: 'pointer' }}
-            onClick={() => navigate('/admin/tally-sync')}>
-            <div className="kpi-label">Tally Sync</div>
-            <div className="kpi-value" style={{ color: tallyOnline ? 'var(--green)' : 'var(--red, #ef4444)', fontSize: 16 }}>
-              {tallyOnline === null ? '⏳ Checking…' : tallyOnline ? '✅ Online' : '❌ Offline'}
-            </div>
-            <div className="kpi-sub">
-              {stats.lastTallySync
-                ? `Last sync: ${new Date(stats.lastTallySync.synced_at).toLocaleTimeString()}`
-                : 'No sync yet today'}
-            </div>
-            <div className="kpi-change">
-              <button
-                onClick={syncBillsNow}
-                disabled={billsSyncing}
-                style={{ background:'none', border:'none', color:'inherit', cursor: billsSyncing ? 'wait' : 'pointer', padding:0, fontWeight:600, fontSize:'inherit' }}
-              >
-                {billsSyncing ? '⏳ Syncing…' : '→ Sync Bills Now'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Main two-column grid */}
-        <div className="g70-30">
-          {/* Recent Orders table */}
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Recent Orders</div>
-              <button className="btn btn-outline btn-sm" onClick={() => navigate('/admin/order-database/sales')}>View All →</button>
-            </div>
-            <div className="tbl">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Invoice</th>
-                    <th>Buyer</th>
-                    <th>Fabric</th>
-                    <th>Qty</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Due</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.length > 0 ? (
-                    recentOrders.map((o, i) => (
-                      <tr key={i}>
-                        <td><span className="mono" style={{ color: 'var(--teal)' }}>{o.order_number || `SRTPL/2026/${i + 1}`}</span></td>
-                        <td>{o.customer_name || 'Walk-in'}</td>
-                        <td><span className="badge bblue">Fabric</span></td>
-                        <td className="mono">{o.total_quantity || '—'} m</td>
-                        <td className="mono">₹{Number(o.final_amount || 0).toLocaleString()}</td>
-                        <td>{statusBadge(o.status)}</td>
-                        <td className="mono">—</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <>
-                      <tr>
-                        <td><span className="mono" style={{ color: 'var(--teal)' }}>SRTPL/2879/25-26</span></td>
-                        <td>Sharmi Creations, Mumbai</td>
-                        <td><span className="badge borg">Mill Print</span></td>
-                        <td className="mono">280 m</td>
-                        <td className="mono">₹44,800</td>
-                        <td><span className="badge bgreen">✓ Paid</span></td>
-                        <td className="mono">23-02-26</td>
-                      </tr>
-                      <tr>
-                        <td><span className="mono" style={{ color: 'var(--teal)' }}>SRTPL/2828/25-26</span></td>
-                        <td>DAILYSTYLISH, Delhi</td>
-                        <td><span className="badge bpurp">Schiffli Dyed</span></td>
-                        <td className="mono">120 m</td>
-                        <td className="mono">₹19,200</td>
-                        <td><span className="badge borg">Pending Pay</span></td>
-                        <td className="mono">15-03-26</td>
-                      </tr>
-                      <tr>
-                        <td><span className="mono" style={{ color: 'var(--teal)' }}>SRTPL/2901/25-26</span></td>
-                        <td>Ananya Textiles, Kolkata</td>
-                        <td><span className="badge bg">Schiffli Digital</span></td>
-                        <td className="mono">200 m</td>
-                        <td className="mono">₹31,000</td>
-                        <td><span className="badge bred">⚠ Overdue</span></td>
-                        <td className="mono" style={{ color: 'var(--red)' }}>10-02-26</td>
-                      </tr>
-                      <tr>
-                        <td><span className="mono" style={{ color: 'var(--teal)' }}>SRTPL/2960/25-26</span></td>
-                        <td>Mirakel Fashions, Surat</td>
-                        <td><span className="badge bblue">Solid Dyed</span></td>
-                        <td className="mono">150 m</td>
-                        <td className="mono">₹12,300</td>
-                        <td><span className="badge borg">Dispatched</span></td>
-                        <td className="mono">05-03-26</td>
-                      </tr>
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Tally Prime Sync card */}
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">Tally Prime Sync</div>
-              <span className="badge bgreen">Live AutoSync</span>
-            </div>
-            <div className="card-body">
-              <div className="sr"><span style={{ fontSize: 11 }}>Last Sync</span><span className="mono" style={{ fontSize: 10, color: 'var(--green)' }}>{format(new Date(), 'dd-MMM-yy HH:mm')}</span></div>
-              <div className="sr"><span style={{ fontSize: 11 }}>Vouchers Imported</span><span className="mono">34 entries</span></div>
-              <div className="sr"><span style={{ fontSize: 11 }}>Sales Invoices</span><span className="mono">12 invoices</span></div>
-              <div className="sr"><span style={{ fontSize: 11 }}>Purchase Entries</span><span className="mono">8 entries</span></div>
-              <div className="sr"><span style={{ fontSize: 11 }}>Pending in Tally</span><span className="mono" style={{ color: 'var(--orange)' }}>2 (manual review)</span></div>
-              <div className="div"></div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span className="sync-pill sp-tally">📊 Tally Prime</span>
-                <span className="sync-pill sp-drive">☁️ Google Drive</span>
-                <span className="sync-pill sp-bunny">🐰 Bunny CDN</span>
-                <span className="sync-pill sp-n8n">⚡ n8n</span>
-              </div>
-              <button
-                className="btn btn-outline btn-sm"
-                style={{ width: '100%', marginTop: 10 }}
-                onClick={() => window.open(TALLY_URL, '_blank')}
-              >
-                View Full Tally Log →
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── JOB WORK / MILL PROCESSING ── */}
-        <div style={{ marginTop:8 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:16 }}>🏭</span>
-              <span style={{ fontFamily:"'Playfair Display',serif", fontSize:15, fontWeight:700, color:'var(--text,#0B2E2B)' }}>
-                Job Work & Mill Processing
-              </span>
-            </div>
-            <div style={{ display:'flex', gap:6 }}>
-              <button onClick={()=>navigate('/admin/challans')} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(43,168,152,.1)', color:'#2BA898', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                📦 Challans
-              </button>
-              <button onClick={()=>navigate('/admin/manufacturing')} style={{ padding:'5px 12px', borderRadius:7, border:'none', background:'rgba(110,68,200,.1)', color:'#6E44C8', fontSize:11, fontWeight:700, cursor:'pointer' }}>
-                🏭 Mfg Entries
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:12 }}>
-            {[
-              { icon:'📦', label:'Challans Open', value:jobWorkStats.challansOpen, sub:`of ${jobWorkStats.challansTotal} total`, color:'#D4920A', link:'/admin/challans' },
-              { icon:'💰', label:'Fabric Value at Mill', value:`₹${Number(jobWorkStats.valueAtMill||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, sub:'Currently out for process', color:'#C9106E', link:'/admin/challans' },
-              { icon:'🎨', label:'Designs This Month', value:jobWorkStats.designsThisMonth, sub:'Design numbers generated', color:'#6E44C8', link:'/admin/manufacturing' },
-              { icon:'💎', label:'Process Value (Month)', value:`₹${Number(jobWorkStats.totalProcessValue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, sub:'Total value created', color:'#1E9E5A', link:'/admin/manufacturing' },
-            ].map((c,i)=>(
-              <div key={i} onClick={()=>navigate(c.link)} style={{ background:'var(--surface,#fff)', borderRadius:12, padding:'14px 16px', boxShadow:'0 2px 10px rgba(0,0,0,.07)', border:'1px solid rgba(43,168,152,.1)', cursor:'pointer', transition:'all .15s' }}
-                onMouseEnter={e=>e.currentTarget.style.transform='translateY(-2px)'}
-                onMouseLeave={e=>e.currentTarget.style.transform='translateY(0)'}>
-                <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8 }}>
-                  <div style={{ width:30, height:30, background:`${c.color}18`, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15 }}>{c.icon}</div>
-                  <div style={{ fontSize:10, fontWeight:700, color:'#6A9B95', textTransform:'uppercase', letterSpacing:'0.7px' }}>{c.label}</div>
-                </div>
-                <div style={{ fontSize:20, fontWeight:800, color:c.color, lineHeight:1 }}>{c.value}</div>
-                <div style={{ fontSize:10, color:'#94a3b8', marginTop:4 }}>{c.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pending Manufacturing Entry Warning */}
-          {jobWorkStats.pendingMfgEntry > 0 && (
-            <div onClick={()=>navigate('/admin/manufacturing')} style={{ background:'linear-gradient(135deg,rgba(239,68,68,.08),rgba(239,68,68,.04))', border:'1px solid rgba(239,68,68,.2)', borderRadius:10, padding:'10px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
-              <span style={{ fontSize:20 }}>⚡</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, color:'#ef4444', fontSize:13 }}>
-                  {jobWorkStats.pendingMfgEntry} Challan{jobWorkStats.pendingMfgEntry>1?'s':''} Pending Manufacturing Entry
-                </div>
-                <div style={{ fontSize:11, color:'#ef4444', opacity:0.7, marginTop:2 }}>
-                  Manufacturing Entry is compulsory for these — without it, design values won't appear in reports. Click to add.
-                </div>
-              </div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#ef4444' }}>→</div>
-            </div>
-          )}
-
-          {jobWorkStats.mfgEntriesToday > 0 && (
-            <div style={{ marginTop:8, background:'rgba(30,158,90,.06)', border:'1px solid rgba(30,158,90,.15)', borderRadius:8, padding:'8px 14px', fontSize:12, color:'#1E9E5A', fontWeight:600 }}>
-              ✅ {jobWorkStats.mfgEntriesToday} Manufacturing {jobWorkStats.mfgEntriesToday>1?'entries':'entry'} created today
-            </div>
-          )}
-        </div>
-
-      </div>
-    </div>
-  );
+const C = {
+  teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6',
+  gold:'#D4920A', goldLight:'#FEF9EC', border:'#D6EEE9',
+  text:'#0D2E2B', muted:'#4A7A74', error:'#D93A3A',
+  green:'#1E9E5A', purple:'#7C3AED', orange:'#C86020',
+  blue:'#2563EB', surface:'#fff',
 };
 
-export default AdminDashboard;
+function StatCard({ icon, label, value, sub, color, to, badge }) {
+  const nav = useNavigate();
+  return (
+    <div onClick={() => to && nav(to)} style={{
+      background:C.surface, border:`1.5px solid ${C.border}`, borderRadius:12,
+      padding:'16px 18px', position:'relative', overflow:'hidden',
+      cursor:to?'pointer':'default', transition:'all 0.2s',
+      borderTop:`3px solid ${color||C.teal}`,
+      boxShadow:'0 1px 4px rgba(43,168,152,.05)',
+    }}
+      onMouseEnter={e=>{if(to){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 6px 20px rgba(43,168,152,.12)';}}}
+      onMouseLeave={e=>{if(to){e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 1px 4px rgba(43,168,152,.05)';}}}
+    >
+      {badge && <div style={{ position:'absolute', top:10, right:12, padding:'2px 8px', borderRadius:20, background:`${color||C.teal}22`, color:color||C.teal, fontSize:9, fontWeight:800 }}>{badge}</div>}
+      <div style={{ fontSize:24, marginBottom:6 }}>{icon}</div>
+      <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:0.8 }}>{label}</div>
+      <div style={{ fontSize:28, fontWeight:800, color:C.tealDark, lineHeight:1.1, marginTop:2, fontFamily:'DM Sans,sans-serif' }}>
+        {value === null ? <span style={{ fontSize:16, color:C.muted }}>Loading…</span> : value}
+      </div>
+      {sub && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function QuickAction({ icon, label, to, color }) {
+  const nav = useNavigate();
+  return (
+    <button onClick={() => nav(to)} style={{
+      display:'flex', alignItems:'center', gap:10, padding:'11px 16px',
+      borderRadius:10, border:`1.5px solid ${color||C.border}`,
+      background:'#fff', cursor:'pointer', transition:'all 0.15s',
+      fontFamily:'inherit', width:'100%', textAlign:'left',
+    }}
+      onMouseEnter={e=>{e.currentTarget.style.background=`${color||C.teal}11`;e.currentTarget.style.borderColor=color||C.teal;}}
+      onMouseLeave={e=>{e.currentTarget.style.background='#fff';e.currentTarget.style.borderColor=color||C.border;}}
+    >
+      <span style={{ fontSize:20 }}>{icon}</span>
+      <span style={{ fontSize:13, fontWeight:600, color:C.text }}>{label}</span>
+    </button>
+  );
+}
+
+export default function AdminDashboard() {
+  const [counts, setCounts] = useState({
+    finish_fabrics: null, base_fabrics: null, designs: null,
+    purchase_bills: null, sales_bills: null, customers: null,
+    suppliers: null, agents: null, orders: null, pending_tally: null,
+    stock_today: null, outstanding: null,
+  });
+  const [tallyStatus, setTallyStatus] = useState('checking');
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [pendingItems, setPendingItems] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadCounts();
+    checkTally();
+    loadActivity();
+  }, []);
+
+  async function loadCounts() {
+    const today = new Date().toISOString().split('T')[0];
+    const [
+      { count: ff }, { count: bf }, { count: dd },
+      { count: pb }, { count: sb }, { count: cust },
+      { count: sup }, { count: ag }, { count: ord },
+      { count: pt }, { count: st }, { count: out },
+    ] = await Promise.all([
+      supabase.from('finish_fabrics').select('*',{count:'exact',head:true}).eq('is_active',true),
+      supabase.from('base_fabrics').select('*',{count:'exact',head:true}).not('status','eq','deleted'),
+      supabase.from('finish_fabric_designs').select('*',{count:'exact',head:true}).eq('is_active',true),
+      supabase.from('purchase_bills').select('*',{count:'exact',head:true}),
+      supabase.from('sales_bills').select('*',{count:'exact',head:true}),
+      supabase.from('customers').select('*',{count:'exact',head:true}).neq('business_type','supplier'),
+      supabase.from('customers').select('*',{count:'exact',head:true}).eq('business_type','supplier'),
+      supabase.from('sales_team').select('*',{count:'exact',head:true}),
+      supabase.from('orders').select('*',{count:'exact',head:true}),
+      supabase.from('tally_sync_errors').select('*',{count:'exact',head:true}).eq('resolved',false),
+      supabase.from('fabric_stock_live').select('*',{count:'exact',head:true}).eq('sync_date',today),
+      supabase.from('payment_followups').select('*',{count:'exact',head:true}),
+    ]);
+    setCounts({ finish_fabrics:ff||0, base_fabrics:bf||0, designs:dd||0, purchase_bills:pb||0, sales_bills:sb||0, customers:cust||0, suppliers:sup||0, agents:ag||0, orders:ord||0, pending_tally:pt||0, stock_today:st||0, outstanding:out||0 });
+  }
+
+  async function checkTally() {
+    try {
+      const r = await fetch(`https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health`, {
+        headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        signal: AbortSignal.timeout(8000)
+      });
+      const j = await r.json();
+      setTallyStatus(j.tally === 'online' ? 'online' : 'offline');
+    } catch { setTallyStatus('offline'); }
+  }
+
+  async function loadActivity() {
+    const [{ data: syncLog }, { data: fabrics }, { data: designs }, { data: bills }] = await Promise.all([
+      supabase.from('tally_sync_log').select('sync_type,tally_ok,created_at').order('created_at',{ascending:false}).limit(5),
+      supabase.from('finish_fabrics').select('item_name,created_at').order('created_at',{ascending:false}).limit(4),
+      supabase.from('finish_fabric_designs').select('design_no,color_name,created_at').order('created_at',{ascending:false}).limit(4),
+      supabase.from('purchase_bills').select('bill_number,supplier_name,created_at').order('created_at',{ascending:false}).limit(3),
+    ]);
+    const items = [
+      ...(syncLog||[]).map(s => ({ icon:'🔄', text:`Tally sync: ${s.sync_type}`, time:s.created_at, ok:s.tally_ok })),
+      ...(fabrics||[]).map(f => ({ icon:'🧵', text:`New fabric: ${f.item_name}`, time:f.created_at, ok:true })),
+      ...(designs||[]).map(d => ({ icon:'🎨', text:`Design ${d.design_no} — ${d.color_name||''}`, time:d.created_at, ok:true })),
+      ...(bills||[]).map(b => ({ icon:'📥', text:`Bill ${b.bill_number} from ${b.supplier_name}`, time:b.created_at, ok:true })),
+    ].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0,12);
+    setRecentActivity(items);
+
+    // Pending items
+    const [{ data: syncErrors }, { data: noDesigns }] = await Promise.all([
+      supabase.from('tally_sync_errors').select('sync_type,error_message').eq('resolved',false).limit(5),
+      supabase.from('finish_fabrics').select('id,item_name').eq('is_active',true).limit(100),
+    ]);
+    const pending = [];
+    if (syncErrors?.length) pending.push({ icon:'⚠️', text:`${syncErrors.length} unresolved Tally sync errors`, to:'/admin/tally-sync', urgent:true });
+    setPendingItems(pending);
+  }
+
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
+  const dateStr = now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  return (
+    <div style={{ fontFamily:"'DM Sans',Inter,sans-serif", padding:'24px 28px', background:'#F4FBFA', minHeight:'100vh' }}>
+
+      {/* Header */}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ fontSize:22, fontWeight:800, color:C.tealDark }}>{greeting}, Shrikumar 👋</div>
+        <div style={{ fontSize:13, color:C.muted, marginTop:2 }}>{dateStr} · Shreerang Trendz Pvt. Ltd.</div>
+        <div style={{ display:'flex', gap:8, marginTop:10, alignItems:'center' }}>
+          <div style={{ padding:'4px 12px', borderRadius:20, background:tallyStatus==='online'?'#d1fae5':'#fee2e2', color:tallyStatus==='online'?'#065f46':'#991b1b', fontSize:11, fontWeight:700 }}>
+            {tallyStatus==='online'?'● Tally Prime Online':'○ Tally Offline'}
+          </div>
+          {counts.pending_tally > 0 && (
+            <div style={{ padding:'4px 12px', borderRadius:20, background:'#fef3c7', color:'#92400e', fontSize:11, fontWeight:700 }} onClick={()=>navigate('/admin/tally-sync')} className="cursor-pointer">
+              ⚠ {counts.pending_tally} sync errors
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pending urgent items */}
+      {pendingItems.length > 0 && (
+        <div style={{ marginBottom:20 }}>
+          {pendingItems.map((p,i) => (
+            <div key={i} onClick={()=>p.to&&navigate(p.to)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 16px', background:'#fef3c7', borderRadius:10, marginBottom:6, cursor:'pointer', border:'1px solid #fbbf24' }}>
+              <span style={{ fontSize:18 }}>{p.icon}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:'#92400e' }}>{p.text}</span>
+              <span style={{ marginLeft:'auto', fontSize:11, color:'#b45309' }}>View →</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CATALOGUE STATS */}
+      <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
+        <span>📦 Catalogue Master</span>
+        <span style={{ flex:1, height:1, background:C.border, display:'block' }} />
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard icon="🧵" label="Finish Fabrics" value={counts.finish_fabrics} sub="Active fabric items" color={C.teal} to="/admin/fabric/finish" />
+        <StatCard icon="🔩" label="Base Fabrics" value={counts.base_fabrics} sub="Grey fabric master" color={C.blue} to="/admin/fabric/base-fabric-form" />
+        <StatCard icon="🎨" label="Design Numbers" value={counts.designs} sub="Across all fabrics" color={C.purple} to="/admin/design/upload" />
+        <StatCard icon="📦" label="Live Stock" value={counts.stock_today} sub="Items synced today" color={C.green} to="/admin/tally-sync" badge={tallyStatus==='online'?'LIVE':null} />
+      </div>
+
+      {/* ACCOUNTS STATS */}
+      <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:1.2, marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
+        <span>🧮 Accounts & Tally</span>
+        <span style={{ flex:1, height:1, background:C.border, display:'block' }} />
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard icon="📥" label="Purchase Bills" value={counts.purchase_bills} sub="Total in DB" color={C.blue} to="/admin/accounting/purchase-bills" />
+        <StatCard icon="📤" label="Sales Bills" value={counts.sales_bills} sub="Total in DB" color={C.green} to="/admin/accounting/sales-bills" />
+        <StatCard icon="👥" label="Customers" value={counts.customers} sub="Sundry debtors" color={C.teal} to="/admin/customers" />
+        <StatCard icon="🏭" label="Suppliers" value={counts.suppliers} sub="Sundry creditors" color={C.orange} to="/admin/tally-sync" />
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:24 }}>
+        <StatCard icon="🤝" label="Sales Agents" value={counts.agents} sub="Active field agents" color="#C9106E" to="/admin/tally-sync" />
+        <StatCard icon="📋" label="Orders" value={counts.orders} sub="Total sales orders" color={C.gold} to="/admin/orders" />
+        <StatCard icon="💰" label="Outstanding" value={counts.outstanding} sub="Bills being tracked" color={C.purple} to="/admin/outstanding-receivable" />
+      </div>
+
+      {/* BOTTOM: Quick Actions + Activity */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1.6fr', gap:20 }}>
+
+        {/* Quick Actions */}
+        <div style={{ background:'#fff', border:`1.5px solid ${C.border}`, borderRadius:12, padding:18 }}>
+          <div style={{ fontSize:12, fontWeight:800, color:C.tealDark, marginBottom:12 }}>⚡ Quick Actions</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+            <QuickAction icon="🧵" label="+ New Finish Fabric" to="/admin/fabric/finish-fabric-form" color={C.teal} />
+            <QuickAction icon="🔩" label="+ New Base Fabric" to="/admin/fabric/base-fabric-form" color={C.blue} />
+            <QuickAction icon="🎨" label="+ Upload Design" to="/admin/design/upload" color={C.purple} />
+            <QuickAction icon="📋" label="+ New Sales Order" to="/admin/orders/new" color={C.gold} />
+            <QuickAction icon="🔄" label="Sync Tally Now" to="/admin/tally-sync" color={C.green} />
+            <QuickAction icon="🧮" label="Open Cost Engine" to="/admin/cost/cost-sheet" color={C.orange} />
+            <QuickAction icon="🔖" label="Edit SKU Formula" to="/admin/settings/sku-formula" color={C.muted} />
+          </div>
+        </div>
+
+        {/* Activity Feed */}
+        <div style={{ background:'#fff', border:`1.5px solid ${C.border}`, borderRadius:12, padding:18 }}>
+          <div style={{ fontSize:12, fontWeight:800, color:C.tealDark, marginBottom:12, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span>📋 Recent Activity</span>
+            <span style={{ fontSize:10, color:C.muted, fontWeight:500 }}>Auto-refreshes</span>
+          </div>
+          {recentActivity.length === 0 ? (
+            <div style={{ textAlign:'center', padding:'24px', color:C.muted, fontSize:13 }}>No recent activity</div>
+          ) : (
+            <div style={{ maxHeight:380, overflowY:'auto' }}>
+              {recentActivity.map((item, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 10px', borderRadius:8, marginBottom:5, background:'#f8fbfa', border:`1px solid ${C.border}` }}>
+                  <span style={{ fontSize:16, flexShrink:0 }}>{item.icon}</span>
+                  <span style={{ fontSize:12, color:C.text, flex:1 }}>{item.text}</span>
+                  <span style={{ fontSize:10, color:C.muted, whiteSpace:'nowrap' }}>
+                    {new Date(item.time).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+                  </span>
+                  {item.ok === false && <span style={{ width:8, height:8, borderRadius:'50%', background:C.error, flexShrink:0 }} />}
+                  {item.ok === true && <span style={{ width:8, height:8, borderRadius:'50%', background:C.green, flexShrink:0 }} />}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}

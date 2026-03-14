@@ -33,6 +33,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Dashboard Ã¢â€â‚¬Ã¢â€â‚¬
 import AdminDashboard from '@/pages/admin/AdminDashboard';
+import DesignPricingPage from '@/pages/admin/fabric/DesignPricingPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Fabric Master Ã¢â€â‚¬Ã¢â€â‚¬
 import BaseFabricForm from '@/pages/admin/fabric/BaseFabricForm';
 import FinishFabricForm from '@/pages/admin/fabric/FinishFabricForm';
@@ -157,6 +158,7 @@ const App = () => {
                     {/* Fabric Master */}
                     <Route path="fabric/base-fabric-form" element={<BaseFabricForm />} />
                     <Route path="fabric/finish-fabric-form" element={<FinishFabricForm />} />
+                    <Route path="fabric/finish-fabric-form/:fabricId/designs" element={<DesignPricingPage />} />
                     <Route path="fabric/finish" element={<FinishFabricDashboard />} />
                     <Route path="fabric/finish/new" element={<FinishFabricForm />} />
                     <Route path="fabric/finish/:id/edit" element={<FinishFabricForm />} />

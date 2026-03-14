@@ -23,6 +23,7 @@ const NAV_GROUPS = [
     items: [
       { icon: '🧵', label: 'Base Fabric', to: '/admin/fabric/base-fabric-form' },
       { icon: '🔄', label: 'Finish Fabric', to: '/admin/fabric/finish-fabric-form' },
+      { icon: '💰', label: 'Designs & Pricing', to: '/admin/fabric/finish' },
       { icon: '🎨', label: 'Design Upload', to: '/admin/design/upload', badge: 'NEW' },
       { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity', badge: 'AI' },
       { icon: '📦', label: 'Bulk Import', to: '/admin/fabric-master/bulk-import' },

@@ -1,67 +1,120 @@
 // Vercel API Route — WhatsApp Bot for Shreerang Trendz
-// Replaces n8n — runs directly on Vercel serverless
-
-const WA_TOKEN = 'EAAKigiKCL4gBQwTbZCZCZAGKoyMkvLWZBGW91JowEdRqhZAAgJmr0oAFsmklZB0cEZC9BIx8bQ4MkWoZCmNE6Gpcubom3zEsyicNByu2wiE35LujumllbekSySFSms9yl77uvAX83ntx7oUqj9paZBZAbtrnQeqgUl3SudiGS90hspkPaGXjYeXZAwfUb2Uhd4xjL2cxwZDZD';
-const PHONE_ID = '868455029689394';
-const ADMIN_PHONE = '917567870000';
-const SUPABASE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzQ0OTg1NSwiZXhwIjoyMDc5MDI1ODU1fQ.fcHpUL4HXJZyW64vtKhZHOPKtYXBIfGeUbBlkkz1oGg';
-const GEMINI_KEY = 'AIzaSyA86vpx6KothltoItlZa-oL3CVvgjnFvmw';
-const VERIFY_TOKEN = 'shreerang2026';
+const WA_TOKEN = process.env.WHATSAPP_TOKEN || 'EAAKigiKCL4gBQwTbZCZCZAGKoyMkvLWZBGW91JowEdRqhZAAgJmr0oAFsmklZB0cEZC9BIx8bQ4MkWoZCmNE6Gpcubom3zEsyicNByu2wiE35LujumllbekSySFSms9yl77uvAX83ntx7oUqj9paZBZAbtrnQeqgUl3SudiGS90hspkPaGXjYeXZAwfUb2Uhd4xjL2cxwZDZD';
+const PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '868455029689394';
+const ADMIN_PHONE = '917567860000'; // ✅ FIXED: Shrikumar Maru
+const MANISHA_PHONE = '917567870000'; // Manisha Maru
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zdekydcscwhuusliwqaz.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzQ0OTg1NSwiZXhwIjoyMDc5MDI1ODU1fQ.fcHpUL4HXJZyW64vtKhZHOPKtYXBIfGeUbBlkkz1oGg';
+const GEMINI_KEY = process.env.GEMINI_API_KEY || 'AIzaSyA86vpx6KothltoItlZa-oL3CVvgjnFvmw';
+const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'shreerang_secure_verify_2026';
 const WA_API = `https://graph.facebook.com/v18.0/${PHONE_ID}/messages`;
 const WA_HEADERS = { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' };
 
+// Office team phones — these are staff, not customers
 const TEAM = {
-  '917567870000': 'admin', '917874220000': 'dispatch',
-  '917874200054': 'sales1', '917874200099': 'sales2', '917874200053': 'sales3'
+  '917567860000': 'admin',    // Shrikumar
+  '917567870000': 'admin',    // Manisha
+  '917874200033': 'dispatch', // Dispatch WhatsApp
 };
 
 async function sendText(to, body) {
-  const r = await fetch(WA_API, {
-    method: 'POST', headers: WA_HEADERS,
-    body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } })
-  });
-  return r.json();
+  try {
+    const r = await fetch(WA_API, {
+      method: 'POST', headers: WA_HEADERS,
+      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } })
+    });
+    return r.json();
+  } catch (e) { console.error('sendText error:', e); }
 }
 
 async function sendButtons(to, bodyText, buttons) {
-  const r = await fetch(WA_API, {
-    method: 'POST', headers: WA_HEADERS,
-    body: JSON.stringify({
-      messaging_product: 'whatsapp', to, type: 'interactive',
-      interactive: {
-        type: 'button',
-        body: { text: bodyText },
-        action: { buttons: buttons.map(b => ({ type: 'reply', reply: { id: b[0], title: b[1] } })) }
-      }
-    })
-  });
-  return r.json();
+  try {
+    const r = await fetch(WA_API, {
+      method: 'POST', headers: WA_HEADERS,
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to, type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: { text: bodyText },
+          action: { buttons: buttons.slice(0, 3).map(b => ({ type: 'reply', reply: { id: b[0], title: b[1].substring(0, 20) } })) }
+        }
+      })
+    });
+    return r.json();
+  } catch (e) { console.error('sendButtons error:', e); }
 }
 
-async function saveToDb(phone, text, direction, msgType, lang) {
+async function saveToDb(phone, text, direction, msgType, lang, extra = {}) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_messages`, {
       method: 'POST',
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ phone_number: phone, message_text: text, direction, message_type: msgType, language: lang, created_at: new Date().toISOString() })
+      body: JSON.stringify({ phone_number: phone, message_text: text, direction, message_type: msgType, language: lang, created_at: new Date().toISOString(), ...extra })
     });
   } catch(e) { console.error('DB save error:', e); }
 }
 
+async function getCustomerInfo(phone) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/customers?phone=eq.${phone}&select=id,name,firm_name,price_tier&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await r.json();
+    return data?.[0] || null;
+  } catch { return null; }
+}
+
+async function createLeadIfNew(phone, name, interestTag) {
+  try {
+    // Check if customer exists
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/customers?phone=eq.${phone}&select=id&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const existing = await r.json();
+    if (existing?.length > 0) return; // Already exists
+
+    // Create new lead
+    await fetch(`${SUPABASE_URL}/rest/v1/customers`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        name, phone, source: 'whatsapp_bot', status: 'lead',
+        fabric_interest: interestTag, created_at: new Date().toISOString()
+      })
+    });
+  } catch(e) { console.error('createLead error:', e); }
+}
+
 async function geminiReply(text, name, lang) {
   try {
-    const prompt = `You are WhatsApp sales assistant for Shreerang Trendz, fabric business in Surat India. Fabrics: Mill Print, Solid Dyed, Digital Print, Embroidery, Schiffli Hakoba. Customer: ${name}, Language: ${lang}, Message: "${text}". Reply warmly in the SAME language (max 60 words). Just the reply text.`;
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`, {
+    const prompt = `You are a professional WhatsApp sales assistant for Shreerang Trendz, a premium fabric business in Surat, India. 
+Fabrics: Mill Print, Solid Dyed, Digital Print (Polyester & Pure), Embroidery, Schiffli, Hakoba.
+Customer Name: ${name}
+Language to reply in: ${lang === 'hi' ? 'Hindi' : lang === 'gu' ? 'Gujarati' : 'English'}
+Customer message: "${text}"
+
+Reply warmly, professionally, in the SAME language as the customer (${lang}). Max 80 words. Just the reply text, no preamble.`;
+    
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 200, temperature: 0.4 } })
     });
     const d = await r.json();
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
   } catch(e) { return ''; }
 }
 
+async function getOrderStatus(phone) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/sales_orders?customer_phone=eq.${phone}&select=order_number,status,total_amount,created_at&order=created_at.desc&limit=3`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    return await r.json();
+  } catch { return []; }
+}
+
 export default async function handler(req, res) {
+  // ── WEBHOOK VERIFICATION ──
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -74,6 +127,7 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).end();
 
+  // Respond immediately to Meta (must be <5s)
   res.status(200).json({ status: 'EVENT_RECEIVED' });
 
   try {
@@ -92,96 +146,188 @@ export default async function handler(req, res) {
     else if (msgType === 'interactive') {
       const ir = message.interactive;
       if (ir.type === 'button_reply') { interactiveId = ir.button_reply.id; text = ir.button_reply.id; }
+      else if (ir.type === 'list_reply') { interactiveId = ir.list_reply.id; text = ir.list_reply.id; }
     }
 
+    // Detect language
     const lang = /[\u0A80-\u0AFF]/.test(text) ? 'gu' : /[\u0900-\u097F]/.test(text) ? 'hi' : 'en';
-    const role = TEAM[phone] || 'customer';
+    const isStaff = !!TEAM[phone];
     const t = text.toLowerCase().trim();
 
-    await saveToDb(phone, text || mediaId || '', 'inbound', msgType, lang);
+    // Save to DB
+    await saveToDb(phone, text || mediaId || '', 'inbound', msgType, lang, { contact_name: name });
 
-    if (role !== 'customer') return;
+    // Skip bot for staff messages
+    if (isStaff) return;
 
-    const GREETINGS = ['hi','hello','hey','hii','namaskar','namaste','kem cho','start','salam','good morning','good evening'];
+    const GREETINGS = ['hi','hello','hey','hii','namaskar','namaste','kem cho','start','salam',
+      'good morning','good evening','good afternoon','kem che','hanji','ji'];
     const isGreeting = !text || GREETINGS.some(g => t === g || t.startsWith(g + ' ') || t.startsWith(g + ','));
 
+    // ── ORDER STATUS CHECK ──
+    if (t.includes('order') || t.includes('mara order') || t.includes('status') || interactiveId === 'ORDER_STATUS') {
+      const orders = await getOrderStatus(phone);
+      if (orders.length === 0) {
+        await sendText(phone, lang === 'hi' ? `📦 आपका कोई order नहीं मिला।\n\nNew order के लिए बताएं — कौनसा fabric चाहिए?` :
+          lang === 'gu' ? `📦 Tamaro koi order nathi malyo.\n\nNew order mate janavjo — kai fabric joie?` :
+          `📦 No orders found for your number.\n\nTo place a new order, tell us which fabric you need!`);
+      } else {
+        const lines = orders.map((o, i) => `${i+1}. Order ${o.order_number} — ${o.status?.toUpperCase()} — ₹${Number(o.total_amount||0).toLocaleString('en-IN')}`).join('\n');
+        await sendText(phone, `📦 *Your Recent Orders:*\n\n${lines}\n\nFor details, call: +91-7874200033`);
+      }
+      return;
+    }
+
+    // ── PRICE ENQUIRY ──
+    if (t.includes('price') || t.includes('rate') || t.includes('bhav') || t.includes('daam') || t.includes('kitna') || t.includes('cost') || interactiveId === 'PRICE_CHECK') {
+      await sendButtons(phone,
+        lang === 'hi' ? `💰 Price जानने के लिए Quantity बताएं:` :
+        lang === 'gu' ? `💰 Price mate quantity janavjo:` :
+        `💰 To get pricing, please specify quantity:`,
+        [['PRICE_LUMP','Lump (50+ mtrs)'],['PRICE_CUT','Cut Pack (20 mtr)'],['PRICE_SAMPLE','Sample (5 mtr)']]
+      );
+      return;
+    }
+
+    if (interactiveId.startsWith('PRICE_')) {
+      const qty = interactiveId === 'PRICE_LUMP' ? 'Lump (50+ mtrs)' : interactiveId === 'PRICE_CUT' ? 'Cut Pack (20 mtrs)' : 'Sample';
+      await sendText(phone, lang === 'hi' ? `✅ *${qty}* के लिए\n\n${['Mill Print','Digital Print','Solid Dyed','Schiffli','Hakoba'].map((f,i)=>`${i+1}️⃣ ${f}`).join('\n')}\n\nWhich fabric? जवाब में number भेजें।` :
+        `✅ *${qty}* pricing:\n\n${['Mill Print','Digital Print','Solid Dyed','Schiffli','Hakoba'].map((f,i)=>`${i+1}️⃣ ${f}`).join('\n')}\n\nReply with number for price.`);
+      await sendText(ADMIN_PHONE, `💰 *Price Enquiry*\nFrom: ${name} (+${phone})\nQty type: ${qty}\n\nKindly send price list to customer.`);
+      return;
+    }
+
+    // ── GREETING → MAIN MENU ──
     if (isGreeting) {
-      const greetHi = `\u0928\u092e\u0938\u094d\u0924\u0947 *${name}* \u091c\u0940! \ud83d\ude4f\n\nShreerang Trendz \u092e\u0947\u0902 \u0906\u092a\u0915\u093e \u0938\u094d\u0935\u093e\u0917\u0924 \u0939\u0948\u0964\n\u0915\u094c\u0928\u0938\u0940 fabric category \u091a\u093e\u0939\u093f\u090f?\n\n1\ufe0f\u20e3 Mill Print / Solid Dyed\n2\ufe0f\u20e3 Digital Print\n3\ufe0f\u20e3 Embroidery\n4\ufe0f\u20e3 Schiffli / Hakoba`;
-      const greetGu = `\u0aa8\u0aae\u0ab8\u0acd\u0aa4\u0ac7 *${name}* ! \ud83d\ude4f\n\nShreerang Trendz \u0aae\u0abe\u0a82 \u0a86\u0aaa\u0aa8\u0ac1\u0a82 \u0ab8\u0acd\u0ab5\u0abe\u0a97\u0aa4!\nKai category joie che?\n\n1\ufe0f\u20e3 Mill Print / Solid\n2\ufe0f\u20e3 Digital Print\n3\ufe0f\u20e3 Embroidery\n4\ufe0f\u20e3 Schiffli / Hakoba`;
-      const greetEn = `Welcome *${name}*! \ud83d\ude4f\n\nThank you for contacting *Shreerang Trendz*.\nWhich fabric are you looking for?\n\n1\ufe0f\u20e3 Mill Print / Solid Dyed\n2\ufe0f\u20e3 Digital Print\n3\ufe0f\u20e3 Embroidery\n4\ufe0f\u20e3 Schiffli / Hakoba`;
-      const greetMsg = lang === 'hi' ? greetHi : lang === 'gu' ? greetGu : greetEn;
-      await sendButtons(phone, greetMsg, [['MP_START','Mill Print / Solid'],['DP_START','Digital Print'],['EMB_START','Embroidery']]);
+      const customer = await getCustomerInfo(phone);
+      const customerGreet = customer ? ` *${customer.name}*` : ` *${name}*`;
+      
+      const greetMsg = lang === 'hi' ?
+        `नमस्ते${customerGreet} जी! 🙏\n\nShreerang Trendz में आपका स्वागत है। 🧵✨\n_Premium Fabrics from Surat_\n\nकौनसा fabric चाहिए?` :
+        lang === 'gu' ?
+        `નમસ્તે${customerGreet}! 🙏\n\nShreerang Trendz માં આપનું સ્વાગત! 🧵✨\n_Premium Fabrics from Surat_\n\nKai fabric joie?` :
+        `Welcome${customerGreet}! 🙏\n\n*Shreerang Trendz* — Premium Fabrics from Surat 🧵✨\n\nWhat fabric are you looking for?`;
+
+      await sendButtons(phone, greetMsg, [
+        ['CAT_MILL','Mill Print / Solid'],
+        ['CAT_DIGITAL','Digital Print'],
+        ['CAT_EMB','Embroidery/Schiffli']
+      ]);
+
+      // Create lead if new
+      await createLeadIfNew(phone, name, 'enquiry');
       return;
     }
 
-    if (interactiveId.startsWith('MP_') || t.includes('mill print') || t.includes('solid dyed') || t === '1') {
-      if (interactiveId === 'MP_START' || t === '1' || (!interactiveId && (t.includes('mill') || t.includes('solid')))) {
-        const body = lang==='hi' ? 'Mill Print / Solid Dyed \u2705\n\n\u0915\u094c\u0928\u0938\u0940 Width \u091a\u093e\u0939\u093f\u090f?' : lang==='gu' ? 'Mill Print / Solid \u2705\nKai Width joie?' : 'Mill Print / Solid Dyed \u2705\n\nWhat width do you need?';
-        await sendButtons(phone, body, [['MP_W44','44 inch'],['MP_W58','58 inch'],['MP_W60','60 inch']]);
-      } else if (interactiveId.startsWith('MP_W')) {
-        const width = interactiveId.replace('MP_W','');
-        const body = lang==='hi' ? `Width: ${width}" \u2705\n\nFabric \u0915\u093e type \u092c\u0924\u093e\u090f\u0902:` : `Width: ${width}" \u2705\n\nFabric type?`;
-        await sendButtons(phone, body, [['MP_REG','Regular'],['MP_DIS','Discharge'],['MP_PREM','Premium']]);
-      } else {
-        const tag = interactiveId.replace('MP_','') || t;
-        await sendText(phone, lang==='hi' ? `\u2705 Mill Print | ${tag}\n\n\u0939\u092e\u093e\u0930\u0940 team \u091c\u0932\u094d\u0926 designs share \u0915\u0930\u0947\u0917\u0940! \ud83d\ude4f` : lang==='gu' ? `\u2705 Mill Print | ${tag}\n\nAmare team designs share karshe. \ud83d\ude4f` : `\u2705 Mill Print | ${tag}\n\nOur team will share designs shortly! \ud83d\ude4f`);
-        await sendText(ADMIN_PHONE, `\ud83d\udd14 *Mill Print Enquiry*\nFrom: ${name} (+${phone})\nType: ${tag}\n\nReply: ASSIGN_1 / ASSIGN_2 / ASSIGN_3`);
-      }
+    // ── MILL PRINT / SOLID DYED ──
+    if (interactiveId === 'CAT_MILL' || t === '1' || (!interactiveId && (t.includes('mill') || t.includes('solid') || t.includes('plain')))) {
+      await sendButtons(phone,
+        lang === 'hi' ? `Mill Print / Solid Dyed ✅\n\nWidth चाहिए?` :
+        lang === 'gu' ? `Mill Print / Solid ✅\nKai Width joie?` :
+        `Mill Print / Solid Dyed ✅\n\nWhich width do you need?`,
+        [['MP_44','44 inch'],['MP_58','58 inch'],['MP_60','60 inch']]
+      );
+      await createLeadIfNew(phone, name, 'Mill Print');
       return;
     }
 
-    if (interactiveId.startsWith('DP_') || t.includes('digital') || t === '2') {
-      if (interactiveId === 'DP_START' || t === '2' || (!interactiveId && t.includes('digital'))) {
-        const body = lang==='hi' ? 'Digital Print \u2705\n\nBase fabric \u0915\u094c\u0928\u0938\u0940?' : 'Digital Print \u2705\n\nWhich base fabric?';
-        await sendButtons(phone, body, [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base']]);
-      } else if (interactiveId === 'DP_POLY' || interactiveId === 'DP_PURE') {
-        const base = interactiveId === 'DP_POLY' ? 'Polyester' : 'Pure';
-        const body = `Digital | ${base} \u2705\n\nDesign style?`;
-        await sendButtons(phone, body, [['DP_ALLOVER','Allover'],['DP_KURTI','Kurti Pattern'],['DP_COORD','Co-ord Sets']]);
-      } else {
-        const style = interactiveId.replace('DP_','') || 'Allover';
-        await sendText(phone, lang==='hi' ? `\u2705 Digital | ${style}\n\n\u0915\u093f\u0924\u0928\u0947 meter? Photo \u092d\u0947\u091c\u0947\u0902 \ud83d\udcf8` : `\u2705 Digital | ${style}\n\nHow many meters? Send photo \ud83d\udcf8`);
-        await sendText(ADMIN_PHONE, `\ud83d\udd14 *Digital Print Enquiry*\nFrom: ${name} (+${phone})\nStyle: ${style}`);
-      }
+    if (interactiveId.startsWith('MP_')) {
+      const width = interactiveId.replace('MP_','');
+      await sendButtons(phone,
+        `Width: ${width}" ✅\n\nFabric type?`,
+        [['MPT_REG','Regular'],['MPT_DIS','Discharge'],['MPT_PREM','Premium']]
+      );
       return;
     }
 
-    if (interactiveId.startsWith('EMB_') || t.includes('embroid') || t === '3') {
-      if (interactiveId === 'EMB_START' || t === '3' || (!interactiveId && t.includes('embroid'))) {
-        const body = lang==='hi' ? 'Embroidery \u2705\n\n\u0915\u094c\u0928\u0938\u093e style?' : 'Embroidery \u2705\n\nWhich style?';
-        await sendButtons(phone, body, [['EMB_ALLOVER','Allover'],['EMB_PATTA','Patta Allover'],['EMB_ANARKALI','Anarkali']]);
-      } else {
-        const style = interactiveId.replace('EMB_','') || t;
-        await sendText(phone, lang==='hi' ? `\u2705 Embroidery | ${style}\n\nFabric + quantity \u092c\u0924\u093e\u090f\u0902 \u092f\u093e photo \ud83d\udcf8` : `\u2705 Embroidery | ${style}\n\nShare fabric + quantity or photo \ud83d\udcf8`);
-        await sendText(ADMIN_PHONE, `\ud83d\udd14 *Embroidery Enquiry*\nFrom: ${name} (+${phone})\nStyle: ${style}`);
-      }
+    if (interactiveId.startsWith('MPT_')) {
+      const type = interactiveId.replace('MPT_','');
+      await sendText(phone, lang === 'hi' ?
+        `✅ Mill Print | ${type}\n\nHamari team designs share karegi! 🙏\n\nQuantity kitni chahiye? (meters mein batayein)` :
+        `✅ Mill Print | ${type}\n\nOur team will share designs shortly! 🙏\n\nHow many meters do you need?`);
+      await sendText(ADMIN_PHONE, `🔔 *Mill Print Enquiry*\nCustomer: ${name}\nPhone: +${phone}\nType: ${type}\n\n👉 Send designs & price list`);
       return;
     }
 
-    if (t.includes('schiffli') || t.includes('hakoba') || t === '4') {
-      await sendText(phone, lang==='hi' ? `\u2705 Schiffli/Hakoba\n\nStyle + quantity \u092c\u0924\u093e\u090f\u0902 \u092f\u093e photo \ud83d\udcf8` : `\u2705 Schiffli/Hakoba\n\nShare style + quantity or send photo \ud83d\udcf8`);
-      await sendText(ADMIN_PHONE, `\ud83d\udd14 *Schiffli Enquiry*\nFrom: ${name} (+${phone})`);
+    // ── DIGITAL PRINT ──
+    if (interactiveId === 'CAT_DIGITAL' || t === '2' || (!interactiveId && t.includes('digital'))) {
+      await sendButtons(phone,
+        lang === 'hi' ? `Digital Print ✅\n\nBase fabric kaunsi?` :
+        lang === 'gu' ? `Digital Print ✅\nBase fabric kai?` :
+        `Digital Print ✅\n\nWhich base fabric?`,
+        [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base'],['DP_BOTH','Both']]
+      );
+      await createLeadIfNew(phone, name, 'Digital Print');
       return;
     }
 
-    if (t.includes('price') || t.includes('rate') || t.includes('bhav') || t.includes('daam') || t.includes('kitna')) {
-      const body = lang==='hi' ? `\ud83d\udcb0 Price Enquiry\n\nQty type \u092c\u0924\u093e\u090f\u0902:` : `\ud83d\udcb0 Price Enquiry\n\nQty type?`;
-      await sendButtons(phone, body, [['PRICE_LUMP','Lump (50+ mtr)'],['PRICE_CUT','Cut Pack (20 mtr)']]);
+    if (interactiveId.startsWith('DP_')) {
+      const base = interactiveId === 'DP_POLY' ? 'Polyester' : interactiveId === 'DP_PURE' ? 'Pure Silk' : 'Both';
+      await sendButtons(phone,
+        `Digital | ${base} ✅\n\nDesign style?`,
+        [['DPS_ALLOVER','Allover Pattern'],['DPS_KURTI','Kurti Panel'],['DPS_COORD','Co-ord Sets']]
+      );
       return;
     }
 
+    if (interactiveId.startsWith('DPS_')) {
+      const style = interactiveId.replace('DPS_','');
+      await sendText(phone, lang === 'hi' ?
+        `✅ Digital | ${style}\n\nKitne meter chahiye? 📐\nYa photo bhejein 📸` :
+        `✅ Digital | ${style}\n\nHow many meters? 📐\nOr send a photo 📸`);
+      await sendText(ADMIN_PHONE, `🔔 *Digital Print Enquiry*\nCustomer: ${name}\nPhone: +${phone}\nStyle: ${style}\n\n👉 Send catalogue & price`);
+      return;
+    }
+
+    // ── EMBROIDERY / SCHIFFLI ──
+    if (interactiveId === 'CAT_EMB' || t === '3' || (!interactiveId && (t.includes('embroid') || t.includes('schiffli') || t.includes('hakoba')))) {
+      await sendButtons(phone,
+        lang === 'hi' ? `Embroidery/Schiffli ✅\n\nKaunsa type?` :
+        `Embroidery/Schiffli ✅\n\nWhich type?`,
+        [['EMB_ALLOVER','Allover Embroidery'],['EMB_SCHIFFLI','Schiffli'],['EMB_HAKOBA','Hakoba']]
+      );
+      await createLeadIfNew(phone, name, 'Embroidery');
+      return;
+    }
+
+    if (interactiveId.startsWith('EMB_')) {
+      const type = interactiveId.replace('EMB_','');
+      await sendText(phone, lang === 'hi' ?
+        `✅ ${type}\n\nFabric + quantity batayein ya photo bhejein 📸\nHamari team best designs share karegi 🙏` :
+        `✅ ${type}\n\nShare fabric + quantity or send a photo 📸\nOur team will suggest best designs 🙏`);
+      await sendText(ADMIN_PHONE, `🔔 *${type} Enquiry*\nCustomer: ${name}\nPhone: +${phone}\n\n👉 Share relevant designs`);
+      return;
+    }
+
+    // ── IMAGE RECEIVED ──
     if (msgType === 'image') {
-      await sendText(phone, lang==='hi' ? `\u2705 Design photo \u092e\u093f\u0932 \u0917\u0908! \ud83d\udcf8\n\nTeam similar designs share \u0915\u0930\u0947\u0917\u0940\u0964 Kitne meter chahiye?` : `\u2705 Design photo received! \ud83d\udcf8\n\nOur team will find similar designs. How many meters?`);
-      await sendText(ADMIN_PHONE, `\ud83d\udcf8 *Design Photo*\nFrom: ${name} (+${phone})\nMedia ID: ${mediaId || 'N/A'}`);
+      await sendText(phone, lang === 'hi' ?
+        `✅ Design photo मिल गई! 📸\n\nHamari team similar designs dhundh ke share karegi.\nKitne meter chahiye?` :
+        lang === 'gu' ?
+        `✅ Design photo mali! 📸\n\nAmare team similar designs share karshe.\nKetla meter joie?` :
+        `✅ Design photo received! 📸\n\nOur team will find similar designs for you.\nHow many meters do you need?`);
+      await sendText(ADMIN_PHONE, `📸 *Design Photo Received*\nFrom: ${name} (+${phone})\nMedia ID: ${mediaId}\n\n👉 Find similar designs & respond`);
       return;
     }
 
+    // ── PORTAL / CATALOGUE LINK ──
+    if (t.includes('catalogue') || t.includes('catalog') || t.includes('portal') || t.includes('website') || t.includes('link')) {
+      await sendText(phone, lang === 'hi' ?
+        `🌐 *Online Catalogue & Portal*\n\nhttps://www.shreerangtrendz.com\n\nPortal login ke liye Register karein ya apna phone number share karein — hum access denge! 🙏` :
+        `🌐 *Online Catalogue & Portal*\n\nhttps://www.shreerangtrendz.com\n\nRegister to access full wholesale catalogue & place orders online! 🙏`);
+      return;
+    }
+
+    // ── FALLBACK → GEMINI AI ──
     let reply = await geminiReply(text, name, lang);
     if (!reply) {
-      reply = lang === 'hi' ? '\u0928\u092e\u0938\u094d\u0924\u0947! \u0939\u092e\u093e\u0930\u0940 team \u091c\u0932\u094d\u0926 \u0906\u092a\u0938\u0947 \u0938\u0902\u092a\u0930\u094d\u0915 \u0915\u0930\u0947\u0917\u0940\u0964 \ud83d\ude4f' : lang === 'gu' ? 'Namaste! Amare team tamaro contact karshE. \ud83d\ude4f' : 'Thank you for reaching out! Our team will contact you shortly. \ud83d\ude4f';
+      reply = lang === 'hi' ? `नमस्ते! हमारी team जल्द आपसे संपर्क करेगी। 🙏` :
+              lang === 'gu' ? `Namaste! Amare team tamaro contact karshe. 🙏` :
+              `Thank you for reaching out! Our team will contact you shortly. 🙏`;
     }
     await sendText(phone, reply);
-    await sendText(ADMIN_PHONE, `\ud83d\udce9 *Other Enquiry*\nFrom: ${name} (+${phone})\n"${text}"\nBot: "${reply.substring(0,80)}"`);
+    await saveToDb(phone, reply, 'outbound', 'text', lang, { contact_name: 'Bot' });
+    await sendText(ADMIN_PHONE, `📩 *Other Enquiry*\nFrom: ${name} (+${phone})\n"${text}"\n\n🤖 Bot replied: "${reply.substring(0,80)}..."`);
 
   } catch (err) {
     console.error('Webhook error:', err);

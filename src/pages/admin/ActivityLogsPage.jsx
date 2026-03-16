@@ -14,13 +14,13 @@ export default function ActivityLogsPage() {
     // Pull recent activity from tally_sync_log + sales_orders + quotations
     const [{ data: syncLogs }, { data: orders }, { data: bills }, { data: quotes }] = await Promise.all([
       supabase.from('tally_sync_log').select('sync_type,status,records_synced,synced_at').order('synced_at',{ascending:false}).limit(20),
-      supabase.from('sales_orders').select('order_number,customer_name,status,created_at').order('created_at',{ascending:false}).limit(10),
+      supabase.from('sales_orders').select('order_no,party_name,party_details,status,created_at').order('created_at',{ascending:false}).limit(10),
       supabase.from('purchase_bills').select('bill_number,supplier_name,total_amount,created_at').order('created_at',{ascending:false}).limit(10),
       supabase.from('quotations').select('quotation_number,party_name,status,created_at').order('created_at',{ascending:false}).limit(10),
     ]);
     const allLogs = [
       ...(syncLogs||[]).map(l=>({ type:'sync', icon:'🔄', title:`Tally Sync — ${l.sync_type}`, sub:`${l.records_synced} records · ${l.status}`, time:l.synced_at, status:l.status })),
-      ...(orders||[]).map(o=>({ type:'order', icon:'📋', title:`Order ${o.order_number||'—'}`, sub:`${o.customer_name} · ${o.status}`, time:o.created_at, status:o.status })),
+      ...(orders||[]).map(o=>({ type:'order', icon:'📋', title:`Order ${o.order_no||'—'}`, sub:`${o.party_name || o.party_details?.name || 'Unknown'} · ${o.status}`, time:o.created_at, status:o.status })),
       ...(bills||[]).map(b=>({ type:'purchase', icon:'🛒', title:`Purchase Bill ${b.bill_number}`, sub:`${b.supplier_name} · ₹${Number(b.total_amount||0).toLocaleString('en-IN')}`, time:b.created_at, status:'success' })),
       ...(quotes||[]).map(q=>({ type:'quote', icon:'📋', title:`Quotation ${q.quotation_number}`, sub:`${q.party_name} · ${q.status}`, time:q.created_at, status:q.status })),
     ].sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,50);

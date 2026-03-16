@@ -10,7 +10,7 @@ import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { pushOrderToTally } from '@/services/TallySyncService';
 
 const STATUS_COLORS = {
-  draft: 'bg-gray-100 text-gray-600',
+ draft: 'bg-gray-100 text-gray-600',
   confirmed: 'bg-blue-100 text-blue-700',
   dispatched: 'bg-yellow-100 text-yellow-700',
   delivered: 'bg-green-100 text-green-700',
@@ -47,7 +47,7 @@ export default function SalesOrderList() {
     try {
       let query = supabase
         .from('sales_orders')
-        .select('id, order_no, customer_name, total_amount, status, tally_sync_status, tally_voucher_id, created_at, delivery_date, order_channel')
+        .select('id, order_no, party_name, party_details, total_amount, status, tally_sync_status, tally_voucher_id, created_at, delivery_date, order_channel')
         .order('created_at', { ascending: false })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -89,7 +89,7 @@ export default function SalesOrderList() {
 
   const filtered = orders.filter(o =>
     !search || o.order_no?.toLowerCase().includes(search.toLowerCase()) ||
-    o.customer_name?.toLowerCase().includes(search.toLowerCase())
+    (o.party_name || o.party_details?.name)?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -149,7 +149,7 @@ export default function SalesOrderList() {
                   <td className="px-4 py-3 font-mono font-semibold text-green-800 text-xs">
                     {order.order_no || '—'}
                   </td>
-                  <td className="px-4 py-3 font-medium max-w-[180px] truncate">{order.customer_name}</td>
+                  <td className="px-4 py-3 font-medium max-w-[180px] truncate">{order.party_name || order.party_details?.name || '—'}</td>
                   <td className="px-4 py-3 font-semibold">
                     ₹{(order.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}
                   </td>

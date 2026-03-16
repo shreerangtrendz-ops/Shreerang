@@ -38,7 +38,7 @@ export default function AnalyticsPage() {
       supabase.from('fabric_stock_live').select('*',{count:'exact',head:true}),
       supabase.from('sales_bills').select('total_amount').gte('bill_date', new Date(new Date().setDate(1)).toISOString().slice(0,10)),
       supabase.from('purchase_bills').select('total_amount').gte('bill_date', new Date(new Date().setDate(1)).toISOString().slice(0,10)),
-      supabase.from('sales_orders').select('id,order_number,customer_name,total_amount,status,created_at').order('created_at',{ascending:false}).limit(8),
+      supabase.from('sales_orders').select('id,order_no,party_name,party_details,total_amount,status,created_at').order('created_at',{ascending:false}).limit(8),
       supabase.from('customers').select('id,name,city,business_type').limit(6),
     ]);
     const revenue = (salesData||[]).reduce((s,r)=>s+Number(r.total_amount||0),0);
@@ -100,8 +100,8 @@ export default function AnalyticsPage() {
                     const [bg,tc]=sc[o.status]||['#f1f5f9','#64748b'];
                     return(
                       <tr key={o.id} style={{ borderBottom:'1px solid rgba(43,168,152,.06)' }}>
-                        <td style={{ padding:'8px 10px', fontWeight:600, color:'#2468C8' }}>{o.order_number||o.id.slice(0,8)}</td>
-                        <td style={{ padding:'8px 10px' }}>{o.customer_name||'—'}</td>
+                        <td style={{ padding:'8px 10px', fontWeight:600, color:'#2468C8' }}>{o.order_no||o.id.slice(0,8)}</td>
+                        <td style={{ padding:'8px 10px' }}>{o.party_name || o.party_details?.name || '—'}</td>
                         <td style={{ padding:'8px 10px', fontWeight:600, color:'#1E9E5A' }}>{fmt(o.total_amount)}</td>
                         <td style={{ padding:'8px 10px' }}><span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700, background:bg, color:tc }}>{o.status}</span></td>
                       </tr>

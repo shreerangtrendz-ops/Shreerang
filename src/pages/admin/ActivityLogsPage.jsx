@@ -23,8 +23,28 @@ export default function ActivityLogsPage() {
       ...(orders||[]).map(o=>({ type:'order', icon:'📋', title:`Order ${o.order_no||'—'}`, sub:`${o.party_name || o.party_details?.name || 'Unknown'} · ${o.status}`, time:o.created_at, status:o.status })),
       ...(bills||[]).map(b=>({ type:'purchase', icon:'🛒', title:`Purchase Bill ${b.bill_number}`, sub:`${b.supplier_name} · ₹${Number(b.total_amount||0).toLocaleString('en-IN')}`, time:b.created_at, status:'success' })),
       ...(quotes||[]).map(q=>({ type:'quote', icon:'📋', title:`Quotation ${q.quotation_number}`, sub:`${q.party_name} · ${q.status}`, time:q.created_at, status:q.status })),
-    ].sort((a,b)=>new Date(b.time)-new Date(a.time)).slice(0,50);
-    setLogs(allLogs);
+    ].sort((a,b)=>new Date(b.time)-new Date(a.time));
+    // Deduplicate: aggregate repeated sync errors into single entries with count
+    const deduped = [];
+    const seenKeys = {};
+    for (const item of allLogs) {
+      const key = item.type + '|' + (item.title||'') + '|' + (item.status||'');
+      if (item.type === 'sync' && item.status === 'error') {
+        if (seenKeys[key]) {
+          seenKeys[key].count = (seenKeys[key].count||1) + 1;
+          seenKeys[key].sub = seenKeys[key].sub.replace(/\(\d+x\)/, '') + `(${seenKeys[key].count}x)`;
+          continue;
+        } else {
+          seenKeys[key] = item;
+          item.count = 1;
+          deduped.push(item);
+        }
+      } else {
+        deduped.push(item);
+      }
+    }
+    const finalLogs = deduped.slice(0, 80);
+    setLogs(finalLogs);
     setLoading(false);
   }
 
@@ -76,7 +96,7 @@ export default function ActivityLogsPage() {
             <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'12px 18px', borderBottom:'1px solid rgba(43,168,152,.07)' }}>
               <div style={{ width:34, height:34, borderRadius:9, background:'#F4FBFA', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>{log.icon}</div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:600, fontSize:13, color:'#0B2E2B' }}>{log.title}</div>
+                <div style={{ fontWeight:600, fontSize:13, color:'#0B2E2B' }}>{log.title}{log.count > 1 && <span style={{marginLeft:6, fontSize:10, background:'#ef4444', color:'#fff', borderRadius:9, padding:'1px 6px', fontWeight:700}}>{log.count}×</span>}</div>
                 <div style={{ fontSize:12, color:'#6A9B95', marginTop:2 }}>{log.sub}</div>
               </div>
               <div style={{ textAlign:'right', flexShrink:0 }}>

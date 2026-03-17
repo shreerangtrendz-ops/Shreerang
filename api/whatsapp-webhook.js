@@ -48,7 +48,7 @@ async function saveToDb(phone, text, direction, msgType, waMessageId, customerNa
   try {
     const timestamp = new Date().toISOString();
     // Upsert conversation
-    const convResp = await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_conversations`, {
+    const convResp = await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_conversations?on_conflict=phone_number`, {
       method: 'POST',
       headers: { ...SB_HEADERS, Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({ phone_number: phone, customer_name: customerName, last_message_at: timestamp, status: 'active' })

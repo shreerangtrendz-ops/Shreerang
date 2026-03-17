@@ -58,7 +58,7 @@ async function saveToDb(phone, text, direction, msgType, waMessageId, customerNa
     if (!convId) return;
 
     // Insert message — direction: 'incoming' | 'outgoing'  status: 'sent' | 'delivered' | 'read' | 'failed'
-    const msgDirection = direction === 'inbound' ? 'incoming' : 'outgoing';
+    const msgDirection = (direction === 'inbound' || direction === 'incoming') ? 'incoming' : 'outgoing';
     const msgStatus = direction === 'inbound' ? 'delivered' : 'sent';
     await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_messages`, {
       method: 'POST',
@@ -142,6 +142,23 @@ export default async function handler(req, res) {
     const body = req.body;
     const message = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     const contact = body?.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
+    // ── STATUS UPDATES (delivered / read) ──
+    const statuses = body?.entry?.[0]?.changes?.[0]?.value?.statuses;
+    if (statuses?.length > 0) {
+      for (const s of statuses) {
+        const waId = s.id;
+        const newStatus = s.status; // 'sent' | 'delivered' | 'read' | 'failed'
+        if (waId && newStatus) {
+          await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_messages?whatsapp_message_id=eq.${encodeURIComponent(waId)}`, {
+            method: 'PATCH',
+            headers: { ...SB_HEADERS, Prefer: 'return=minimal' },
+            body: JSON.stringify({ status: newStatus })
+          });
+        }
+      }
+      return;
+    }
+
     if (!message) return;
 
     const phone = message.from;

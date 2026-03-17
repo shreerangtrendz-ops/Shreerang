@@ -10,109 +10,81 @@ const WA_API = `https://graph.facebook.com/v18.0/${PHONE_ID}/messages`;
 const WA_HEADERS = { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' };
 const SB_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
 
-// ── Auto-send catalogue images ────────────────────
-async function sendCatalogueImages(phone, category, subcategory, maxImages = 3) {
+// ── Smart Catalogue Image Sender ─────────────────
+// Modes: 'new_only' (default) | 'all' | 'more'
+async function sendCatalogueImages(phone, category, subcategory, mode = 'new_only', batchSize = 3) {
   try {
-    let url = `${SUPABASE_URL}/rest/v1/fabric_catalogue?select=name,image_url,description,price_range&category=eq.${category}&in_stock=eq.true&limit=${maxImages}&order=created_at.desc`;
+    // Step 1: Get all in-stock images for this category
+    let url = `${SUPABASE_URL}/rest/v1/fabric_catalogue?select=id,name,image_url,description,price_range&category=eq.${category}&in_stock=eq.true&order=sort_order.asc,created_at.desc`;
     if (subcategory) url += `&subcategory=eq.${subcategory}`;
 
-    const r = await fetch(url, { headers: SB_HEADERS });
-    const items = await r.json();
+    const catResp = await fetch(url, { headers: SB_HEADERS });
+    const allItems = await catResp.json();
+    if (!allItems || allItems.length === 0) return { sent: 0, total: 0, allSeen: false };
 
-    if (!items || items.length === 0) return false;
+    let itemsToSend = allItems;
 
-    // Send each image via WhatsApp
-    for (const item of items) {
-      await fetch(WA_API, {
+    if (mode === 'new_only' || mode === 'more') {
+      // Step 2: Get IDs already sent to this customer
+      const sentResp = await fetch(
+        `${SUPABASE_URL}/rest/v1/whatsapp_designs_sent?select=catalogue_id&phone_number=eq.${phone}`,
+        { headers: SB_HEADERS }
+      );
+      const sentData = await sentResp.json();
+      const sentIds = new Set((sentData || []).map(s => s.catalogue_id));
+
+      // Step 3: Filter to only unseen items
+      itemsToSend = allItems.filter(item => !sentIds.has(item.id));
+    }
+
+    // All designs already seen?
+    if (itemsToSend.length === 0) {
+      return { sent: 0, total: allItems.length, allSeen: true };
+    }
+
+    // Step 4: Apply batch size limit
+    const batch = mode === 'all' ? itemsToSend : itemsToSend.slice(0, batchSize);
+    const hasMore = itemsToSend.length > batch.length;
+
+    // Step 5: Send images via WhatsApp
+    const sentIds = [];
+    for (const item of batch) {
+      const waResp = await fetch(WA_API, {
         method: 'POST', headers: WA_HEADERS,
         body: JSON.stringify({
           messaging_product: 'whatsapp', to: phone, type: 'image',
           image: {
             link: item.image_url,
-            caption: `*${item.name}*\n${item.description || ''}\n💰 ${item.price_range || 'Price on request'}\n\nInterested? Reply with your quantity 📦`
+            caption: `*${item.name}*\n${item.description ? item.description + '\n' : ''}💰 ${item.price_range || 'Price on request'}\n\nInterested? Reply with quantity 📦`
           }
         })
       });
-      // Small delay between images to avoid rate limiting
-      await new Promise(r => setTimeout(r, 500));
+      const waData = await waResp.json();
+      if (waData?.messages?.[0]?.id) sentIds.push(item.id);
+      await new Promise(r => setTimeout(r, 400));
     }
-    return true;
+
+    // Step 6: Record what was sent (upsert - ignore if already exists)
+    if (sentIds.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_designs_sent?on_conflict=phone_number,catalogue_id`, {
+        method: 'POST',
+        headers: { ...SB_HEADERS, Prefer: 'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify(sentIds.map(id => ({ phone_number: phone, catalogue_id: id })))
+      });
+      // Increment send_count for each design
+      for (const id of sentIds) {
+        await fetch(`${SUPABASE_URL}/rest/v1/fabric_catalogue?id=eq.${id}`, {
+          method: 'PATCH', headers: { ...SB_HEADERS, Prefer: 'return=minimal' },
+          body: JSON.stringify({ send_count: `send_count + 1` })
+        });
+      }
+    }
+
+    return { sent: sentIds.length, total: allItems.length, hasMore, remaining: itemsToSend.length - batch.length, allSeen: false };
   } catch(e) {
     console.error('sendCatalogueImages error:', e);
-    return false;
+    return { sent: 0, total: 0, allSeen: false };
   }
-}
-
-// ── Get all images for a category (for "show me more") ──
-async function sendAllCategoryImages(phone, category) {
-  return sendCatalogueImages(phone, category, null, 5);
-}
-
-
-
-const TEAM = {
-  '917567860000': 'admin',
-  '917567870000': 'admin',
-  '917874200033': 'dispatch',
-};
-
-async function sendText(to, body) {
-  try {
-    const r = await fetch(WA_API, {
-      method: 'POST', headers: WA_HEADERS,
-      body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'text', text: { body } })
-    });
-    return r.json();
-  } catch (e) { console.error('sendText error:', e); }
-}
-
-async function sendButtons(to, bodyText, buttons) {
-  try {
-    const r = await fetch(WA_API, {
-      method: 'POST', headers: WA_HEADERS,
-      body: JSON.stringify({
-        messaging_product: 'whatsapp', to, type: 'interactive',
-        interactive: {
-          type: 'button',
-          body: { text: bodyText },
-          action: { buttons: buttons.slice(0, 3).map(b => ({ type: 'reply', reply: { id: b[0], title: b[1].substring(0, 20) } })) }
-        }
-      })
-    });
-    return r.json();
-  } catch (e) { console.error('sendButtons error:', e); }
-}
-
-// ✅ FIXED: Uses whatsapp_conversations + whatsapp_messages schema
-async function saveToDb(phone, text, direction, msgType, waMessageId, customerName) {
-  try {
-    const timestamp = new Date().toISOString();
-    // Upsert conversation
-    const convResp = await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_conversations?on_conflict=phone_number`, {
-      method: 'POST',
-      headers: { ...SB_HEADERS, Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify({ phone_number: phone, customer_name: customerName, last_message_at: timestamp, status: 'active' })
-    });
-    const convData = await convResp.json();
-    const convId = Array.isArray(convData) ? convData[0]?.id : convData?.id;
-    if (!convId) return;
-
-    // Insert message — direction: 'incoming' | 'outgoing'  status: 'sent' | 'delivered' | 'read' | 'failed'
-    const msgDirection = (direction === 'inbound' || direction === 'incoming') ? 'incoming' : 'outgoing';
-    const msgStatus = direction === 'inbound' ? 'delivered' : 'sent';
-    await fetch(`${SUPABASE_URL}/rest/v1/whatsapp_messages`, {
-      method: 'POST',
-      headers: { ...SB_HEADERS, Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        conversation_id: convId,
-        direction: msgDirection,
-        message_text: text,
-        message_type: msgType || 'text',
-        whatsapp_message_id: waMessageId || `gen_${Date.now()}`,
-        status: msgStatus
-      })
-    });
-  } catch(e) { console.error('DB save error:', e); }
 }
 
 async function getCustomerInfo(phone) {
@@ -260,11 +232,17 @@ export default async function handler(req, res) {
 
     if (interactiveId === 'CAT_MILL' || t === '1' || (!interactiveId && (t.includes('mill') || t.includes('solid') || t.includes('plain')))) {
       // Auto-send catalogue images first
-      const sent = await sendCatalogueImages(phone, 'mill_print', null, 3);
-      if (!sent) {
-        await sendText(phone, lang === 'hi' ? '🧵 Mill Print / Solid Dyed के लिए हमारी team आपको designs share करेगी!' : '🧵 Our team will share Mill Print / Solid Dyed designs with you!');
+      const millResult = await sendCatalogueImages(phone, 'mill_print', null, 'new_only', 3);
+      let millMsg = '';
+      if (millResult.allSeen) {
+        millMsg = lang === 'hi' ? `आपने हमारे सभी Mill Print designs देख लिए हैं! 🙏\nनए designs जल्द आएंगे। अभी order करें?\n\nWidth चाहिए?` : `You've seen all our Mill Print designs! 🙏\nNew arrivals coming soon. Ready to order?\n\nWhich width?`;
+      } else if (millResult.sent === 0) {
+        millMsg = lang === 'hi' ? `🧵 Mill Print designs भेज रहे हैं...\n\nWidth चाहिए?` : `🧵 Sending Mill Print designs...\n\nWhich width?`;
+      } else {
+        const moreText = millResult.hasMore ? ` (${millResult.remaining} more — type "aur dikhao")` : '';
+        millMsg = lang === 'hi' ? `ऊपर देखें ${millResult.sent} designs! 👆${moreText}\n\nWidth चाहिए?` : `Check ${millResult.sent} designs above! 👆${moreText}\n\nWhich width?`;
       }
-      await sendButtons(phone, lang === 'hi' ? `ऊपर देखें हमारे latest designs! 👆\n\nWidth चाहिए?` : `Check out our latest designs above! 👆\n\nWhich width do you need?`, [['MP_44','44 inch'],['MP_58','58 inch'],['MP_60','60 inch']]);
+      await sendButtons(phone, millMsg, [['MP_44','44 inch'],['MP_58','58 inch'],['MP_60','60 inch']]);
       await createLeadIfNew(phone, name, 'Mill Print');
       return;
     }
@@ -284,11 +262,11 @@ export default async function handler(req, res) {
 
     if (interactiveId === 'CAT_DIGITAL' || t === '2' || (!interactiveId && t.includes('digital'))) {
       // Auto-send digital catalogue images
-      const sent = await sendCatalogueImages(phone, 'digital', null, 3);
-      if (!sent) {
-        await sendText(phone, '🖨️ Our team will share Digital Print designs shortly!');
-      }
-      await sendButtons(phone, `Check our latest Digital Prints above! 👆\n\nWhich base fabric?`, [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base'],['DP_BOTH','Both']]);
+      const digResult = await sendCatalogueImages(phone, 'digital', null, 'new_only', 3);
+      let digMsg = digResult.allSeen
+        ? `You've seen all our Digital Print designs! 🙏 New arrivals soon.\n\nWhich base fabric?`
+        : `Check ${digResult.sent || 'our'} Digital Prints above! 👆${digResult.hasMore ? ` (${digResult.remaining} more — type "show more")` : ''}\n\nWhich base fabric?`;
+      await sendButtons(phone, digMsg, [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base'],['DP_BOTH','Both']]);
       await createLeadIfNew(phone, name, 'Digital Print');
       return;
     }
@@ -334,27 +312,50 @@ export default async function handler(req, res) {
                         t.includes('dikhao') || t.includes('dikha') || t.includes('design bhejo') ||
                         t.includes('show') || t.includes('dekhna');
 
-    if (wantsImages) {
+    // "show more" / "aur dikhao" — send next batch
+    const wantsMore = t.includes('aur dikhao') || t.includes('more designs') || t.includes('show more') || t.includes('aur batao') || t.includes('next');
+    // "all designs" — send everything
+    const wantsAll = t.includes('sab dikhao') || t.includes('all designs') || t.includes('sabhi') || t.includes('poora') || t.includes('full catalogue');
+
+    if (wantsImages || wantsMore || wantsAll) {
+      const mode = wantsAll ? 'all' : wantsMore ? 'new_only' : 'new_only';
+      const batchSize = wantsAll ? 10 : 3;
+
       // Detect which category they want
       let cat = null;
-      if (t.includes('mill') || t.includes('solid') || t.includes('plain') || t.includes('cotton')) cat = 'mill_print';
+      if (t.includes('mill') || t.includes('cotton') || t.includes('plain')) cat = 'mill_print';
       else if (t.includes('digital')) cat = 'digital';
       else if (t.includes('embroid') || t.includes('emb')) cat = 'embroidery';
       else if (t.includes('schiffli')) cat = 'schiffli';
       else if (t.includes('hakoba')) cat = 'hakoba';
-      else if (t.includes('solid') || t.includes('plain') || t.includes('dyed')) cat = 'solid';
+      else if (t.includes('solid') || t.includes('dyed')) cat = 'solid';
 
       if (cat) {
-        await sendText(phone, lang === 'hi' ? `📸 ${cat.replace('_',' ')} के latest designs भेज रहे हैं...` : `📸 Sending latest ${cat.replace('_',' ')} designs...`);
-        await sendAllCategoryImages(phone, cat);
-        await sendText(phone, lang === 'hi' ? `ऊपर देखें! Quantity और width बताएं 📦` : `Check above! Reply with quantity & width needed 📦`);
-      } else {
-        // Send one from each category as a teaser
-        await sendText(phone, `📸 *Our Fabric Collection*\nSending samples from all categories...`);
-        for (const c of ['mill_print', 'digital', 'solid', 'embroidery']) {
-          await sendCatalogueImages(phone, c, null, 1);
+        await sendText(phone, lang === 'hi' ? `📸 भेज रहे हैं...` : `📸 Sending designs...`);
+        const result = await sendCatalogueImages(phone, cat, null, mode, batchSize);
+        if (result.allSeen) {
+          await sendText(phone, lang === 'hi'
+            ? `आपने ${cat.replace('_',' ')} के सभी designs देख लिए हैं! 🙏\nनए designs जल्द आएंगे 🔔\nAbhi order karna hai?`
+            : `You've seen all ${cat.replace('_',' ')} designs! 🙏\nNew arrivals coming soon 🔔\nReady to place an order?`);
+        } else if (result.sent > 0) {
+          if (result.hasMore) {
+            await sendText(phone, lang === 'hi'
+              ? `ऊपर देखें! अभी ${result.remaining} और designs बाकी हैं।\n"aur dikhao" लिखें अगले देखने के लिए 👆`
+              : `Check above! ${result.remaining} more designs available.\nType "show more" for next batch 👆`);
+          } else {
+            await sendText(phone, lang === 'hi'
+              ? `ये सभी available designs हैं! 🙏 Quantity बताएं 📦`
+              : `That's all available designs! 🙏 Reply with your quantity 📦`);
+          }
         }
-        await sendButtons(phone, `Like what you see? Choose a category for more designs! 👆`, [['CAT_MILL','Mill Print / Solid'],['CAT_DIGITAL','Digital Print'],['CAT_EMB','Embroidery']]);
+      } else {
+        // No category specified — send 1 from each as teaser
+        await sendText(phone, `📸 *Our Fabric Collection*\nSending 1 sample from each category...`);
+        for (const c of ['mill_print', 'digital', 'solid', 'embroidery']) {
+          await sendCatalogueImages(phone, c, null, 'new_only', 1);
+          await new Promise(r => setTimeout(r, 300));
+        }
+        await sendButtons(phone, `Like any? Choose a category for more 👆`, [['CAT_MILL','Mill Print / Solid'],['CAT_DIGITAL','Digital Print'],['CAT_EMB','Embroidery']]);
       }
       return;
     }

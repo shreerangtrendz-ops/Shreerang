@@ -10,6 +10,46 @@ const WA_API = `https://graph.facebook.com/v18.0/${PHONE_ID}/messages`;
 const WA_HEADERS = { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' };
 const SB_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' };
 
+// ── Auto-send catalogue images ────────────────────
+async function sendCatalogueImages(phone, category, subcategory, maxImages = 3) {
+  try {
+    let url = `${SUPABASE_URL}/rest/v1/fabric_catalogue?select=name,image_url,description,price_range&category=eq.${category}&in_stock=eq.true&limit=${maxImages}&order=created_at.desc`;
+    if (subcategory) url += `&subcategory=eq.${subcategory}`;
+
+    const r = await fetch(url, { headers: SB_HEADERS });
+    const items = await r.json();
+
+    if (!items || items.length === 0) return false;
+
+    // Send each image via WhatsApp
+    for (const item of items) {
+      await fetch(WA_API, {
+        method: 'POST', headers: WA_HEADERS,
+        body: JSON.stringify({
+          messaging_product: 'whatsapp', to: phone, type: 'image',
+          image: {
+            link: item.image_url,
+            caption: `*${item.name}*\n${item.description || ''}\n💰 ${item.price_range || 'Price on request'}\n\nInterested? Reply with your quantity 📦`
+          }
+        })
+      });
+      // Small delay between images to avoid rate limiting
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return true;
+  } catch(e) {
+    console.error('sendCatalogueImages error:', e);
+    return false;
+  }
+}
+
+// ── Get all images for a category (for "show me more") ──
+async function sendAllCategoryImages(phone, category) {
+  return sendCatalogueImages(phone, category, null, 5);
+}
+
+
+
 const TEAM = {
   '917567860000': 'admin',
   '917567870000': 'admin',
@@ -219,7 +259,12 @@ export default async function handler(req, res) {
     }
 
     if (interactiveId === 'CAT_MILL' || t === '1' || (!interactiveId && (t.includes('mill') || t.includes('solid') || t.includes('plain')))) {
-      await sendButtons(phone, lang === 'hi' ? `Mill Print / Solid Dyed ✅\n\nWidth चाहिए?` : `Mill Print / Solid Dyed ✅\n\nWhich width do you need?`, [['MP_44','44 inch'],['MP_58','58 inch'],['MP_60','60 inch']]);
+      // Auto-send catalogue images first
+      const sent = await sendCatalogueImages(phone, 'mill_print', null, 3);
+      if (!sent) {
+        await sendText(phone, lang === 'hi' ? '🧵 Mill Print / Solid Dyed के लिए हमारी team आपको designs share करेगी!' : '🧵 Our team will share Mill Print / Solid Dyed designs with you!');
+      }
+      await sendButtons(phone, lang === 'hi' ? `ऊपर देखें हमारे latest designs! 👆\n\nWidth चाहिए?` : `Check out our latest designs above! 👆\n\nWhich width do you need?`, [['MP_44','44 inch'],['MP_58','58 inch'],['MP_60','60 inch']]);
       await createLeadIfNew(phone, name, 'Mill Print');
       return;
     }
@@ -238,7 +283,12 @@ export default async function handler(req, res) {
     }
 
     if (interactiveId === 'CAT_DIGITAL' || t === '2' || (!interactiveId && t.includes('digital'))) {
-      await sendButtons(phone, `Digital Print ✅\n\nWhich base fabric?`, [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base'],['DP_BOTH','Both']]);
+      // Auto-send digital catalogue images
+      const sent = await sendCatalogueImages(phone, 'digital', null, 3);
+      if (!sent) {
+        await sendText(phone, '🖨️ Our team will share Digital Print designs shortly!');
+      }
+      await sendButtons(phone, `Check our latest Digital Prints above! 👆\n\nWhich base fabric?`, [['DP_POLY','Polyester Base'],['DP_PURE','Pure Base'],['DP_BOTH','Both']]);
       await createLeadIfNew(phone, name, 'Digital Print');
       return;
     }
@@ -257,7 +307,10 @@ export default async function handler(req, res) {
     }
 
     if (interactiveId === 'CAT_EMB' || t === '3' || (!interactiveId && (t.includes('embroid') || t.includes('schiffli') || t.includes('hakoba')))) {
-      await sendButtons(phone, `Embroidery/Schiffli ✅\n\nWhich type?`, [['EMB_ALLOVER','Allover Embroidery'],['EMB_SCHIFFLI','Schiffli'],['EMB_HAKOBA','Hakoba']]);
+      // Auto-send embroidery images
+      const sent = await sendCatalogueImages(phone, 'embroidery', null, 2);
+      await sendCatalogueImages(phone, 'schiffli', null, 1);
+      await sendButtons(phone, `Check our Embroidery collection above! 👆\n\nWhich type?`, [['EMB_ALLOVER','Allover Embroidery'],['EMB_SCHIFFLI','Schiffli'],['EMB_HAKOBA','Hakoba']]);
       await createLeadIfNew(phone, name, 'Embroidery');
       return;
     }
@@ -272,6 +325,37 @@ export default async function handler(req, res) {
     if (msgType === 'image') {
       await sendText(phone, `✅ Design photo received! 📸\n\nOur team will find similar designs for you.\nHow many meters do you need?`);
       await sendText(ADMIN_PHONE, `📸 *Design Photo Received*\nFrom: ${name} (+${phone})\nMedia ID: ${mediaId}\n\n👉 Find similar designs & respond`);
+      return;
+    }
+
+    // ── KEYWORD: show designs / catalogue / images ──
+    const wantsImages = t.includes('design') || t.includes('pattern') || t.includes('photo') || 
+                        t.includes('image') || t.includes('pic') || t.includes('sample') ||
+                        t.includes('dikhao') || t.includes('dikha') || t.includes('design bhejo') ||
+                        t.includes('show') || t.includes('dekhna');
+
+    if (wantsImages) {
+      // Detect which category they want
+      let cat = null;
+      if (t.includes('mill') || t.includes('solid') || t.includes('plain') || t.includes('cotton')) cat = 'mill_print';
+      else if (t.includes('digital')) cat = 'digital';
+      else if (t.includes('embroid') || t.includes('emb')) cat = 'embroidery';
+      else if (t.includes('schiffli')) cat = 'schiffli';
+      else if (t.includes('hakoba')) cat = 'hakoba';
+      else if (t.includes('solid') || t.includes('plain') || t.includes('dyed')) cat = 'solid';
+
+      if (cat) {
+        await sendText(phone, lang === 'hi' ? `📸 ${cat.replace('_',' ')} के latest designs भेज रहे हैं...` : `📸 Sending latest ${cat.replace('_',' ')} designs...`);
+        await sendAllCategoryImages(phone, cat);
+        await sendText(phone, lang === 'hi' ? `ऊपर देखें! Quantity और width बताएं 📦` : `Check above! Reply with quantity & width needed 📦`);
+      } else {
+        // Send one from each category as a teaser
+        await sendText(phone, `📸 *Our Fabric Collection*\nSending samples from all categories...`);
+        for (const c of ['mill_print', 'digital', 'solid', 'embroidery']) {
+          await sendCatalogueImages(phone, c, null, 1);
+        }
+        await sendButtons(phone, `Like what you see? Choose a category for more designs! 👆`, [['CAT_MILL','Mill Print / Solid'],['CAT_DIGITAL','Digital Print'],['CAT_EMB','Embroidery']]);
+      }
       return;
     }
 

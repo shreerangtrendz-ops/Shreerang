@@ -38,7 +38,7 @@ const CataloguePage = () => {
 
   const fetchItems = async () => {
     setLoading(true);
-    const { data } = await supabase.from('fabric_catalogue').select('*').order('category').order('created_at', { ascending: false });
+    const { data } = await supabase.from('fabric_catalogue').select('*, whatsapp_designs_sent(count)').order('category').order('sort_order').order('created_at', { ascending: false });
     setItems(data || []);
     setLoading(false);
   };
@@ -46,7 +46,7 @@ const CataloguePage = () => {
   const filtered = activeCategory === 'all' ? items : items.filter(i => i.category === activeCategory);
 
   const resetForm = () => {
-    setForm({ category: 'mill_print', subcategory: '', name: '', image_url: '', description: '', price_range: '', in_stock: true, tags: '' });
+    setForm({ category: 'mill_print', subcategory: '', name: '', image_url: '', description: '', price_range: '', sort_order: 0, in_stock: true, tags: '' });
     setEditItem(null);
     setShowForm(false);
   };
@@ -191,6 +191,11 @@ const CataloguePage = () => {
               <Input value={form.price_range} onChange={e => setForm(p => ({...p, price_range: e.target.value}))}
                 placeholder="e.g. ₹45-65/mtr" />
             </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Sort Order <span className="text-slate-400">(1=first, 0=default)</span></label>
+              <Input type="number" value={form.sort_order || 0} onChange={e => setForm(p => ({...p, sort_order: parseInt(e.target.value)||0}))}
+                placeholder="0" />
+            </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-600 mb-1 block">Tags (comma separated)</label>
               <Input value={form.tags} onChange={e => setForm(p => ({...p, tags: e.target.value}))}
@@ -229,13 +234,30 @@ const CataloguePage = () => {
         })}
       </div>
 
+      {/* Stats Bar */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Total Designs', value: items.length, icon: '🖼️' },
+          { label: 'In Stock', value: items.filter(i=>i.in_stock).length, icon: '✅' },
+          { label: 'Out of Stock', value: items.filter(i=>!i.in_stock).length, icon: '❌' },
+          { label: 'Total Sent', value: items.reduce((sum,i)=>(sum+(i.send_count||0)),0), icon: '📤' },
+        ].map(stat => (
+          <div key={stat.label} className="bg-white rounded-lg border p-3 text-center">
+            <div className="text-xl mb-1">{stat.icon}</div>
+            <div className="text-2xl font-bold text-slate-800">{stat.value}</div>
+            <div className="text-xs text-slate-500">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Info Banner */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800 flex items-start gap-2">
         <span className="text-lg">🤖</span>
         <div>
-          <strong>How it works:</strong> When a customer WhatsApps "show me designs" or selects Mill Print/Digital/Embroidery from the menu, 
-          the bot <strong>automatically sends these images</strong> as WhatsApp messages with name, description & price.
-          Keep images <span className="font-medium">In Stock</span> to show them, toggle off to hide.
+          <strong>Smart sending:</strong> Bot sends <strong>3 new designs</strong> each time (skips already-seen ones per customer).
+          Customer types "aur dikhao" for 3 more, "sab dikhao" for all.
+          When all designs seen → bot says "new arrivals coming soon".
+          <strong> Sort Order</strong> controls which designs show first (1 = first).
         </div>
       </div>
 
@@ -280,6 +302,10 @@ const CataloguePage = () => {
                     ))}
                   </div>
                 )}
+                <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
+                  {(item.send_count > 0) && <span>📤 Sent {item.send_count}× to customers</span>}
+                  {item.sort_order > 0 && <span>#{item.sort_order}</span>}
+                </div>
                 <div className="flex items-center gap-1 mt-3">
                   <Button onClick={() => handleEdit(item)} size="sm" variant="outline" className="flex-1 h-7 text-xs">
                     <Edit2 className="h-3 w-3 mr-1" />Edit

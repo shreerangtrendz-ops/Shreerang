@@ -83,6 +83,7 @@ import CalendarVisitsPage from '@/pages/admin/CalendarVisitsPage';
 import WhatsAppBotPage from '@/pages/admin/WhatsAppBotPage';
 import WhatsAppBroadcastPage from '@/pages/admin/marketing/WhatsAppBroadcast';
 import WhatsAppInboxPage from '@/pages/admin/WhatsAppInboxPage';
+import FabricCataloguePage from '@/pages/admin/FabricCataloguePage';
 import AIPriceSyncPage from '@/pages/admin/AIPriceSyncPage';
 import SalesTeamMapPage from '@/pages/admin/SalesTeamMapPage';
 import MakeToOrderPage from '@/pages/admin/MakeToOrderPage';
@@ -213,6 +214,7 @@ const App = () => {
                     <Route path="whatsapp" element={<WhatsAppBotPage />} />
                     <Route path="whatsapp-broadcast" element={<WhatsAppBroadcastPage />} />
                     <Route path="whatsapp-inbox" element={<WhatsAppInboxPage />} />
+              <Route path="fabric-catalogue" element={<FabricCataloguePage />} />
                     <Route path="cloud-sync" element={<CloudSyncPage />} />
                     <Route path="tally-prime" element={<TallySyncDashboard />} />
                     <Route path="tally-sync" element={<TallySyncDashboard />} />

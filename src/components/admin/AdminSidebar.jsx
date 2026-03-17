@@ -76,6 +76,7 @@ const ALL_GROUPS = [
       { icon: '📱', label: 'WhatsApp Inbox',       to: '/admin/whatsapp-inbox',      roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '🤖', label: 'WhatsApp Bot',         to: '/admin/whatsapp',            roles: ['admin','manager'], badge: 'ON',   badgeClass: 'ok' },
       { icon: '📢', label: 'Broadcast',            to: '/admin/whatsapp-broadcast',  roles: ['admin','manager'], badge: 'NEW' },
+        { icon: '🖼️', label: 'Fabric Catalogue',      to: '/admin/fabric-catalogue',    roles: ['admin','manager'], badge: 'AUTO' },
     ]
   },
   {

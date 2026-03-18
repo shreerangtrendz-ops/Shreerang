@@ -75,30 +75,42 @@ function tallyDate(d) {
 }
 
 // --------- VOUCHER XML BUILDER ---------------------------------------------------------------------------------------------------------
+// IMPORTANT: Use "Day Book" report NOT "Vouchers" - "Vouchers" triggers TallyPrime Import dialog
+// Day Book works regardless of what screen the user is on in TallyPrime
 function buildVoucherXml(fromDate, toDate, type) {
   return '<?xml version="1.0"?>' +
     '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
-    '<BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME>' +
+    '<BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME>' +
     '<STATICVARIABLES>' +
     '<SVFROMDATE>' + toTallyDate(fromDate) + '</SVFROMDATE>' +
     '<SVTODATE>' + toTallyDate(toDate) + '</SVTODATE>' +
-    '<VOUCHERTYPENAME>' + type + '</VOUCHERTYPENAME>' +
     '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>' +
     '</STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
 
 // --------- VOUCHER PARSER ------------------------------------------------------------------------------------------------------------------------
+// Parses Day Book XML - filters by VCHTYPE attribute on the <VOUCHER> tag
 function parseVouchers(xml, type) {
   const rows = [];
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
   for (const b of blocks) {
+    // Filter by voucher type from the attribute
+    const vchtypeMatch = b.match(/VCHTYPE="([^"]+)"/i);
+    const vchtype = vchtypeMatch ? vchtypeMatch[1] : '';
+    if (type === 'Purchase' && !vchtype.toLowerCase().includes('purchase')) continue;
+    if (type === 'Sales' && !vchtype.toLowerCase().includes('sale')) continue;
+
     const vn = extractTag(b, 'VOUCHERNUMBER');
     const dt = tallyDate(extractTag(b, 'DATE'));
     const pa = extractTag(b, 'PARTYLEDGERNAME');
     if (!vn || !dt || !pa) continue;
-    const amounts = extractAll(b, 'AMOUNT').map(parseAmt);
-    const total = Math.abs(amounts.reduce((s, a) => s + a, 0)) / 2;
+
+    // Get amount from ALLLEDGERENTRIES or AMOUNT fields
+    const amounts = extractAll(b, 'AMOUNT').map(parseAmt).filter(a => a !== 0);
+    const total = amounts.length > 0 ? Math.max(...amounts.map(Math.abs)) : 0;
     const narr = extractTag(b, 'NARRATION') || null;
+    const gst = extractTag(b, 'TAXREGISTRATIONNUMBER') || null;
+
     if (type === 'Purchase') {
       rows.push({ bill_number: vn, bill_date: dt, supplier_name: pa, total_amount: total, notes: narr, status: 'synced', fabric_type: 'Tally Import' });
     } else {

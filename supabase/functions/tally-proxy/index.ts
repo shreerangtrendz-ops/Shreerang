@@ -70,11 +70,14 @@ serve(async (req) => {
       });
     }
 
-    if (responseText.includes("IMPORTFILE") || responseText.includes("File to Import") || responseText.includes("LONGPROMPT")) {
+    // Detect Tally showing Import dialog (only when File to Import prompt appears)
+    // Note: Day Book returns IMPORTDATA wrapper which is normal - do NOT block that
+    if (responseText.includes("File to Import") || 
+        (responseText.includes("IMPORTFILE") && responseText.includes("LONGPROMPT"))) {
       return new Response(JSON.stringify({
         success: false,
         error: "TALLY_IMPORT_DIALOG_OPEN",
-        hint: "Press ESC in Tally to return to Gateway of Tally main screen, then retry sync",
+        hint: "Tally is showing Import dialog. This may resolve automatically - retry sync.",
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

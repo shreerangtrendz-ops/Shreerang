@@ -1,0 +1,7 @@
+[1;34m2026-03-15 02:14:13.723 [I] [frps/root.go:105] frps uses config file: frps.toml
+[0m[1;34m2026-03-15 02:14:13.819 [I] [server/service.go:237] frps tcp listen on 0.0.0.0:9000
+[0m[1;34m2026-03-15 02:14:13.820 [I] [frps/root.go:114] frps started successfully
+[0m[1;34m2026-03-15 02:14:33.236 [I] [frps/root.go:105] frps uses config file: frps.toml
+[0m[1;34m2026-03-15 02:14:33.426 [I] [server/service.go:237] frps tcp listen on 0.0.0.0:9000
+[0m[1;34m2026-03-15 02:14:33.426 [I] [frps/root.go:114] frps started successfully
+[0m

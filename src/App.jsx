@@ -108,6 +108,8 @@ import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
 import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
+import DesignGalleryPage from '@/pages/admin/design/DesignGalleryPage';
+import MTOCostTemplatePage from '@/pages/admin/MTOCostTemplatePage';
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -192,6 +194,9 @@ const App = () => {
                     <Route path="customers" element={<CustomerMasterPage />} />
                     <Route path="market-intel" element={<MarketIntelPage />} />
                     <Route path="mto-orders" element={<MakeToOrderPage />} />
+              {/* Design Gallery & MTO Cost Templates */}
+              <Route path="design-gallery" element={<DesignGalleryPage />} />
+              <Route path="mto-cost-template" element={<MTOCostTemplatePage />} />
 
                     {/* Smart Features */}
                     <Route path="calendar" element={<CalendarVisitsPage />} />

@@ -1,55 +1,65 @@
-// supabase/functions/tally-health/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const TALLY_URL = "http://tally.shreerangtrendz.com:9000";
-
 const CORS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+async function checkUrl(url: string, timeoutMs = 8000): Promise<{ ok: boolean; status: number; body: string; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(url, { method: "GET", signal: controller.signal });
+    clearTimeout(t);
+    const body = await r.text();
+    return { ok: r.ok, status: r.status, body };
+  } catch (err) {
+    return { ok: false, status: 0, body: "", error: err instanceof Error ? err.message : "Unknown" };
+  }
+}
+
 serve(async (req) => {
-    if (req.method === "OPTIONS") {
-        return new Response("ok", { headers: CORS });
-    }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-    try {
-        const r = await fetch(TALLY_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/xml" },
-            body: '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Companies</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>',
-            signal: AbortSignal.timeout(8000),
-        });
+  // Check each service INDEPENDENTLY
+  const [tally, n8n, domain, frpsApi] = await Promise.all([
+    checkUrl("https://tally.shreerangtrendz.com"),        // Tally HTTP via FRP tunnel
+    checkUrl("https://n8n.shreerangtrendz.com"),           // n8n Docker
+    checkUrl("https://shreerangtrendz.com"),               // Main domain / nginx
+    checkUrl("https://shreerangtrendz.com/api/frp-status"), // Optional: frps status API
+  ]);
 
-        const text = await r.text();
-        const domainOnline = r.ok;
-        const tallyOnline = r.ok && text.length > 50 && !text.includes("LINEERROR");
+  // Tally: must return 200 with TallyPrime text
+  const tallyOnline = tally.ok && tally.body.includes("TallyPrime");
 
-        // Extract active company name from List of Companies response
-        const companyMatch = text.match(/<NAME\.LIST[^>]*>([\s\S]*?)<\/NAME\.LIST>/i)
-            || text.match(/<BASICCOMPANYNAME>(.*?)<\/BASICCOMPANYNAME>/i)
-            || text.match(/<NAME>(.*?)<\/NAME>/i);
-        const tallyCompany = companyMatch ? companyMatch[1].replace(/<[^>]+>/g, "").trim() : "";
+  // frps: if tally tunnel works, frps is working
+  const frpsOnline = tallyOnline;
 
-        const stockItems = (text.match(/<BASICCOMPANYNAME>/g) || []).length;
+  // frpc: if tally responds, frpc is connected
+  const frpcOnline = tallyOnline;
 
-        return new Response(JSON.stringify({
-            domain: domainOnline ? "online" : "offline",
-            frps: domainOnline ? "online" : "offline",
-            frpc: domainOnline ? "online" : "offline",
-            nginx: domainOnline ? "online" : "offline",
-            tally: tallyOnline ? "online" : "offline",
-            tallyCompany,
-            stockItems,
-            rawLength: text.length,
-        }), { headers: { ...CORS, "Content-Type": "application/json" } });
+  // nginx: main domain responds
+  const nginxOnline = domain.ok;
 
-    } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        return new Response(JSON.stringify({
-            domain: "offline", frps: "offline", frpc: "offline",
-            nginx: "offline", tally: "offline",
-            tallyCompany: "", stockItems: 0, error: msg,
-        }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
-    }
+  // n8n automation
+  const n8nOnline = n8n.ok;
+
+  // Domain gateway = main domain
+  const domainOnline = domain.ok;
+
+  return new Response(JSON.stringify({
+    tally: tallyOnline ? "online" : "offline",
+    frps: frpsOnline ? "online" : "offline",
+    frpc: frpcOnline ? "online" : "offline",
+    nginx: nginxOnline ? "online" : "offline",
+    n8n: n8nOnline ? "online" : "offline",
+    domain: domainOnline ? "online" : "offline",
+    details: {
+      tally: { url: "https://tally.shreerangtrendz.com", status: tally.status, error: tally.error },
+      n8n: { url: "https://n8n.shreerangtrendz.com", status: n8n.status, error: n8n.error },
+      domain: { url: "https://shreerangtrendz.com", status: domain.status, error: domain.error },
+    },
+    checkedAt: new Date().toISOString(),
+  }), { headers: { ...CORS, "Content-Type": "application/json" } });
 });
+

@@ -1,12 +1,12 @@
 // ============================================================
-// TallySyncService.js — v2 Progressive Sync
+// TallySyncService.js -- v2 Progressive Sync
 // Calls Supabase Edge Function directly from browser
 // Handles chunked sync (7 days at a time) to avoid timeouts
 // Correct tables: purchase_bills, sales_bills
 // ============================================================
 import { supabase } from '../lib/supabase';
 
-// ─── CORE: POST XML to Tally via Edge Function ────────────
+// --------- CORE: POST XML to Tally via Edge Function ------------------------------------
 async function postToTally(xml, company = '') {
   const { data, error } = await supabase.functions.invoke('tally-proxy', {
     body: { xmlBody: xml, company },
@@ -26,13 +26,13 @@ async function postToTally(xml, company = '') {
   return xml_resp;
 }
 
-// ─── GET REAL COMPANY NAME FROM TALLY ─────────────────────
+// --------- GET REAL COMPANY NAME FROM TALLY ---------------------------------------------------------------
 export async function getCompanyName(company = '') {
   try {
-    const xml = \`<ENVELOPE>
+    const xml = `<ENVELOPE>
   <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER>
   <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY>
-</ENVELOPE>\`;
+</ENVELOPE>`;
     const responseXml = await postToTally(xml, company);
     // Try to extract BASICCOMPANYNAME or COMPANYNAME
     const m = responseXml.match(/<BASICCOMPANYNAME[^>]*>([^<]+)<\/BASICCOMPANYNAME>/i)
@@ -44,7 +44,7 @@ export async function getCompanyName(company = '') {
   }
 }
 
-// ─── DATE HELPERS ─────────────────────────────────────────
+// --------- DATE HELPERS ---------------------------------------------------------------------------------------------------------------------------
 function addDays(iso, days) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
@@ -52,7 +52,7 @@ function addDays(iso, days) {
 }
 function toTallyDate(iso) { return iso.replace(/-/g, ''); }
 
-// ─── XML PARSERS ──────────────────────────────────────────
+// --------- XML PARSERS ------------------------------------------------------------------------------------------------------------------------------
 function extractTag(xml, tag) {
   const m = xml.match(new RegExp('<' + tag + '[^>]*>([^<]*)<\/' + tag + '>', 'i'));
   return m ? m[1].trim() : null;
@@ -74,7 +74,7 @@ function tallyDate(d) {
   return null;
 }
 
-// ─── VOUCHER XML BUILDER ───────────────────────────────────
+// --------- VOUCHER XML BUILDER ---------------------------------------------------------------------------------------------------------
 function buildVoucherXml(fromDate, toDate, type) {
   return '<?xml version="1.0"?>' +
     '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
@@ -87,7 +87,7 @@ function buildVoucherXml(fromDate, toDate, type) {
     '</STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
 
-// ─── VOUCHER PARSER ────────────────────────────────────────
+// --------- VOUCHER PARSER ------------------------------------------------------------------------------------------------------------------------
 function parseVouchers(xml, type) {
   const rows = [];
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
@@ -108,7 +108,7 @@ function parseVouchers(xml, type) {
   return rows;
 }
 
-// ─── GET SYNC STATE ────────────────────────────────────────
+// --------- GET SYNC STATE ------------------------------------------------------------------------------------------------------------------------
 async function getSyncState(syncType) {
   const { data } = await supabase
     .from('tally_sync_state')
@@ -118,7 +118,7 @@ async function getSyncState(syncType) {
   return data;
 }
 
-// ─── UPDATE SYNC STATE ─────────────────────────────────────
+// --------- UPDATE SYNC STATE ---------------------------------------------------------------------------------------------------------------
 async function updateSyncState(syncType, lastDate, totalCount) {
   await supabase.from('tally_sync_state').upsert({
     sync_type: syncType,
@@ -128,7 +128,7 @@ async function updateSyncState(syncType, lastDate, totalCount) {
   }, { onConflict: 'sync_type' });
 }
 
-// ─── LOG SYNC ──────────────────────────────────────────────
+// --------- LOG SYNC ------------------------------------------------------------------------------------------------------------------------------------------
 async function logSync(syncType, status, count, rawPreview, errorMsg) {
   await supabase.from('tally_sync_log').insert({
     sync_type: syncType,
@@ -141,7 +141,7 @@ async function logSync(syncType, status, count, rawPreview, errorMsg) {
 }
 
 // ============================================================
-// MAIN: PULL BILLS — PROGRESSIVE SINGLE CHUNK
+// MAIN: PULL BILLS -- PROGRESSIVE SINGLE CHUNK
 // Call this repeatedly from dashboard until hasMore=false
 // Each call: fetches ONE 7-day chunk, upserts to Supabase
 // Returns: { success, hasMore, chunkFrom, chunkTo, recordsThisChunk, totalSynced, message }
@@ -226,12 +226,12 @@ export async function pullBillsChunk(billType = 'purchase', company = '') {
   }
 }
 
-// ─── LEGACY: pullPurchasesFromTally (kept for compatibility) ─
+// --------- LEGACY: pullPurchasesFromTally (kept for compatibility) ---
 export async function pullPurchasesFromTally(fromDate, toDate) {
   return pullBillsChunk('purchase');
 }
 
-// ─── STOCK SYNC ───────────────────────────────────────────
+// --------- STOCK SYNC ---------------------------------------------------------------------------------------------------------------------------------
 export async function pullStockWithDesignDetail(company = '') {
   const xml = '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
   try {
@@ -257,7 +257,7 @@ export async function pullStockWithDesignDetail(company = '') {
   }
 }
 
-// ─── LEDGER SYNCS ──────────────────────────────────────────
+// --------- LEDGER SYNCS ------------------------------------------------------------------------------------------------------------------------------
 export async function syncCustomersFromTally() { return syncLedgers('Sundry Debtors', 'customers'); }
 export async function syncSuppliersFromTally() { return syncLedgers('Sundry Creditors', 'customers', { business_type: 'supplier' }); }
 export async function syncAgentsFromTally() { return syncLedgers('Sales Accounts', 'sales_team'); }
@@ -283,7 +283,7 @@ async function syncLedgers(group, table, extra = {}) {
   }
 }
 
-// ─── OUTSTANDING SYNC ─────────────────────────────────────
+// --------- OUTSTANDING SYNC ---------------------------------------------------------------------------------------------------------------
 export async function syncOutstandingFromTally() {
   const xml = '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Bill Outstanding</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
   try {
@@ -298,7 +298,7 @@ export async function syncOutstandingFromTally() {
   }
 }
 
-// ─── PUSH SALES ORDER TO TALLY ────────────────────────────
+// --------- PUSH SALES ORDER TO TALLY ------------------------------------------------------------------------------------
 export async function pushOrderToTally(orderId) {
   const { data: order } = await supabase.from('sales_orders').select('*, customers(tally_ledger_name, name)').eq('id', orderId).single();
   if (!order) return { success: false, error: 'Order not found' };
@@ -315,7 +315,7 @@ export async function pushOrderToTally(orderId) {
   }
 }
 
-// ─── BUILD XML FOR PUSH ────────────────────────────────────
+// --------- BUILD XML FOR PUSH ------------------------------------------------------------------------------------------------------------
 export function buildSalesVoucherXML(order) {
   const dateStr = new Date(order.created_at).toISOString().split('T')[0].replace(/-/g, '');
   const ledger = order.customers.tally_ledger_name;
@@ -323,7 +323,7 @@ export function buildSalesVoucherXML(order) {
   return '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>' + dateStr + '</DATE><VOUCHERNUMBER>WEB-' + order.order_no + '</VOUCHERNUMBER><PARTYLEDGERNAME>' + ledger + '</PARTYLEDGERNAME><NARRATION>Website order - ' + order.order_no + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>' + ledger + '</LEDGERNAME><AMOUNT>' + amount + '</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>-' + amount + '</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>';
 }
 
-// ─── PARSE HELPERS ────────────────────────────────────────
+// --------- PARSE HELPERS ------------------------------------------------------------------------------------------------------------------------
 export function parseTallyXMLResponse(xml) {
   const vouchers = [];
   const stockItems = [];

@@ -1,156 +1,155 @@
-# 🏭 Shreerang Trendz — Implementation Tracker
-*Last updated: 06 Mar 2026 | Live: shreerangtrendz.com/admin*
+﻿# SHREERANG TRENDZ — IMPLEMENTATION TRACKER
+## Last Updated: 11 March 2026
 
 ---
 
-## ✅ FULLY COMPLETED (All Committed to Master)
+## ✅ IMPLEMENTED THIS SESSION
 
-### 🖥️ Dashboard & Navigation (Commits 1–4)
-| # | Feature | Status |
-|---|---------|--------|
-| 1 | Sidebar redesigned — 5 groups (Overview, Catalogue, Accounts, Operations, Settings) | ✅ Live |
-| 2 | Sidebar search (press `/`), collapse button (60px ↔ 240px) | ✅ Live |
-| 3 | Integration status lights — Tally, n8n, WhatsApp | ✅ Live |
-| 4 | Dynamic sidebar width — AdminLayout CSS transition | ✅ Live |
+### 1. Finish Fabric — Multi-Step Process Path (DONE)
+**Files changed:**
+- `src/services/FinishFabricService.js` — Added `PROCESS_STEPS` array (13 individual steps), `processPathLabel()` helper, updated `buildFinishFabricName()` and `buildFinishFabricSKU()` to use multi-step array, updated `buildDbRecord()` to serialize `processSteps` to JSON
+- `src/pages/admin/fabric/FinishFabricForm.jsx` — Added `ProcessPathBuilder` drag-drop component (palette + ordered path), Step 2 now uses multi-step builder, `processSteps: []` in form state, loads/saves `process_steps` JSONB
+- `supabase/migrations/20260311_finish_fabrics_process_steps.sql` — Adds `process_steps JSONB` column, updates `fabric_category` CHECK to include `'fancy'`, migrates `fancy_finish_fabrics` into `finish_fabrics`
+- `src/App.jsx` — Added routes: `/admin/fabric/finish` (dashboard), `/admin/fabric/finish/new`, `/admin/fabric/finish/:id/edit`
 
-### 📊 Dashboard KPI Cards (Commit 3)
-| # | Feature | Status |
-|---|---------|--------|
-| 5 | Real Sales This Month from `sales_bills` | ✅ Live |
-| 6 | Real Purchase This Month from `purchase_bills` | ✅ Live |
-| 7 | Outstanding Receivable (red border if >0) | ✅ Live |
-| 8 | Outstanding Payable | ✅ Live |
-| 9 | Tally Sync Status — live ✅/❌ + last sync time | ✅ Live |
-| 10 | **Sync Bills Now** functional button in Tally KPI card | ✅ Live |
+**What works now:**
+- FinishFabricForm Step 2 shows a clickable palette of 13 process steps (Grey, RFD, Bleach, Dye, Mill Print, Digital Print, Embroidery, Schiffli, Discharge, Deca, Fancy, Finishing, Cut & Pack)
+- User clicks steps to add them to the path; drag to reorder; click × to remove
+- Any combination in any order is accepted
+- Process path stored as JSONB array in `finish_fabrics.process_steps`
+- SKU and Name are auto-built from process steps
+- Fancy Finish merged into Finish Fabrics (category = 'fancy')
 
-### ⚡ Tally Integration (Commits 5–8)
-| # | Feature | Status |
-|---|---------|--------|
-| 11 | `tally-health` edge function — Supabase deployed | ✅ Live |
-| 12 | `api/tally-proxy.js` — Vercel, forwards XML to FRP tunnel | ✅ Live |
-| 13 | `api/tally-sync.js` v2 — **FIXED** (correct column names: `bill_number`, `supplier_name`, `customer_name`) | ✅ Live |
-| 14 | `api/tally-outstanding.js` — NEW: syncs Outstanding Receivable snapshot | ✅ Live |
-| 15 | n8n workflow v3 — 3× daily: bills + outstanding + stock in parallel | ✅ Committed |
+### 2. Base Fabric — Optional Mapping (ALREADY EXISTED, confirmed OK)
+The existing form already had "None / Skip for now" option. No change needed.
 
-### 🧮 Accounting Pages (All NEW — Commit a5e9bb0)
-| # | Page | Route | Status |
-|---|------|-------|--------|
-| 16 | **Purchase Bills** — table, search, date filter, manual entry, Tally sync | `/admin/accounting/purchase-bills` | ✅ Live |
-| 17 | **Sales Bills** — table, search, date filter, manual entry, Tally sync | `/admin/accounting/sales-bills` | ✅ Live |
-| 18 | **Job Work Bills** — table with design no, process type, manual entry | `/admin/accounting/job-work-bills` | ✅ Live |
-| 19 | **Quotations** — full CRUD, status management (pending/approved/rejected/expired) | `/admin/accounting/quotations` | ✅ Live |
-
-### 💹 Tally Sync Control Centre  
-| # | Feature | Status |
-|---|---------|--------|
-| 20 | TallySyncDashboard `💰 Sync Bills Now` header button | ✅ Live |
-| 21 | Purchase Bills + Sales Bills cards with live record counts | ✅ Live |
-| 22 | Bills Accounting section showing last sync timestamp | ✅ Live |
-
-### 📊 Reports (All pre-existing)
-| # | Page | Route | Status |
-|---|------|-------|--------|
-| 23 | Outstanding Receivable | `/admin/outstanding-receivable` | ✅ Live |
-| 24 | Outstanding Payable | `/admin/outstanding-payable` | ✅ Live |
-| 25 | Cash & Bank Balance | `/admin/cash-bank` | ✅ Live |
-| 26 | Party Ledger | `/admin/reports/party-ledger` | ✅ Live |
-| 27 | Day Book | `/admin/reports/day-book` | ✅ Live |
-| 28 | Design Profitability | `/admin/reports/design-profitability` | ✅ Live |
-
-### 🖼️ Product Images (Phase 2)
-| # | Feature | Status |
-|---|---------|--------|
-| 29 | **FinishFabricForm image upload** — Bunny CDN integration, preview + upload | ✅ Live |
-| 30 | `design_image_url` field added to FinishFabricForm state + saved to `finish_fabrics` | ✅ Live |
+### 3. Search-Before-Create Flow (ALREADY EXISTED, improved)
+- Typing in Step 0 searches existing finish fabrics
+- If no match, inline "Create X" link
+- Clicking existing result opens edit mode
 
 ---
 
-## 🔴 ONE MANUAL STEP — START FRP TUNNEL (Required for ANY Tally sync)
+## 🔴 PENDING (NOT YET DONE — Hand to next Claude chat)
 
-**Do this on your Windows PC where Tally Prime is running:**
+### P1. Run SQL Migration in Supabase
+**Action required (human):** Go to:
+https://supabase.com/dashboard/project/zdekydcscwhuusliwqaz/sql
+Run file: `Horizon Code/supabase/migrations/20260311_finish_fabrics_process_steps.sql`
 
-```
-1. Open Tally Prime → Load company "ShreeRang Trendz Pvt. Ltd."
-2. Gateway → Configure → Advanced Configuration
-3. Enable: HTTP Server = Yes, Port = 9000
-4. CMD in folder with frpc.exe (Drive folder: 17HHDAaoChjq_sqWaxgMT8OC2b5y96PHZ)
-5. Run: frpc.exe -c frpc.ini
-6. Confirm: "start proxy success" appears
+### P2. Tally Integration — Full Connect & Test
+**Status:** API code exists (api/tally-push.js + TallySyncService.js), but NOT tested end-to-end
+**What's needed:**
+- Start FRP tunnel on Office PC: run `START_TALLY_TUNNEL.bat` as Administrator
+- Ensure Tally is open on port 9000 (F12 → Advanced → HTTP Server: Yes, Port 9000)
+- Open Company "Shreerang Trendz" in Tally
+- Test: Create one finish fabric, confirm Tally sync shows green
+- If tally-proxy Supabase Edge Function not deployed yet: `supabase functions deploy tally-proxy`
+
+### P3. Cost Calculation Per Process Step
+**Status:** Architecture in place (process_steps JSONB stored), but NO actual cost rates defined
+**What's needed:**
+- Create `process_charges` table in Supabase with rate per step per fabric category
+- Update `CostingService.js` to sum charges across process_steps array
+- Display running cost total in FinishFabricForm
+
+**Suggested schema:**
+```sql
+CREATE TABLE public.process_charges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  step_id TEXT NOT NULL,      -- matches PROCESS_STEPS id (grey, scour, etc.)
+  fabric_category TEXT,       -- or NULL for all categories
+  rate_per_mtr NUMERIC(10,4),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 ```
 
-Then test: Visit `/admin/tally-sync` → should show 🟢 Tally Live  
-Then sync: Click **💰 Sync Bills Now** → purchase_bills and sales_bills will populate
+### P4. Fancy Finish — Data Migration Verification
+**Status:** SQL migration written but not run
+**After running migration:** Verify all rows from `fancy_finish_fabrics` appear in `finish_fabrics` with `fabric_category = 'fancy'`
 
-**Import n8n Workflow v3:**
-1. Download `n8n-daily-tally-sync-v3.json` from repo root  
-2. Open https://shreerangtrendz.app.n8n.cloud → Import workflow  
-3. Set `SUPABASE_ANON_KEY` environment variable  
-4. Activate — will auto-sync 3× daily at 12:30am, 8:30am, 1:30pm IST
+### P5. WhatsApp Bot — Connect Finish Fabric to Bot Queries
+**Status:** n8n workflow has 38+ nodes but fabric queries use `fabric_master` table
+**What's needed:**
+- Update n8n fabric query nodes to query `finish_fabrics` instead of `fabric_master`
+- Map `fabric_category` in finish_fabrics to bot menu options
+- Filter by `is_active = true` (or `status = 'active'`)
+
+### P6. E-commerce Catalogue Link
+**Status:** `ecom_visible` flag exists on finish_fabrics, ShopPage exists
+**What's needed:**
+- ProductService.js needs to query finish_fabrics WHERE ecom_visible=true
+- Design images from Bunny CDN need to show on ShopPage
+- ProductDetailPage needs to map finish_fabric fields to display
+
+### P7. Design Image → Tally Design Link
+**Status:** Images uploaded to Bunny CDN, stored in finish_fabrics.design_image_url
+**What's needed:**
+- Tally doesn't natively store images; a separate design register in Supabase links design photos to fabric items
+- `design_sets` table maps finish_fabric_id + design_image_url
+- WhatsApp bot shares images from design_sets when customer asks about a fabric
+
+### P8. Tally Sync Dashboard Route
+**Status:** TallySyncDashboard.jsx exists at `/admin/tally-prime`
+**What's needed:** Verify it works with FRP tunnel live
 
 ---
 
-## 🟡 REMAINING (Phase 3 — AI Automation)
+## 📋 CREDENTIALS & KEYS (Quick Reference)
 
-| # | Feature | Description | Est. Effort |
-|---|---------|-------------|-------------|
-| A | **AI Bill Scanner** | Upload PDF/photo → extract bill fields → push to Tally | 3–4 days |
-| B | **WhatsApp Order Bot** | Customer WhatsApp message → create order → confirm | 2–3 days |
-| C | **Smart Cost Engine** | AI suggests MRP based on GSM, process, market data | 2–3 days |
-| D | **Design Velocity AI** | Predict reorder needs from sales velocity | 2–3 days |
-| E | **Customer Portal Image Sync** | Show fabric images on customer portal `/customer/designs` | 1 day |
-| F | **B2B Catalogue PDF** | Generate price list PDF from current designs | 1 day |
+- **Supabase URL:** `https://zdekydcscwhuusliwqaz.supabase.co`
+- **Supabase Service Key:** In WhatsAppDashboard.jsx top of file (eyJhbGci...)
+- **Tally Office PC:** `https://tally.shreerangtrendz.com` (FRP tunnel must be running)
+- **Tally Test PC:** `https://tally-test.shreerangtrendz.com`
+- **VPS IP:** `72.61.249.86` | FRP token: `ShreerangFRP2026`
+- **Vercel Token:** `vcp_XXXX_REDACTED_SEE_VERCEL_DASHBOARD`
+- **n8n:** `https://airtribe.app.n8n.cloud` (38-node workflow active)
+- **WhatsApp Number:** +91 78742 00033
+- **Admin WhatsApp:** +91 75678 70000
+- **Bunny CDN Zone:** `shreerang-s` | CDN: `https://shreerang.b-cdn.net`
+- **Meta Verify Token:** `shreerang2026`
+- **Website:** `https://www.shreerangtrendz.com`
 
 ---
 
-## 🏗️ System Architecture (Final)
+## 🗂️ KEY FILES TO KNOW
+
+| Purpose | File Path |
+|---------|-----------|
+| Finish Fabric Form | `src/pages/admin/fabric/FinishFabricForm.jsx` |
+| Finish Fabric List | `src/pages/admin/fabric/FinishFabricDashboard.jsx` |
+| Fabric Service | `src/services/FinishFabricService.js` |
+| Tally Sync Service | `src/services/TallySyncService.js` |
+| Tally Push API | `api/tally-push.js` |
+| Tally Sync API | `api/tally-sync.js` |
+| WhatsApp Webhook | `api/whatsapp-webhook.js` |
+| App Routes | `src/App.jsx` |
+| SQL Migration (new) | `supabase/migrations/20260311_finish_fabrics_process_steps.sql` |
+| n8n Workflow | `n8n-whatsapp-bot-complete.json` |
+
+---
+
+## 🏗️ ARCHITECTURE SUMMARY
 
 ```
-Tally Prime PC (port 9000)
-  ↕  frpc.exe → tally.shreerangtrendz.com (FRP tunnel)
-
-Vercel Serverless APIs:
-  /api/tally-proxy        → raw XML bridge
-  /api/tally-sync         → purchase_bills + sales_bills  ← FIXED ✅
-  /api/tally-outstanding  → outstanding_receivable         ← NEW ✅
-
-Supabase DB (zdekydcscwhuusliwqaz):
-  purchase_bills          → Tally purchase vouchers
-  sales_bills             → Tally sales vouchers
-  job_work_bills          → Job worker charges
-  quotations              → Customer price quotes
-  outstanding_receivable  → Party-wise outstanding snapshot
-  cash_bank_ledger        → Account balances
-  tally_sync_log          → Every sync logged
-
-n8n Cloud (v3 workflow):
-  6:00am / 2:00pm / 9:30pm IST
-  → health check → sync bills + outstanding + stock (parallel)
-
-Bunny CDN (shreerang.b-cdn.net):
-  Storage zone: shreerang-s
-  design_image_url on finish_fabrics table
+Customer WhatsApp → Meta API → n8n (airtribe.app.n8n.cloud)
+                                   ↓
+                            Supabase DB (223 tables)
+                                   ↓
+                    Admin Dashboard (shreerangtrendz.com/admin)
+                                   ↓
+                         Tally Prime (via FRP tunnel)
+                    tally.shreerangtrendz.com → VPS → FRP → Office PC port 9000
 ```
 
----
+**Fabric Data Flow:**
+```
+Admin creates Finish Fabric on website
+     ↓ saves to finish_fabrics (Supabase)
+     ↓ pushes Stock Item to Tally via /api/tally-push → Supabase Edge Function tally-proxy → FRP → Tally
+     ↓ marks tally_synced = true
+WhatsApp bot reads finish_fabrics to answer customer queries
+E-commerce ShopPage reads finish_fabrics WHERE ecom_visible=true
+```
 
-## 📁 Complete File Map
-
-| File | Purpose | Status |
-|------|---------|--------|
-| `src/components/admin/AdminSidebar.jsx` | 5-group nav with search/collapse | ✅ |
-| `src/components/admin/AdminLayout.jsx` | Dynamic sidebar width | ✅ |
-| `src/pages/admin/AdminDashboard.jsx` | Real KPIs + Sync Bills Now button | ✅ |
-| `src/pages/admin/integrations/TallySyncDashboard.jsx` | Full sync control + Bills cards | ✅ |
-| `src/pages/admin/accounting/PurchaseBillsPage.jsx` | Purchase bills table + Tally sync | ✅ NEW |
-| `src/pages/admin/accounting/SalesBillsPage.jsx` | Sales bills table + Tally sync | ✅ NEW |
-| `src/pages/admin/accounting/JobWorkBillsPage.jsx` | Job work billing management | ✅ NEW |
-| `src/pages/admin/accounting/QuotationsPage.jsx` | Quotations CRUD + status | ✅ NEW |
-| `src/pages/admin/fabric/FinishFabricForm.jsx` | Finish fabric + Bunny image upload | ✅ UPDATED |
-| `src/services/DashboardService.js` | Accounting KPI queries | ✅ |
-| `api/tally-proxy.js` | Vercel: XML bridge to Tally | ✅ |
-| `api/tally-sync.js` | Vercel: voucher sync (FIXED columns) | ✅ FIXED |
-| `api/tally-outstanding.js` | Vercel: outstanding receivable sync | ✅ NEW |
-| `n8n-daily-tally-sync-v3.json` | n8n: 3× daily full sync | ✅ NEW |
-| `IMPLEMENTATION_TRACKER.md` | This file | ✅ |
-
-*06 Mar 2026 — Shreerang Trendz ERP*

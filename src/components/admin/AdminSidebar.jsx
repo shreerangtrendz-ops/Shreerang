@@ -1,130 +1,162 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useUserProfile } from '@/hooks/useUserProfile';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 
-// ─── NAVIGATION CONFIG ───────────────────────────────────────────────────────
-// 5 core groups instead of 11 — cleaner, faster to navigate
-const NAV_GROUPS = [
+// ─── NAVIGATION STRUCTURE ─────────────────────────────────────────────────────
+const ALL_GROUPS = [
   {
     id: 'overview',
+    label: 'Command',
     icon: '⬡',
-    label: 'Overview',
-    color: '#2BA898',
+    roles: ['admin','manager','accounts','operations','sales'],
     items: [
-      { icon: '⬡', label: 'Dashboard', to: '/admin/dashboard' },
-      { icon: '📊', label: 'Analytics', to: '/admin/analytics' },
-      { icon: '📋', label: 'Activity Log', to: '/admin/activity-logs' },
+      { icon: '⬡',  label: 'Dashboard',        to: '/admin/dashboard',       roles: ['admin','manager','accounts','operations','sales'] },
+      { icon: '📊', label: 'Analytics',         to: '/admin/analytics',       roles: ['admin','manager'] },
+      { icon: '📋', label: 'Activity Log',      to: '/admin/activity-logs',   roles: ['admin','manager'] },
     ]
   },
   {
     id: 'catalogue',
-    icon: '🧵',
     label: 'Catalogue',
-    color: '#3DBFAE',
+    icon: '🧵',
+    roles: ['admin','manager'],
     items: [
-      { icon: '🧵', label: 'Base Fabric', to: '/admin/fabric/base-fabric-form' },
-      { icon: '🔄', label: 'Finish Fabric', to: '/admin/fabric/finish-fabric-form' },
-      { icon: '✨', label: 'Fancy Finish', to: '/admin/fabric/fancy-finish-fabric-form' },
-      { icon: '🎨', label: 'Design Upload', to: '/admin/design/upload', badge: 'NEW' },
-      { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity', badge: 'AI' },
-      { icon: '📦', label: 'Bulk Import', to: '/admin/fabric-master/bulk-import' },
-      { icon: '🗂', label: 'Product Master', to: '/admin/products' },
-      { icon: '🖼', label: 'Media Library', to: '/admin/media-library' },
+      { icon: '🔩', label: 'Base Fabric',        to: '/admin/fabric/base-fabric-form',   roles: ['admin','manager'] },
+      { icon: '🧵', label: 'Finish Fabric',       to: '/admin/fabric/finish-fabric-form', roles: ['admin','manager'] },
+      { icon: '🗂',  label: 'Fabric Catalogue',   to: '/admin/fabric/finish',             roles: ['admin','manager'] },
+      { icon: '🎨', label: 'Design Upload',       to: '/admin/design/upload',             roles: ['admin','manager'], badge: 'NEW' },
+      { icon: '💰', label: 'Designs & Pricing',   to: '/admin/fabric/finish',             roles: ['admin','manager'] },
+      { icon: '📈', label: 'Design Velocity',     to: '/admin/design-velocity',           roles: ['admin','manager'], badge: 'AI' },
+      { icon: '📦', label: 'Bulk Import',         to: '/admin/fabric-master/bulk-import', roles: ['admin'] },
+      { icon: '🖼',  label: 'Media Library',       to: '/admin/media-library',             roles: ['admin','manager'] },
     ]
   },
   {
     id: 'accounts',
-    icon: '🧮',
     label: 'Accounts',
-    color: '#D4920A',
+    icon: '💰',
+    roles: ['admin','manager','accounts'],
     items: [
-      { icon: '🔄', label: 'Tally Sync', to: '/admin/tally-sync', badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📥', label: 'Purchase Bills', to: '/admin/accounting/purchase-bills' },
-      { icon: '📤', label: 'Sales Bills', to: '/admin/accounting/sales-bills' },
-      { icon: '🔧', label: 'Job Work Bills', to: '/admin/accounting/job-work-bills' },
-      { icon: '💬', label: 'Quotations', to: '/admin/accounting/quotations' },
-      { icon: '💰', label: 'Outstanding Recv', to: '/admin/outstanding-receivable' },
-      { icon: '📤', label: 'Outstanding Pay', to: '/admin/outstanding-payable' },
-      { icon: '🏦', label: 'Cash & Bank', to: '/admin/cash-bank' },
-      { icon: '📒', label: 'Party Ledger', to: '/admin/reports/party-ledger' },
-      { icon: '📅', label: 'Day Book', to: '/admin/reports/day-book' },
-      { icon: '🧮', label: 'Cost Engine', to: '/admin/cost/cost-sheet' },
-      { icon: '💰', label: 'Price Database', to: '/admin/price-database' },
+      { icon: '🔄', label: 'Tally Sync',          to: '/admin/tally-sync',                    roles: ['admin','manager'],            badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '📥', label: 'Purchase Bills',       to: '/admin/accounting/purchase-bills',     roles: ['admin','manager','accounts'] },
+      { icon: '📤', label: 'Sales Bills',          to: '/admin/accounting/sales-bills',        roles: ['admin','manager','accounts'] },
+      { icon: '🔧', label: 'Job Work Bills',       to: '/admin/accounting/job-work-bills',     roles: ['admin','manager','accounts'] },
+      { icon: '💬', label: 'Quotations',           to: '/admin/accounting/quotations',         roles: ['admin','manager','accounts'] },
+      { icon: '📈', label: 'Outstanding Recv',     to: '/admin/outstanding-receivable',        roles: ['admin','manager','accounts'] },
+      { icon: '📉', label: 'Outstanding Pay',      to: '/admin/outstanding-payable',           roles: ['admin','manager','accounts'] },
+      { icon: '🏦', label: 'Cash & Bank',          to: '/admin/cash-bank',                     roles: ['admin','manager','accounts'] },
+      { icon: '📒', label: 'Party Ledger',         to: '/admin/reports/party-ledger',          roles: ['admin','manager','accounts'] },
+      { icon: '📅', label: 'Day Book',             to: '/admin/reports/day-book',              roles: ['admin','manager','accounts'] },
+      { icon: '🧮', label: 'Cost Engine',          to: '/admin/cost/cost-sheet',               roles: ['admin','manager'] },
+      { icon: '💲', label: 'Price Database',       to: '/admin/price-database',                roles: ['admin','manager'] },
     ]
   },
   {
     id: 'operations',
-    icon: '📋',
     label: 'Operations',
-    color: '#2BA898',
+    icon: '📦',
+    roles: ['admin','manager','operations','sales'],
     items: [
-      { icon: '📋', label: 'Sales Orders', to: '/admin/orders' },
-      { icon: '📦', label: 'Job Work Challans', to: '/admin/challans' },
-      { icon: '🏭', label: 'Manufacturing Entry', to: '/admin/manufacturing' },
-      { icon: '🏭', label: 'Vendors', to: '/admin/settings/suppliers' },
-      { icon: '👥', label: 'Customers', to: '/admin/customers' },
-      { icon: '🤝', label: 'Job Workers', to: '/admin/job-workers' },
-      { icon: '🎯', label: 'Make-to-Order', to: '/admin/mto-orders', badge: 'NEW' },
-      { icon: '🛒', label: 'Store / Ecom', to: '/admin/ecom' },
-      { icon: '💬', label: 'WhatsApp Bot', to: '/admin/whatsapp', badge: 'ON', badgeClass: 'ok' },
+      { icon: '📋', label: 'Sales Orders',         to: '/admin/orders',              roles: ['admin','manager','operations','sales'] },
+      { icon: '👥', label: 'Customers',            to: '/admin/customers',           roles: ['admin','manager','operations','sales'] },
+      { icon: '💰', label: 'Payment Reminders',    to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
+      { icon: '📦', label: 'Job Work Challans',    to: '/admin/challans',            roles: ['admin','manager','operations'] },
+      { icon: '🏭', label: 'Production Tracker',  to: '/admin/manufacturing',       roles: ['admin','manager','operations'] },
+      { icon: '🤝', label: 'Job Workers',          to: '/admin/job-workers',         roles: ['admin','manager','operations'] },
+      { icon: '🎯', label: 'Make-to-Order',        to: '/admin/mto-orders',          roles: ['admin','manager','operations'], badge: 'NEW' },
+    ]
+  },
+  {
+    id: 'marketing',
+    label: 'Marketing & WhatsApp',
+    icon: '📢',
+    roles: ['admin','manager'],
+    items: [
+      { icon: '📱', label: 'WhatsApp Inbox',       to: '/admin/whatsapp-inbox',      roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '🤖', label: 'WhatsApp Bot',         to: '/admin/whatsapp',            roles: ['admin','manager'], badge: 'ON',   badgeClass: 'ok' },
+      { icon: '📢', label: 'Broadcast',            to: '/admin/whatsapp-broadcast',  roles: ['admin','manager'], badge: 'NEW' },
+        { icon: '🖼️', label: 'Fabric Catalogue',      to: '/admin/fabric-catalogue',    roles: ['admin','manager'], badge: 'AUTO' },
     ]
   },
   {
     id: 'settings',
-    icon: '⚙️',
     label: 'Settings',
-    color: '#6b7280',
+    icon: '⚙️',
+    roles: ['admin'],
     items: [
-      { icon: '🔧', label: 'Field Config', to: '/admin/settings/dropdown-manager' },
-      { icon: '🔢', label: 'HSN Codes', to: '/admin/settings/hsn-codes' },
-      { icon: '🏭', label: 'Job Work Units', to: '/admin/settings/job-units' },
-      { icon: '☁️', label: 'Cloud Storage', to: '/admin/cloud-sync' },
-      { icon: '🛡', label: 'Access Control', to: '/admin/access-control' },
-      { icon: '💾', label: 'Backup', to: '/admin/backup-control' },
+      { icon: '🛡',  label: 'Access Control',      to: '/admin/access-control',               roles: ['admin'] },
+      { icon: '🔧', label: 'Field Config',         to: '/admin/settings/dropdown-manager',    roles: ['admin'] },
+      { icon: '🔢', label: 'HSN Codes',            to: '/admin/settings/hsn-codes',           roles: ['admin'] },
+      { icon: '🏭', label: 'Job Work Units',       to: '/admin/settings/job-units',           roles: ['admin'] },
+      { icon: '🔖', label: 'SKU Formula',          to: '/admin/settings/sku-formula',         roles: ['admin'] },
+      { icon: '☁️',  label: 'Cloud Storage',        to: '/admin/cloud-sync',                   roles: ['admin'] },
+      { icon: '💾', label: 'Backup',               to: '/admin/backup-control',               roles: ['admin'] },
     ]
   }
 ];
 
-// ─── BADGE STYLES ─────────────────────────────────────────────────────────────
 const BADGE_STYLES = {
-  ok:   { bg: '#d1fae5', color: '#065f46' },
-  warn: { bg: '#fef3c7', color: '#92400e' },
-  gold: { bg: '#fef3c7', color: '#b45309' },
-  teal: { bg: '#ccfbf1', color: '#0f766e' },
-  default: { bg: '#e0f2fe', color: '#0369a1' },
-  AI:   { bg: '#f3e8ff', color: '#7c3aed' },
-  LIVE: { bg: '#d1fae5', color: '#065f46' },
-  ON:   { bg: '#d1fae5', color: '#065f46' },
-  NEW:  { bg: '#fef3c7', color: '#b45309' },
+  ok:      { bg: '#D1FAE5', color: '#065F46' },
+  warn:    { bg: '#FEF3C7', color: '#92400E' },
+  AI:      { bg: '#F3E8FF', color: '#7C3AED' },
+  LIVE:    { bg: '#D1FAE5', color: '#065F46' },
+  ON:      { bg: '#D1FAE5', color: '#065F46' },
+  NEW:     { bg: '#FEF3C7', color: '#B45309' },
+  '⚡':    { bg: '#FEF3C7', color: '#B45309' },
+  default: { bg: '#E0F2FE', color: '#0369A1' },
 };
 
 function Badge({ text, cls }) {
   const style = BADGE_STYLES[cls] || BADGE_STYLES[text] || BADGE_STYLES.default;
   return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
-      padding: '2px 6px', borderRadius: 20,
-      background: style.bg, color: style.color,
-      marginLeft: 'auto', flexShrink: 0,
-    }}>{text}</span>
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 20, background: style.bg, color: style.color, marginLeft: 'auto', flexShrink: 0 }}>
+      {text}
+    </span>
+  );
+}
+
+function RolePill({ role }) {
+  const styles = {
+    admin:      { bg: '#FEF3C7', color: '#B45309', label: 'Admin' },
+    manager:    { bg: '#DBEAFE', color: '#1D4ED8', label: 'Manager' },
+    accounts:   { bg: '#D1FAE5', color: '#065F46', label: 'Accounts' },
+    operations: { bg: '#EDE9FE', color: '#5B21B6', label: 'Operations' },
+    sales:      { bg: '#FCE7F3', color: '#9D174D', label: 'Sales' },
+  };
+  const s = styles[role] || { bg: '#F3F4F6', color: '#374151', label: role };
+  return (
+    <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 99, background: s.bg, color: s.color, textTransform: 'uppercase' }}>
+      {s.label}
+    </span>
   );
 }
 
 export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { profile } = useUserProfile();
+  const role = profile?.role || 'admin';
+
   const [openGroups, setOpenGroups] = useState(() => {
-    // Auto-open the group that contains the current route
-    const active = NAV_GROUPS.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
-    return active ? { [active.id]: true } : { overview: true, accounts: true };
+    const active = ALL_GROUPS.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
+    return active ? { [active.id]: true } : { overview: true };
   });
   const [collapsed, setCollapsed] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchRef = useRef(null);
+
   const toggleCollapse = (val) => {
     setCollapsed(val);
     if (onCollapseChange) onCollapseChange(val);
   };
-  const [search, setSearch] = useState('');
-  const searchRef = useRef(null);
 
-  // Keyboard shortcut: / to focus search
+  const visibleGroups = ALL_GROUPS
+    .filter(g => role === 'admin' || g.roles.includes(role))
+    .map(g => ({ ...g, items: g.items.filter(i => role === 'admin' || (i.roles || []).includes(role)) }))
+    .filter(g => g.items.length > 0);
+
   useEffect(() => {
     const handler = (e) => {
       if (e.key === '/' && !e.target.matches('input,textarea')) {
@@ -137,183 +169,90 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Auto-open group on route change
   useEffect(() => {
-    const active = NAV_GROUPS.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
+    const active = visibleGroups.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
     if (active) setOpenGroups(prev => ({ ...prev, [active.id]: true }));
   }, [location.pathname]);
 
-  const toggleGroup = (id) => {
-    setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  // Search filter
   const searchLower = search.toLowerCase();
   const filteredGroups = search
-    ? NAV_GROUPS.map(g => ({
-        ...g,
-        items: g.items.filter(i => i.label.toLowerCase().includes(searchLower))
-      })).filter(g => g.items.length > 0)
-    : NAV_GROUPS;
+    ? visibleGroups.map(g => ({ ...g, items: g.items.filter(i => i.label.toLowerCase().includes(searchLower)) })).filter(g => g.items.length > 0)
+    : visibleGroups;
 
-  const sidebarStyle = {
-    width: collapsed ? 60 : 240,
-    minWidth: collapsed ? 60 : 240,
-    transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1), min-width 0.25s cubic-bezier(0.4,0,0.2,1)',
-    background: 'var(--sidebar-bg, #0B2E2B)',
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100vh',
-    overflowX: 'hidden',
-    overflowY: 'auto',
-    borderRight: '1px solid rgba(255,255,255,0.06)',
-    flexShrink: 0,
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    zIndex: 50,
-  };
+  const handleSignOut = async () => { await signOut(); navigate('/'); };
 
   return (
     <>
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div
-          onClick={onClose}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-            zIndex: 49, display: 'none'
-          }}
-          className="sidebar-overlay"
-        />
-      )}
+      {isOpen && <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 49 }} className="sidebar-overlay" />}
 
       <style>{`
-        .sidebar-overlay { display: block !important; }
-        @media(min-width:1024px) { .sidebar-overlay { display: none !important; } }
-
-        .sb-nav-item {
-          display: flex; align-items: center; gap: 10px;
-          padding: 7px 12px; border-radius: 8px; text-decoration: none;
-          color: rgba(255,255,255,0.6); font-size: 13px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
-          overflow: hidden;
-        }
-        .sb-nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
-        .sb-nav-item.active { background: rgba(43,168,152,0.2); color: #3DBFAE !important; }
-
-        .sb-group-header {
-          display: flex; align-items: center; gap: 8px;
-          padding: 6px 12px; cursor: pointer; border-radius: 6px;
-          color: rgba(255,255,255,0.35); font-size: 10px; font-weight: 700;
-          letter-spacing: 0.08em; text-transform: uppercase;
-          transition: color 0.15s; user-select: none;
-        }
-        .sb-group-header:hover { color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.04); }
-
-        .sb-group-items {
-          overflow: hidden; transition: max-height 0.25s ease;
-        }
-
-        .sb-icon { font-size: 16px; flex-shrink: 0; width: 20px; text-align: center; }
-
-        .sb-search {
-          background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 8px; padding: 6px 10px; color: #fff; font-size: 12px;
-          width: 100%; outline: none; transition: border-color 0.15s;
-        }
-        .sb-search::placeholder { color: rgba(255,255,255,0.3); }
-        .sb-search:focus { border-color: rgba(43,168,152,0.6); }
-
-        .sb-collapse-btn {
-          display: flex; align-items: center; justify-content: center;
-          width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
-          color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.05);
-          border: none; transition: all 0.15s; flex-shrink: 0;
-        }
-        .sb-collapse-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-
-        .sb-integration-dot {
-          width: 6px; height: 6px; border-radius: 50%;
-          background: #22c55e; flex-shrink: 0;
-          box-shadow: 0 0 6px #22c55e;
-        }
+        .sidebar-overlay { display: none; }
+        @media(max-width:1023px) { .sidebar-overlay { display: block !important; } }
+        .sb-item { display:flex; align-items:center; gap:10px; padding:7px 12px; border-radius:8px; text-decoration:none; color:rgba(200,232,228,0.55); font-size:13px; font-weight:500; cursor:pointer; transition:all 0.13s ease; white-space:nowrap; overflow:hidden; border:none; background:none; width:100%; text-align:left; font-family:inherit; }
+        .sb-item:hover { background:rgba(61,191,174,0.1); color:#C8E8E4; }
+        .sb-item.active { background:rgba(61,191,174,0.18); color:#3DBFAE !important; font-weight:600; }
+        .sb-group-hdr { display:flex; align-items:center; gap:8px; padding:7px 12px; cursor:pointer; border-radius:7px; color:rgba(200,232,228,0.3); font-size:9.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; transition:all 0.13s; user-select:none; margin-top:4px; }
+        .sb-group-hdr:hover { color:rgba(200,232,228,0.7); background:rgba(255,255,255,0.04); }
+        .sb-items { overflow:hidden; transition:max-height 0.22s ease; }
+        .sb-icon { font-size:15px; flex-shrink:0; width:20px; text-align:center; }
+        .sb-search { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:7px 10px; color:#fff; font-size:12px; width:100%; outline:none; box-sizing:border-box; }
+        .sb-search::placeholder { color:rgba(255,255,255,0.28); }
+        .sb-search:focus { border-color:rgba(61,191,174,0.5); background:rgba(255,255,255,0.1); }
+        .sb-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+        .sb-dot-on { background:#22C55E; box-shadow:0 0 6px #22C55E; }
+        .sb-dot-off { background:#EF4444; box-shadow:0 0 6px #EF4444; }
       `}</style>
 
-      <nav style={sidebarStyle}>
-        {/* ── LOGO / HEADER ── */}
-        <div style={{
-          padding: '16px 12px 10px',
-          display: 'flex', alignItems: 'center', gap: 10,
-          borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0
-        }}>
+      <nav style={{
+        width: collapsed ? 60 : 240, minWidth: collapsed ? 60 : 240,
+        transition: 'width 0.22s cubic-bezier(.4,0,.2,1), min-width 0.22s cubic-bezier(.4,0,.2,1)',
+        background: '#071E1C', display: 'flex', flexDirection: 'column', height: '100vh',
+        overflowX: 'hidden', overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0, position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 50,
+      }}>
+
+        {/* LOGO */}
+        <div style={{ padding: '14px 12px 10px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
           {!collapsed && (
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <div style={{ color: '#3DBFAE', fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>
-                Shreerang
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.06em' }}>
-                ADMIN PANEL
-              </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#3DBFAE', fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em', lineHeight: 1.1 }}>Shreerang</div>
+              <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, letterSpacing: '0.1em', marginTop: 1 }}>ADMIN PANEL</div>
             </div>
           )}
-          <button
-            className="sb-collapse-btn"
-            onClick={() => toggleCollapse(!collapsed)}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? '›' : '‹'}
-          </button>
+          <button onClick={() => toggleCollapse(!collapsed)}
+            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}
+            title={collapsed ? 'Expand' : 'Collapse'}
+          >{collapsed ? '›' : '‹'}</button>
         </div>
 
-        {/* ── SEARCH ── */}
+        {/* SEARCH */}
         {!collapsed && (
           <div style={{ padding: '10px 12px', flexShrink: 0 }}>
-            <input
-              ref={searchRef}
-              className="sb-search"
-              placeholder="Search… ( / )"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <input ref={searchRef} className="sb-search" placeholder="Search… ( / )" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         )}
 
-        {/* ── NAV GROUPS ── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 16px' }}>
+        {/* NAV GROUPS */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px 12px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
           {filteredGroups.map(group => {
             const isOpen = !!openGroups[group.id] || !!search;
             return (
-              <div key={group.id} style={{ marginBottom: 4 }}>
+              <div key={group.id}>
                 {!collapsed && (
-                  <div
-                    className="sb-group-header"
-                    onClick={() => toggleGroup(group.id)}
-                    style={{ color: isOpen ? 'rgba(255,255,255,0.55)' : undefined }}
-                  >
+                  <div className="sb-group-hdr" onClick={() => setOpenGroups(p => ({ ...p, [group.id]: !p[group.id] }))}>
                     <span style={{ flex: 1 }}>{group.label}</span>
-                    <span style={{ fontSize: 10, transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+                    <span style={{ fontSize: 9, transition: 'transform 0.18s', transform: isOpen ? 'rotate(180deg)' : '' }}>▾</span>
                   </div>
                 )}
-                <div
-                  className="sb-group-items"
-                  style={{ maxHeight: (isOpen || collapsed) ? '800px' : '0px' }}
-                >
+                <div className="sb-items" style={{ maxHeight: isOpen || collapsed ? '1200px' : '0px' }}>
                   {group.items.map(item => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      className={({ isActive }) => `sb-nav-item${isActive ? ' active' : ''}`}
-                      onClick={onClose}
-                      title={collapsed ? item.label : undefined}
-                    >
+                    <NavLink key={item.to + item.label} to={item.to}
+                      className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}
+                      onClick={onClose} title={collapsed ? item.label : undefined}>
                       <span className="sb-icon">{item.icon}</span>
                       {!collapsed && (
                         <>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {item.label}
-                          </span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
                           {item.badge && <Badge text={item.badge} cls={item.badgeClass} />}
                         </>
                       )}
@@ -325,28 +264,42 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
           })}
         </div>
 
-        {/* ── INTEGRATION STATUS BAR ── */}
-        {!collapsed && (
-          <div style={{
-            padding: '10px 12px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            flexShrink: 0
-          }}>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.08em', marginBottom: 8, textTransform: 'uppercase' }}>
-              Integrations
-            </div>
-            {[
-              { label: 'Tally Prime', status: true },
-              { label: 'n8n Workflows', status: true },
-              { label: 'WhatsApp Bot', status: true },
-            ].map(int => (
-              <div key={int.label} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                <div className="sb-integration-dot" style={{ background: int.status ? '#22c55e' : '#ef4444', boxShadow: `0 0 6px ${int.status ? '#22c55e' : '#ef4444'}` }} />
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>{int.label}</span>
+        {/* FOOTER */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+          <NavLink to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '10px' : '9px 12px', textDecoration: 'none', color: 'rgba(200,232,228,0.4)', fontSize: 12, transition: 'background 0.13s', justifyContent: collapsed ? 'center' : 'flex-start' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            title={collapsed ? 'Homepage' : undefined}>
+            <span style={{ fontSize: 15 }}>🏠</span>
+            {!collapsed && <span style={{ fontSize: 12 }}>Back to Homepage</span>}
+          </NavLink>
+
+          {!collapsed && (
+            <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(61,191,174,0.2)', border: '1.5px solid rgba(61,191,174,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#3DBFAE', flexShrink: 0 }}>
+                  {(profile?.full_name || user?.email || 'A')[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {profile?.full_name || user?.email?.split('@')[0]}
+                  </div>
+                  <div style={{ marginTop: 2 }}><RolePill role={role} /></div>
+                </div>
+                <button onClick={handleSignOut} title="Sign out"
+                  style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>↪</button>
               </div>
-            ))}
-          </div>
-        )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {[{ label: 'Tally Prime', on: true },{ label: 'n8n Workflows', on: true },{ label: 'WhatsApp Bot', on: true }].map(int => (
+                  <div key={int.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span className={`sb-dot ${int.on ? 'sb-dot-on' : 'sb-dot-off'}`} />
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{int.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </nav>
     </>
   );

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 
 export default function QuotationsPage() {
+  const navigate = useNavigate();
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -40,6 +42,29 @@ export default function QuotationsPage() {
 
   const statusColors = { pending:['#FFF8E8','#D4920A'], approved:['#E8FFF4','#1E9E5A'], rejected:['#FFF3F3','#ef4444'], expired:['#f1f5f9','#94a3b8'] };
 
+  // Convert approved quotation to sales order
+  async function convertToOrder(q) {
+    if (q.status !== 'approved') {
+      alert('Only approved quotations can be converted to orders.');
+      return;
+    }
+    const orderNo = 'ORD-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*9000)+1000);
+    const { data, error } = await supabase.from('sales_orders').insert({
+      order_no: orderNo,
+      party_name: q.party_name,
+      party_details: { name: q.party_name },
+      total_amount: q.amount,
+      status: 'draft',
+      order_channel: 'quotation',
+      quotation_id: q.id,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    if (error) { alert('Failed to create order: ' + error.message); return; }
+    alert('Sales Order ' + orderNo + ' created!');
+    navigate('/admin/orders');
+  }
+
+
   return (
     <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>
       <div style={{ background:'linear-gradient(135deg,#0B2E2B,#143F3C)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
@@ -71,7 +96,7 @@ export default function QuotationsPage() {
         <div style={{ background:'#fff', borderRadius:12, boxShadow:'0 2px 10px rgba(0,0,0,.07)', border:'1px solid rgba(43,168,152,.12)', overflow:'hidden' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead><tr style={{ background:'#F4FBFA' }}>
-              {['Quote No','Date','Party','Item','Design','Qty','Rate','Amount','Valid Until','Status','Actions'].map(h=>(
+              {['Quote No','Date','Party','Item','Design','Qty','Rate','Amount','Valid Until','Status','Actions','Convert'].map(h=>(
                 <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, color:'#0B2E2B', borderBottom:'1px solid rgba(43,168,152,.15)', whiteSpace:'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
@@ -102,7 +127,16 @@ export default function QuotationsPage() {
                         <option value="rejected">Reject</option>
                         <option value="expired">Expire</option>
                       </select>
-                    </td>
+                    
+                    <td style={{ padding:'9px 12px' }}>
+                      {q.status==='approved' && (
+                        <button onClick={()=>convertToOrder(q)}
+                          style={{ padding:'4px 10px', background:'#1E9E5A', color:'#fff', border:'none', borderRadius:6, fontSize:11, fontWeight:700, cursor:'pointer' }}
+                          title="Convert to Sales Order">
+                          → Order
+                        </button>
+                      )}
+                    </td></td>
                   </tr>
                 );
               })}

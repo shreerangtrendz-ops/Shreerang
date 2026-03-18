@@ -65,7 +65,7 @@ export const DashboardService = {
   async getRecentOrders(limit = 5) {
     return safeFetch(
       supabase.from('sales_orders')
-        .select('id, order_number, customer_name, total_amount, status, created_at')
+        .select('id, order_no, party_name, party_details, total_amount, status, created_at')
         .order('created_at', { ascending: false })
         .limit(limit),
       []
@@ -189,7 +189,7 @@ export const DashboardService = {
   async getRecentSalesBills(limit = 5) {
     return safeFetch(
       supabase.from('sales_bills')
-        .select('id, bill_number, customer_name, total_amount, bill_date, status')
+        .select('id, bill_number, supplier_name, total_amount, bill_date, status')
         .order('created_at', { ascending: false })
         .limit(limit),
       []

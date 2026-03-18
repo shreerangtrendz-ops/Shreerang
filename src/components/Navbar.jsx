@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X, User, LogOut, Search, ShoppingBag, Heart } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -8,7 +8,7 @@ import NotificationCenter from '@/components/admin/NotificationCenter';
 
 const navLinks = [
   { name: 'Shop', path: '/shop' },
-  { name: 'Wholesale', path: '/wholesale' },
+  { name: 'Wholesale Portal', path: '/wholesale' },
   { name: 'About', path: '/about' },
   { name: 'Contact', path: '/contact' },
 ];
@@ -105,11 +105,11 @@ const Navbar = () => {
             {/* User / Login */}
             {user ? (
               <>
-                <Link to={profile?.role === 'admin' ? '/admin' : '/my-account'} style={{ ...iconBtn }}>
+                <Link to={profile?.role === 'admin' ? '/admin/dashboard' : '/customer/dashboard'} style={{ ...iconBtn }}>
                   <User style={{ width: 16, height: 16, color: '#6A9B95' }} />
                 </Link>
                 <button onClick={handleSignOut} style={{ ...iconBtn }}>
-                  <LogOut style={{ width: 16, height: 16, color: '#D93A3A' }} />
+                  <LogOut style={{ width: 16, height: 16, color: '#6A9B95' }} />
                 </button>
               </>
             ) : (
@@ -158,7 +158,7 @@ const Navbar = () => {
         onClick={() => setIsOpen(false)}
         style={{ display: 'block', padding: '10px 16px', fontSize: 13, color: 'var(--teal-bright)', textDecoration: 'none', fontWeight: 600 }}
       >
-        🛡️ Dashboard
+        ðŸ›¡ï¸ Dashboard
       </Link>
     )}
     <button onClick={handleSignOut} style={{ color: 'var(--red)', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', padding: '10px 16px', display: 'block' }}>

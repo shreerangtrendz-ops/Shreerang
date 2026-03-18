@@ -7,7 +7,8 @@ import {
   syncCustomersFromTally,
   syncSuppliersFromTally,
   syncAgentsFromTally,
-  syncOutstandingFromTally
+  syncOutstandingFromTally,
+  syncAllFromTally
 } from '../../../services/TallySyncService';
 import { RefreshCcw } from 'lucide-react';
 import { useToast } from '../../../components/ui/use-toast';
@@ -303,6 +304,34 @@ export default function TallySyncDashboard() {
     }
   }
 
+  /* SYNC ALL — unified one-click sync */
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState([]);
+
+  async function handleSyncAll() {
+    setSyncingAll(true);
+    setSyncProgress([]);
+    try {
+      const result = await syncAllFromTally('', (progress) => {
+        setSyncProgress(prev => {
+          const existing = prev.findIndex(p => p.step === progress.step);
+          if (existing >= 0) {
+            const updated = [...prev];
+            updated[existing] = progress;
+            return updated;
+          }
+          return [...prev, progress];
+        });
+      });
+      toast({ title: ' Sync All Complete', description: result.summary });
+      await loadData();
+    } catch(e) {
+      toast({ title: ' Sync All Failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setSyncingAll(false);
+    }
+  }
+
   const statsMini = [
     { num:logItems.length+errors.length, lbl:'Total Syncs',    c:'var(--teal-light,#1D8A7C)' },
     { num:logItems.filter(l=>l.status==='success').length, lbl:'Successful', c:'#1E9E5A' },
@@ -323,14 +352,40 @@ export default function TallySyncDashboard() {
             BizAnalyst  Real-time ERP data sync for Shreerang Trendz Pvt. Ltd.
           </p>
         </div>
-        <button onClick={() => { setRefreshing(true); checkInfrastructure().finally(()=>setRefreshing(false)); loadData(); }} style={{ display:'flex', alignItems:'center', gap:6, background:'var(--teal,#1D8A7C)', color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:11, fontWeight:700, cursor:'pointer', letterSpacing:'.4px' }}>
-          <RefreshCcw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-          Refresh All
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button onClick={() => { setRefreshing(true); checkInfrastructure().finally(()=>setRefreshing(false)); loadData(); }} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(29,138,124,.15)', color:'#1D8A7C', border:'1px solid rgba(29,138,124,.3)', borderRadius:8, padding:'8px 14px', fontSize:11, fontWeight:700, cursor:'pointer', letterSpacing:'.4px' }}>
+            <RefreshCcw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            Refresh Status
+          </button>
+          <button onClick={handleSyncAll} disabled={syncingAll} style={{ display:'flex', alignItems:'center', gap:6, background: syncingAll ? 'rgba(232,168,0,.15)' : '#1D8A7C', color: syncingAll ? '#D4920A' : '#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:11, fontWeight:800, cursor: syncingAll ? 'not-allowed' : 'pointer', letterSpacing:'.4px' }}>
+            <RefreshCcw size={13} style={{ animation: syncingAll ? 'spin 1s linear infinite' : 'none' }} />
+            {syncingAll ? ' Syncing...' : ' Sync All From Tally'}
+          </button>
+        </div>
       </div>
 
       {/*  INFRASTRUCTURE STATUS  */}
       <InfraPanel infra={infra} onRefresh={() => { setRefreshing(true); checkInfrastructure().finally(()=>setRefreshing(false)); }} refreshing={refreshing} />
+
+      {/* SYNC ALL PROGRESS */}
+      {syncProgress.length > 0 && (
+        <div style={{ background:'rgba(29,138,124,.06)', border:'1px solid rgba(29,138,124,.15)', borderRadius:12, padding:'16px 20px', marginBottom:20 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#1D8A7C', marginBottom:12 }}> Sync Progress</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:8 }}>
+            {syncProgress.map((p, i) => (
+              <div key={i} style={{ background:'rgba(0,0,0,.04)', borderRadius:8, padding:'8px 12px', display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:16 }}>{p.status==='done'?'✅':p.status==='error'?'❌':'⏳'}</span>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:600, color:'var(--color-text-primary)' }}>{p.label}</div>
+                  <div style={{ fontSize:10, color:'var(--color-text-secondary)' }}>
+                    {p.status==='done'? (p.count ? p.count+' records' : 'Done') : p.status==='error'? (p.error||'Error').slice(0,40) : p.chunk || 'Running...'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/*  SYNC CARDS GRID  */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:24 }}>

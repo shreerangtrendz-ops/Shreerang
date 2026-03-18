@@ -361,6 +361,73 @@ function parseBillsFromXML(xml) {
   return bills;
 }
 
+
+// ============================================================
+// SYNC ALL — pulls every data type from Tally in one call
+// Runs: purchases, sales, stock, customers, suppliers, agents, outstanding
+// Call this from the "Sync All" button on the dashboard
+// ============================================================
+export async function syncAllFromTally(company = '', onProgress = null) {
+  const results = {};
+  const steps = [
+    { key: 'customers',   label: 'Customers (Sundry Debtors)',  fn: () => syncCustomersFromTally() },
+    { key: 'suppliers',   label: 'Suppliers (Sundry Creditors)',fn: () => syncSuppliersFromTally() },
+    { key: 'agents',      label: 'Sales Agents',                fn: () => syncAgentsFromTally() },
+    { key: 'stock',       label: 'Stock Items',                  fn: () => pullStockWithDesignDetail(company) },
+    { key: 'outstanding', label: 'Outstanding Bills',            fn: () => syncOutstandingFromTally() },
+  ];
+
+  // Run master data syncs first (fast, no chunking needed)
+  for (const step of steps) {
+    try {
+      if (onProgress) onProgress({ step: step.key, label: step.label, status: 'running' });
+      const r = await step.fn();
+      results[step.key] = r;
+      if (onProgress) onProgress({ step: step.key, label: step.label, status: r.success ? 'done' : 'error', count: r.count || 0, error: r.error });
+    } catch (e) {
+      results[step.key] = { success: false, error: e.message };
+      if (onProgress) onProgress({ step: step.key, label: step.label, status: 'error', error: e.message });
+    }
+  }
+
+  // Run voucher syncs (chunked — call repeatedly until hasMore = false)
+  for (const billType of ['purchase', 'sales']) {
+    const key = billType === 'purchase' ? 'purchases' : 'sales';
+    let totalSynced = 0, hasMore = true, attempts = 0;
+    if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'running' });
+    while (hasMore && attempts < 200) {
+      attempts++;
+      try {
+        const r = await pullBillsChunk(billType, company);
+        if (!r.success) {
+          results[key] = { success: false, error: r.error };
+          if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'error', error: r.error });
+          break;
+        }
+        totalSynced += r.recordsThisChunk || 0;
+        hasMore = r.hasMore;
+        if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: hasMore ? 'running' : 'done', count: totalSynced, chunk: r.chunkFrom + ' to ' + r.chunkTo });
+        if (!hasMore) results[key] = { success: true, count: totalSynced };
+      } catch (e) {
+        results[key] = { success: false, error: e.message };
+        if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'error', error: e.message });
+        break;
+      }
+    }
+    if (hasMore && attempts >= 200) {
+      if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'done', count: totalSynced, note: 'Max chunks reached — run Sync All again tomorrow to continue' });
+      results[key] = { success: true, count: totalSynced, partial: true };
+    }
+  }
+
+  const successCount = Object.values(results).filter(r => r.success).length;
+  return {
+    success: successCount > 0,
+    results,
+    summary: successCount + '/' + (steps.length + 2) + ' syncs completed'
+  };
+}
+
 // Keep these for compatibility with existing code
 export { pullBillsChunk as pullSalesFromTally };
 export async function pullJobBillsFromTally() { return { success: false, error: 'Use Job Bills sync from dashboard' }; }

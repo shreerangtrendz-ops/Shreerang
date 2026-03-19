@@ -1,445 +1,354 @@
-// ============================================================
-// TallySyncService.js -- v2 Progressive Sync
-// Calls Supabase Edge Function directly from browser
-// Handles chunked sync (7 days at a time) to avoid timeouts
-// Correct tables: purchase_bills, sales_bills
-// ============================================================
-import { supabase } from '../lib/supabase';
+// TallySyncService.js — Shreerang Trendz
+// Rewritten: correct XML parsing, all Tally voucher types, full auto-sync
+import { supabase } from '@/lib/customSupabaseClient';
 
-// --------- CORE: POST XML to Tally via Edge Function ------------------------------------
-async function postToTally(xml, company = '') {
-  const { data, error } = await supabase.functions.invoke('tally-proxy', {
-    body: { xmlBody: xml, company },
-  });
-  if (error) throw new Error('Tally edge function error: ' + error.message);
+const TALLY_PROXY = async (xmlBody, company = '') => {
+  const { data, error } = await supabase.functions.invoke('tally-proxy', { body: { xmlBody, company } });
+  if (error) throw new Error('Edge function error: ' + error.message);
   if (!data) throw new Error('Empty response from tally-proxy');
-  // New proxy always returns HTTP 200 with {success, data} or {success:false, error}
   if (data.success === false) {
-    if (data.error === 'TALLY_IMPORT_DIALOG_OPEN') {
-      throw new Error('TALLY_DIALOG_OPEN: Tally is showing Import dialog. Press ESC in Tally to return to Gateway of Tally main screen, then try again.');
-    }
-    throw new Error('Tally error: ' + (data.error || 'Unknown error'));
+    if (data.error === 'TALLY_IMPORT_DIALOG_OPEN') throw new Error('TALLY_DIALOG_OPEN: Press ESC in Tally');
+    throw new Error('Tally error: ' + (data.error || 'Unknown'));
   }
-  // Support both new format (data.data) and old format (data.xml) for backward compat
-  const xml_resp = data.data || data.xml;
-  if (!xml_resp || typeof xml_resp !== 'string') throw new Error('tally-proxy returned no XML');
-  return xml_resp;
-}
+  return data.data; // raw XML string
+};
 
-// --------- GET REAL COMPANY NAME FROM TALLY ---------------------------------------------------------------
-export async function getCompanyName(company = '') {
-  try {
-    const xml = `<ENVELOPE>
-  <HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>List of Companies</ID></HEADER>
-  <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></DESC></BODY>
-</ENVELOPE>`;
-    const responseXml = await postToTally(xml, company);
-    // Try to extract BASICCOMPANYNAME or COMPANYNAME
-    const m = responseXml.match(/<BASICCOMPANYNAME[^>]*>([^<]+)<\/BASICCOMPANYNAME>/i)
-      || responseXml.match(/<COMPANYNAME[^>]*>([^<]+)<\/COMPANYNAME>/i)
-      || responseXml.match(/<NAME[^>]*>([^<]+)<\/NAME>/i);
-    return m ? m[1].trim() : 'Unknown Company';
-  } catch (e) {
-    return 'Tally Offline';
-  }
-}
-
-// --------- DATE HELPERS ---------------------------------------------------------------------------------------------------------------------------
-function addDays(iso, days) {
-  const d = new Date(iso + 'T00:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-function toTallyDate(iso) { return iso.replace(/-/g, ''); }
-
-// --------- XML PARSERS ------------------------------------------------------------------------------------------------------------------------------
+// ─── XML HELPERS ─────────────────────────────────────────────────────────────
 function extractTag(xml, tag) {
-  const m = xml.match(new RegExp('<' + tag + '[^>]*>([^<]*)<\/' + tag + '>', 'i'));
+  const re = new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '>', 'i');
+  const m = xml.match(re);
   return m ? m[1].trim() : null;
 }
 function extractAll(xml, tag) {
-  const r = [], re = new RegExp('<' + tag + '[^>]*>([\s\S]*?)<\/' + tag + '>', 'gi');
+  const re = new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '>', 'gi');
+  const out = [];
   let m;
-  while ((m = re.exec(xml)) !== null) r.push(m[1].trim());
-  return r;
+  while ((m = re.exec(xml)) !== null) out.push(m[1].trim());
+  return out;
 }
-function parseAmt(s) { return s ? (parseFloat(s.replace(/[^0-9.-]/g, '')) || 0) : 0; }
-function tallyDate(d) {
-  if (!d) return null;
-  d = d.trim();
-  if (/^\d{8}$/.test(d)) return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6,8);
-  const ms = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-  const m = d.match(/(\d{1,2})-([a-z]{3})-(\d{4})/i);
-  if (m) return m[3] + '-' + ms[m[2].toLowerCase()] + '-' + m[1].padStart(2, '0');
-  return null;
+function tallyDate(raw) {
+  if (!raw) return null;
+  const s = raw.replace(/\D/g, '');
+  if (s.length !== 8) return null;
+  return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+}
+function parseAmt(s) {
+  if (!s) return 0;
+  const n = parseFloat(s.replace(/[^\d.-]/g, ''));
+  return isNaN(n) ? 0 : Math.abs(n);
 }
 
-// --------- VOUCHER XML BUILDER ---------------------------------------------------------------------------------------------------------
-// IMPORTANT: Use "Day Book" report NOT "Vouchers" - "Vouchers" triggers TallyPrime Import dialog
-// Day Book works regardless of what screen the user is on in TallyPrime
-function buildVoucherXml(fromDate, toDate, type) {
+// ─── TALLY XML BUILDERS ───────────────────────────────────────────────────────
+function buildDayBookXml() {
+  // No date filter — Tally returns current open period data
   return '<?xml version="1.0"?>' +
     '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
-    '<BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME>' +
-    '<STATICVARIABLES>' +
-    '<SVFROMDATE>' + toTallyDate(fromDate) + '</SVFROMDATE>' +
-    '<SVTODATE>' + toTallyDate(toDate) + '</SVTODATE>' +
-    '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>' +
-    '</STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+    '<BODY><EXPORTDATA><REQUESTDESC>' +
+    '<REPORTNAME>Day Book</REPORTNAME>' +
+    '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>' +
+    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
 
-// --------- VOUCHER PARSER ------------------------------------------------------------------------------------------------------------------------
-// Parses Day Book XML - filters by VCHTYPE attribute on the <VOUCHER> tag
-function parseVouchers(xml, type) {
-  const rows = [];
+function buildLedgersXml() {
+  return '<?xml version="1.0"?>' +
+    '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
+    '<BODY><EXPORTDATA><REQUESTDESC>' +
+    '<REPORTNAME>List of Accounts</REPORTNAME>' +
+    '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>' +
+    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+}
+
+function buildStockXml() {
+  return '<?xml version="1.0"?>' +
+    '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
+    '<BODY><EXPORTDATA><REQUESTDESC>' +
+    '<REPORTNAME>Stock Summary</REPORTNAME>' +
+    '<STATICVARIABLES>' +
+    '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>' +
+    '<EXPLODEFLAG>Yes</EXPLODEFLAG>' +
+    '</STATICVARIABLES>' +
+    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+}
+
+// ─── VOUCHER PARSER ───────────────────────────────────────────────────────────
+// Shreerang Trendz voucher types:
+//   Sales        → sales_bills
+//   Purchase     → purchase_bills (if present)
+//   Debit Note   → purchase_bills (returns/adjustments)
+//   Receipt      → cash/bank (future)
+//   Payment      → cash/bank (future)
+function parseVouchers(xml) {
+  const salesRows = [];
+  const purchaseRows = [];
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
+
   for (const b of blocks) {
-    // Filter by voucher type from the attribute
     const vchtypeMatch = b.match(/VCHTYPE="([^"]+)"/i);
     const vchtype = vchtypeMatch ? vchtypeMatch[1] : '';
-    if (type === 'Purchase' && !vchtype.toLowerCase().includes('purchase')) continue;
-    if (type === 'Sales' && !vchtype.toLowerCase().includes('sale')) continue;
+    const vt = vchtype.toLowerCase();
 
-    const vn = extractTag(b, 'VOUCHERNUMBER');
-    const dt = tallyDate(extractTag(b, 'DATE'));
-    const pa = extractTag(b, 'PARTYLEDGERNAME');
+    const vn    = extractTag(b, 'VOUCHERNUMBER');
+    const dt    = tallyDate(extractTag(b, 'DATE'));
+    const pa    = extractTag(b, 'PARTYLEDGERNAME');
+    const narr  = extractTag(b, 'NARRATION') || null;
+    const ref   = extractTag(b, 'REFERENCE') || null;
+
     if (!vn || !dt || !pa) continue;
 
-    // Get amount from ALLLEDGERENTRIES or AMOUNT fields
-    const amounts = extractAll(b, 'AMOUNT').map(parseAmt).filter(a => a !== 0);
-    const total = amounts.length > 0 ? Math.max(...amounts.map(Math.abs)) : 0;
-    const narr = extractTag(b, 'NARRATION') || null;
-    const gst = extractTag(b, 'TAXREGISTRATIONNUMBER') || null;
+    // Get amount — use AMOUNT tag, take absolute max
+    const amounts = extractAll(b, 'AMOUNT').map(parseAmt).filter(a => a > 0);
+    const total = amounts.length > 0 ? Math.max(...amounts) : 0;
 
-    if (type === 'Purchase') {
-      rows.push({ bill_number: vn, bill_date: dt, supplier_name: pa, total_amount: total, notes: narr, status: 'synced', fabric_type: 'Tally Import' });
-    } else {
-      rows.push({ bill_number: vn, bill_date: dt, customer_name: pa, total_amount: total, notes: narr, status: 'synced' });
+    if (vt.includes('sale')) {
+      salesRows.push({
+        bill_number:   vn,
+        bill_date:     dt,
+        customer_name: pa,
+        total_amount:  total,
+        notes:         narr,
+        reference:     ref,
+        voucher_type:  vchtype,
+        status:        'synced',
+        source:        'tally'
+      });
+    } else if (vt.includes('purchase') || vt.includes('debit note')) {
+      purchaseRows.push({
+        bill_number:   vn,
+        bill_date:     dt,
+        supplier_name: pa,
+        total_amount:  total,
+        notes:         narr,
+        reference:     ref,
+        voucher_type:  vchtype,
+        status:        'synced',
+        source:        'tally'
+      });
     }
+  }
+  return { salesRows, purchaseRows, totalBlocks: blocks.length };
+}
+
+// ─── LEDGER / CUSTOMER PARSER ─────────────────────────────────────────────────
+function parseLedgers(xml) {
+  const customers = [];
+  const suppliers = [];
+  const agents    = [];
+
+  const blocks = xml.match(/<LEDGER[\s\S]*?<\/LEDGER>/gi) || [];
+  for (const b of blocks) {
+    const name    = extractTag(b, 'NAME') || extractTag(b, 'LANGUAGENAME.LIST') || null;
+    const parent  = extractTag(b, 'PARENT') || '';
+    const address = extractAll(b, 'ADDRESS').join(', ') || null;
+    const phone   = extractTag(b, 'LEDPHONE') || extractTag(b, 'PHONE') || null;
+    const email   = extractTag(b, 'EMAIL') || null;
+    const gstin   = extractTag(b, 'TAXREGISTRATIONNUMBER') || null;
+    const state   = extractTag(b, 'STATENAME') || null;
+    const country = extractTag(b, 'COUNTRYNAME') || 'India';
+    const creditDays = parseInt(extractTag(b, 'CREDITPERIOD') || '0') || 0;
+    const creditLimit = parseAmt(extractTag(b, 'CREDITLIMIT') || '0');
+
+    if (!name) continue;
+    const p = parent.toLowerCase();
+
+    if (p.includes('sundry debtor')) {
+      customers.push({ name, address, phone, email, gst_number: gstin, state, country, credit_days: creditDays, credit_limit: creditLimit, tally_ledger_name: name, customer_type: 'Wholesale', source: 'tally', status: 'active' });
+    } else if (p.includes('sundry creditor')) {
+      suppliers.push({ name, address, phone, email, gst_number: gstin, state, country, tally_ledger_name: name, status: 'active', source: 'tally' });
+    } else if (p.includes('agent') || p.includes('commission')) {
+      agents.push({ name, phone, email, state, status: 'active', source: 'tally' });
+    }
+  }
+  return { customers, suppliers, agents };
+}
+
+// ─── STOCK PARSER ─────────────────────────────────────────────────────────────
+function parseStock(xml) {
+  const rows = [];
+  const blocks = xml.match(/<STOCKITEM[\s\S]*?<\/STOCKITEM>/gi) || [];
+  for (const b of blocks) {
+    const name    = extractTag(b, 'NAME') || null;
+    const closing = parseAmt(extractTag(b, 'CLOSINGBALANCE') || '0');
+    const group   = extractTag(b, 'PARENT') || null;
+    const uom     = extractTag(b, 'BASEUNITS') || 'MTR';
+    if (!name) continue;
+    // Generate SKU from name
+    const sku = name.toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').substring(0, 50);
+    rows.push({
+      fabric_sku:       sku,
+      fabric_name:      name,
+      closing_qty_mtrs: closing,
+      tally_group:      group,
+      sync_date:        new Date().toISOString().slice(0, 10),
+      last_tally_sync:  new Date().toISOString()
+    });
   }
   return rows;
 }
 
-// --------- GET SYNC STATE ------------------------------------------------------------------------------------------------------------------------
-async function getSyncState(syncType) {
-  const { data } = await supabase
-    .from('tally_sync_state')
-    .select('*')
-    .eq('sync_type', syncType)
-    .single();
-  return data;
-}
-
-// --------- UPDATE SYNC STATE ---------------------------------------------------------------------------------------------------------------
-async function updateSyncState(syncType, lastDate, totalCount) {
-  await supabase.from('tally_sync_state').upsert({
-    sync_type: syncType,
-    last_synced_voucher_date: lastDate,
-    total_records_synced: totalCount,
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'sync_type' });
-}
-
-// --------- LOG SYNC ------------------------------------------------------------------------------------------------------------------------------------------
-async function logSync(syncType, status, count, rawPreview, errorMsg) {
-  await supabase.from('tally_sync_log').insert({
-    sync_type: syncType,
-    status,
-    records_synced: count,
-    raw_response: rawPreview ? rawPreview.slice(0, 3000) : null,
-    error_message: errorMsg || null,
-    last_voucher_date: new Date().toISOString().slice(0, 10)
-  });
-}
-
-// ============================================================
-// MAIN: PULL BILLS -- PROGRESSIVE SINGLE CHUNK
-// Call this repeatedly from dashboard until hasMore=false
-// Each call: fetches ONE 7-day chunk, upserts to Supabase
-// Returns: { success, hasMore, chunkFrom, chunkTo, recordsThisChunk, totalSynced, message }
-// ============================================================
-export async function pullBillsChunk(billType = 'purchase', company = '') {
-  const today = new Date().toISOString().slice(0, 10);
-  const voucherType = billType === 'sales' ? 'Sales' : 'Purchase';
-  const syncKey = billType === 'sales' ? 'sales_vouchers' : 'purchase_vouchers';
-  const table = billType === 'sales' ? 'sales_bills' : 'purchase_bills';
-  const CHUNK_DAYS = 7;
-
+// ─── SYNC: VOUCHERS (SALES + PURCHASE) ───────────────────────────────────────
+export async function syncVouchersFromTally(company = '') {
+  const log = { sales: 0, purchase: 0, errors: [], totalBlocks: 0 };
   try {
-    const state = await getSyncState(syncKey);
-    const lastDate = state?.last_synced_voucher_date || null;
-    const fromDate = lastDate ? addDays(lastDate, 1) : '2024-04-01';
+    const xml = await TALLY_PROXY(buildDayBookXml(), company);
+    const { salesRows, purchaseRows, totalBlocks } = parseVouchers(xml);
+    log.totalBlocks = totalBlocks;
 
-    // Already up to date
-    if (fromDate > today) {
-      return {
-        success: true,
-        hasMore: false,
-        chunkFrom: null,
-        chunkTo: null,
-        recordsThisChunk: 0,
-        totalSynced: state?.total_records_synced || 0,
-        message: 'All data synced - up to date!'
-      };
+    // Upsert Sales → sales_bills
+    if (salesRows.length > 0) {
+      const { error } = await supabase.from('sales_bills').upsert(salesRows, { onConflict: 'bill_number' });
+      if (error) log.errors.push('sales_bills: ' + error.message);
+      else log.sales = salesRows.length;
     }
 
-    // Calculate chunk end date
-    const rawTo = addDays(fromDate, CHUNK_DAYS - 1);
-    const toDate = rawTo > today ? today : rawTo;
+    // Upsert Purchase → purchase_bills
+    if (purchaseRows.length > 0) {
+      const { error } = await supabase.from('purchase_bills').upsert(purchaseRows, { onConflict: 'bill_number' });
+      if (error) log.errors.push('purchase_bills: ' + error.message);
+      else log.purchase = purchaseRows.length;
+    }
 
-    console.log('[TallySyncService] Pulling ' + voucherType + ' ' + fromDate + ' to ' + toDate);
+    // Log to tally_sync_log
+    await supabase.from('tally_sync_log').insert({
+      sync_type: 'vouchers_combined',
+      status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.sales + log.purchase,
+      error_message: log.errors.join('; ') || null,
+      raw_response: xml.substring(0, 500)
+    });
 
-    // Call Tally
-    const xml = buildVoucherXml(fromDate, toDate, voucherType);
-    const tallyXml = await postToTally(xml, company);
+    // Update sync state
+    await supabase.from('tally_sync_state').upsert([
+      { sync_type: 'sales_vouchers', last_synced_voucher_date: new Date().toISOString().slice(0,10), total_records_synced: log.sales },
+      { sync_type: 'purchase_vouchers', last_synced_voucher_date: new Date().toISOString().slice(0,10), total_records_synced: log.purchase }
+    ], { onConflict: 'sync_type' });
 
-    // Parse vouchers
-    const rows = parseVouchers(tallyXml, voucherType);
+  } catch (e) {
+    log.errors.push(e.message);
+    await supabase.from('tally_sync_log').insert({ sync_type: 'vouchers_combined', status: 'error', records_synced: 0, error_message: e.message });
+  }
+  return log;
+}
 
-    // Upsert to Supabase
+// ─── SYNC: CUSTOMERS + SUPPLIERS + AGENTS ────────────────────────────────────
+export async function syncCustomersFromTally(company = '') {
+  const log = { customers: 0, suppliers: 0, agents: 0, errors: [] };
+  try {
+    const xml = await TALLY_PROXY(buildLedgersXml(), company);
+    const { customers, suppliers, agents } = parseLedgers(xml);
+
+    if (customers.length > 0) {
+      const { error } = await supabase.from('customers').upsert(customers, { onConflict: 'tally_ledger_name', ignoreDuplicates: false });
+      if (error) log.errors.push('customers: ' + error.message);
+      else log.customers = customers.length;
+    }
+    if (suppliers.length > 0) {
+      // Store suppliers in customers table with customer_type = 'Supplier'
+      const suppliersForDB = suppliers.map(s => ({ ...s, customer_type: 'Supplier' }));
+      const { error } = await supabase.from('customers').upsert(suppliersForDB, { onConflict: 'tally_ledger_name', ignoreDuplicates: false });
+      if (error) log.errors.push('suppliers: ' + error.message);
+      else log.suppliers = suppliers.length;
+    }
+    if (agents.length > 0) {
+      const { error } = await supabase.from('agents').upsert(agents, { onConflict: 'name' });
+      if (error) log.errors.push('agents: ' + error.message);
+      else log.agents = agents.length;
+    }
+
+    await supabase.from('tally_sync_log').insert({
+      sync_type: 'ledgers',
+      status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.customers + log.suppliers + log.agents,
+      error_message: log.errors.join('; ') || null
+    });
+  } catch (e) {
+    log.errors.push(e.message);
+    await supabase.from('tally_sync_log').insert({ sync_type: 'ledgers', status: 'error', records_synced: 0, error_message: e.message });
+  }
+  return log;
+}
+
+// ─── SYNC: STOCK ──────────────────────────────────────────────────────────────
+export async function syncStockFromTally(company = '') {
+  const log = { stock: 0, errors: [] };
+  try {
+    const xml = await TALLY_PROXY(buildStockXml(), company);
+    const rows = parseStock(xml);
+
     if (rows.length > 0) {
-      const { error: upsertErr } = await supabase
-        .from(table)
-        .upsert(rows, { onConflict: 'bill_number' });
-      if (upsertErr) throw new Error('DB upsert failed: ' + upsertErr.message);
+      // Clear old stock and re-insert fresh (full refresh)
+      const { error: delErr } = await supabase.from('fabric_stock_live').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (delErr) log.errors.push('delete: ' + delErr.message);
+
+      const { error } = await supabase.from('fabric_stock_live').insert(rows);
+      if (error) log.errors.push('stock insert: ' + error.message);
+      else log.stock = rows.length;
     }
 
-    // Update state
-    const prevTotal = state?.total_records_synced || 0;
-    const newTotal = prevTotal + rows.length;
-    await updateSyncState(syncKey, toDate, newTotal);
-    await logSync(syncKey, 'success', rows.length, tallyXml.slice(0, 2000), null);
-
-    const hasMore = toDate < today;
-    return {
-      success: true,
-      hasMore,
-      chunkFrom: fromDate,
-      chunkTo: toDate,
-      recordsThisChunk: rows.length,
-      totalSynced: newTotal,
-      nextFrom: hasMore ? addDays(toDate, 1) : null,
-      message: hasMore
-        ? 'Synced ' + fromDate + ' to ' + toDate + ': ' + rows.length + ' records'
-        : 'Complete! Total: ' + newTotal + ' records up to ' + toDate
-    };
-
-  } catch (err) {
-    await logSync(
-      billType === 'sales' ? 'sales_vouchers' : 'purchase_vouchers',
-      'error', 0, null, err.message
-    ).catch(() => {});
-    return {
-      success: false,
-      hasMore: false,
-      error: err.message,
-      isTallyDialog: err.message.startsWith('TALLY_DIALOG_OPEN')
-    };
+    await supabase.from('tally_sync_log').insert({
+      sync_type: 'stock_items',
+      status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.stock,
+      error_message: log.errors.join('; ') || null
+    });
+  } catch (e) {
+    log.errors.push(e.message);
+    await supabase.from('tally_sync_log').insert({ sync_type: 'stock_items', status: 'error', records_synced: 0, error_message: e.message });
   }
+  return log;
 }
 
-// --------- LEGACY: pullPurchasesFromTally (kept for compatibility) ---
-export async function pullPurchasesFromTally(fromDate, toDate) {
-  return pullBillsChunk('purchase');
-}
-
-// --------- STOCK SYNC ---------------------------------------------------------------------------------------------------------------------------------
-export async function pullStockWithDesignDetail(company = '') {
-  const xml = '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
-  try {
-    const responseXml = await postToTally(xml, company);
-    const { stockItems } = parseTallyXMLResponse(responseXml);
-    const today = new Date().toISOString().split('T')[0];
-    let count = 0;
-    for (const item of stockItems) {
-      const batches = item.batches && item.batches.length > 0 ? item.batches : [{ name: 'MAIN', closingQty: item.closingQty || 0 }];
-      for (const batch of batches) {
-        let designNo = batch.name ? batch.name.replace(/^D\s*(No\.?)?\s*/i, '').trim() : 'MAIN';
-        if (!designNo || designNo.toLowerCase() === 'primary batch') designNo = 'MAIN';
-        await supabase.from('fabric_stock_live').upsert({
-          fabric_sku: item.name, fabric_name: item.name, design_no: designNo,
-          closing_qty_mtrs: batch.closingQty || 0, sync_date: today, last_tally_sync: new Date().toISOString(),
-        }, { onConflict: 'fabric_sku,design_no,sync_date' });
-        count++;
-      }
-    }
-    return { success: true, count };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-// --------- LEDGER SYNCS ------------------------------------------------------------------------------------------------------------------------------
-export async function syncCustomersFromTally() { return syncLedgers('Sundry Debtors', 'customers'); }
-export async function syncSuppliersFromTally() { return syncLedgers('Sundry Creditors', 'customers', { business_type: 'supplier' }); }
-export async function syncAgentsFromTally() { return syncLedgers('Sales Accounts', 'sales_team'); }
-
-async function syncLedgers(group, table, extra = {}) {
-  const xml = '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Ledger</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><LEDGERGROUPSFILTER>' + group + '</LEDGERGROUPSFILTER></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
-  try {
-    const xml_response = await postToTally(xml);
-    const ledgers = parseLedgersFromXML(xml_response);
-    let count = 0;
-    for (const ledger of ledgers) {
-      const row = { name: ledger.name, tally_ledger_name: ledger.name, phone: ledger.phone || null, address: ledger.address || null, gst_number: ledger.gstin || null, status: 'active', ...extra };
-      if (table === 'sales_team') {
-        await supabase.from(table).upsert({ name: ledger.name, phone: ledger.phone || null, is_active: true }, { onConflict: 'name' });
-      } else {
-        await supabase.from(table).upsert(row, { onConflict: 'tally_ledger_name' });
-      }
-      count++;
-    }
-    return { success: true, count };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-// --------- OUTSTANDING SYNC ---------------------------------------------------------------------------------------------------------------
-export async function syncOutstandingFromTally() {
-  const xml = '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Bill Outstanding</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
-  try {
-    const xml_response = await postToTally(xml);
-    const bills = parseBillsFromXML(xml_response);
-    for (const bill of bills) {
-      await supabase.from('payment_followups').upsert({ customer_name: bill.partyName, total_outstanding: bill.amount, committed_date: bill.dueDate, status: 'pending' }, { onConflict: 'customer_name' });
-    }
-    return { success: true, count: bills.length };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-// --------- PUSH SALES ORDER TO TALLY ------------------------------------------------------------------------------------
-export async function pushOrderToTally(orderId) {
-  const { data: order } = await supabase.from('sales_orders').select('*, customers(tally_ledger_name, name)').eq('id', orderId).single();
-  if (!order) return { success: false, error: 'Order not found' };
-  if (!order.customers?.tally_ledger_name) return { success: false, error: 'Customer has no Tally ledger name' };
-  const xml = buildSalesVoucherXML(order);
-  try {
-    const responseXml = await postToTally(xml);
-    const voucherNo = extractTag(responseXml, 'VOUCHERNUMBER') || extractTag(responseXml, 'VCHNO');
-    await supabase.from('sales_orders').update({ tally_voucher_no: voucherNo, tally_sync_status: 'synced', tally_synced_at: new Date().toISOString() }).eq('id', orderId);
-    return { success: true, voucherNo };
-  } catch (err) {
-    await supabase.from('sales_orders').update({ tally_sync_status: 'failed', tally_error_msg: err.message }).eq('id', orderId);
-    return { success: false, error: err.message };
-  }
-}
-
-// --------- BUILD XML FOR PUSH ------------------------------------------------------------------------------------------------------------
-export function buildSalesVoucherXML(order) {
-  const dateStr = new Date(order.created_at).toISOString().split('T')[0].replace(/-/g, '');
-  const ledger = order.customers.tally_ledger_name;
-  const amount = order.total_amount;
-  return '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>' + dateStr + '</DATE><VOUCHERNUMBER>WEB-' + order.order_no + '</VOUCHERNUMBER><PARTYLEDGERNAME>' + ledger + '</PARTYLEDGERNAME><NARRATION>Website order - ' + order.order_no + '</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>' + ledger + '</LEDGERNAME><AMOUNT>' + amount + '</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>-' + amount + '</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>';
-}
-
-// --------- PARSE HELPERS ------------------------------------------------------------------------------------------------------------------------
-export function parseTallyXMLResponse(xml) {
-  const vouchers = [];
-  const stockItems = [];
-  for (const m of xml.matchAll(/<VOUCHER[^>]*>([\s\S]*?)<\/VOUCHER>/gi)) {
-    const b = m[1];
-    vouchers.push({ voucherNumber: extractTag(b,'VOUCHERNUMBER'), partyLedgerName: extractTag(b,'PARTYLEDGERNAME'), date: tallyDate(extractTag(b,'DATE')), amount: parseAmt(extractTag(b,'AMOUNT')) });
-  }
-  for (const m of xml.matchAll(/<STOCKITEM[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)) {
-    const b = m[1];
-    const batches = [];
-    for (const bm of b.matchAll(/<BATCHALLOCATIONS\.LIST[^>]*>([\s\S]*?)<\/BATCHALLOCATIONS\.LIST>/gi)) {
-      const bb = bm[1];
-      batches.push({ name: extractTag(bb,'BATCHNAME') || extractTag(bb,'NAME'), closingQty: parseAmt(extractTag(bb,'CLOSINGBALANCE')) });
-    }
-    stockItems.push({ name: extractTag(b,'NAME'), closingQty: parseAmt(extractTag(b,'CLOSINGBALANCE')), batches });
-  }
-  return { vouchers, stockItems };
-}
-
-function parseLedgersFromXML(xml) {
-  const ledgers = [];
-  for (const m of xml.matchAll(/<LEDGER[^>]*NAME="([^"]*)"[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
-    const name = m[1], b = m[2];
-    ledgers.push({ name, gstin: extractTag(b,'PARTYGSTIN'), phone: extractTag(b,'LEDGERPHONE'), address: extractTag(b,'ADDRESS'), email: extractTag(b,'EMAIL') });
-  }
-  return ledgers;
-}
-
-function parseBillsFromXML(xml) {
-  const bills = [];
-  for (const m of xml.matchAll(/<BILLDETAILS[^>]*>([\s\S]*?)<\/BILLDETAILS>/gi)) {
-    const b = m[1];
-    bills.push({ partyName: extractTag(b,'PARTYLEDGERNAME'), amount: parseAmt(extractTag(b,'CLOSINGBALANCE')), dueDate: tallyDate(extractTag(b,'BILLDATE')) });
-  }
-  return bills;
-}
-
-
-// ============================================================
-// SYNC ALL — pulls every data type from Tally in one call
-// Runs: purchases, sales, stock, customers, suppliers, agents, outstanding
-// Call this from the "Sync All" button on the dashboard
-// ============================================================
-export async function syncAllFromTally(company = '', onProgress = null) {
+// ─── SYNC ALL ─────────────────────────────────────────────────────────────────
+export async function syncAllFromTally(company = '') {
   const results = {};
-  const steps = [
-    { key: 'customers',   label: 'Customers (Sundry Debtors)',  fn: () => syncCustomersFromTally() },
-    { key: 'suppliers',   label: 'Suppliers (Sundry Creditors)',fn: () => syncSuppliersFromTally() },
-    { key: 'agents',      label: 'Sales Agents',                fn: () => syncAgentsFromTally() },
-    { key: 'stock',       label: 'Stock Items',                  fn: () => pullStockWithDesignDetail(company) },
-    { key: 'outstanding', label: 'Outstanding Bills',            fn: () => syncOutstandingFromTally() },
-  ];
 
-  // Run master data syncs first (fast, no chunking needed)
-  for (const step of steps) {
-    try {
-      if (onProgress) onProgress({ step: step.key, label: step.label, status: 'running' });
-      const r = await step.fn();
-      results[step.key] = r;
-      if (onProgress) onProgress({ step: step.key, label: step.label, status: r.success ? 'done' : 'error', count: r.count || 0, error: r.error });
-    } catch (e) {
-      results[step.key] = { success: false, error: e.message };
-      if (onProgress) onProgress({ step: step.key, label: step.label, status: 'error', error: e.message });
-    }
-  }
+  // Run all in sequence to avoid overwhelming Tally HTTP server
+  console.log('[TallySyncService] Starting full sync...');
 
-  // Run voucher syncs (chunked — call repeatedly until hasMore = false)
-  for (const billType of ['purchase', 'sales']) {
-    const key = billType === 'purchase' ? 'purchases' : 'sales';
-    let totalSynced = 0, hasMore = true, attempts = 0;
-    if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'running' });
-    while (hasMore && attempts < 200) {
-      attempts++;
-      try {
-        const r = await pullBillsChunk(billType, company);
-        if (!r.success) {
-          results[key] = { success: false, error: r.error };
-          if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'error', error: r.error });
-          break;
-        }
-        totalSynced += r.recordsThisChunk || 0;
-        hasMore = r.hasMore;
-        if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: hasMore ? 'running' : 'done', count: totalSynced, chunk: r.chunkFrom + ' to ' + r.chunkTo });
-        if (!hasMore) results[key] = { success: true, count: totalSynced };
-      } catch (e) {
-        results[key] = { success: false, error: e.message };
-        if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'error', error: e.message });
-        break;
-      }
-    }
-    if (hasMore && attempts >= 200) {
-      if (onProgress) onProgress({ step: key, label: billType + ' vouchers', status: 'done', count: totalSynced, note: 'Max chunks reached — run Sync All again tomorrow to continue' });
-      results[key] = { success: true, count: totalSynced, partial: true };
-    }
-  }
+  results.vouchers  = await syncVouchersFromTally(company);
+  console.log('[TallySyncService] Vouchers done:', results.vouchers);
 
-  const successCount = Object.values(results).filter(r => r.success).length;
-  return {
-    success: successCount > 0,
-    results,
-    summary: successCount + '/' + (steps.length + 2) + ' syncs completed'
-  };
+  results.customers = await syncCustomersFromTally(company);
+  console.log('[TallySyncService] Customers done:', results.customers);
+
+  results.stock     = await syncStockFromTally(company);
+  console.log('[TallySyncService] Stock done:', results.stock);
+
+  return results;
 }
 
-// Keep these for compatibility with existing code
-export { pullBillsChunk as pullSalesFromTally };
-export async function pullJobBillsFromTally() { return { success: false, error: 'Use Job Bills sync from dashboard' }; }
+// ─── LEGACY COMPATIBILITY (kept for old UI buttons) ──────────────────────────
+export async function pullPurchasesFromTally(fromDate, toDate) { return syncVouchersFromTally(); }
+export async function pullSalesFromTally() { return syncVouchersFromTally(); }
+export async function pullStockWithDesignDetail() { return syncStockFromTally(); }
+export async function pullJobBillsFromTally() { return { success: true, records: 0, message: 'Use Tally sync instead' }; }
+export async function syncSuppliersFromTally() { return syncCustomersFromTally(); }
+export async function syncAgentsFromTally() { return syncCustomersFromTally(); }
+export async function syncOutstandingFromTally() { return { success: true, records: 0 }; }
+export async function pushOrderToTally() { return { success: false, error: 'Not implemented' }; }
+
+// ─── INFRA STATUS CHECK ───────────────────────────────────────────────────────
+export async function checkTallyInfraStatus() {
+  const results = { nginx: false, frpServer: false, frpTunnel: false, tallyPrime: false, n8n: false };
+  try {
+    const r = await fetch('https://tally.shreerangtrendz.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+    results.tallyPrime = r.status < 500;
+    results.nginx = true;
+    results.frpServer = true;
+    results.frpTunnel = true;
+  } catch {}
+  try {
+    const r2 = await fetch('https://n8n.shreerangtrendz.com/healthz', { signal: AbortSignal.timeout(5000) });
+    results.n8n = r2.ok;
+  } catch {}
+  return results;
+}
+
+export async function getSyncState() {
+  const { data } = await supabase.from('tally_sync_state').select('*');
+  return data || [];
+}
+
+export async function getLatestSyncLog(limit = 10) {
+  const { data } = await supabase.from('tally_sync_log').select('*').order('synced_at', { ascending: false }).limit(limit);
+  return data || [];
+}

@@ -105,11 +105,8 @@ function parseVouchers(xml) {
         bill_date:     dt,
         customer_name: pa,
         total_amount:  total,
-        notes:         narr,
-        reference:     ref,
-        voucher_type:  vchtype,
-        status:        'synced',
-        source:        'tally'
+        notes:         narr ? `${vchtype} | ${narr}` : vchtype,
+        status:        'synced'
       });
     } else if (vt.includes('purchase') || vt.includes('debit note')) {
       purchaseRows.push({
@@ -117,11 +114,8 @@ function parseVouchers(xml) {
         bill_date:     dt,
         supplier_name: pa,
         total_amount:  total,
-        notes:         narr,
-        reference:     ref,
-        voucher_type:  vchtype,
-        status:        'synced',
-        source:        'tally'
+        notes:         narr ? `${vchtype} | ${narr}` : vchtype,
+        status:        'synced'
       });
     }
   }

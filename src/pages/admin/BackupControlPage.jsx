@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 // ============================================================
 // Shreerang Trendz - Backup & Restore Control Panel

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import AdminPageHeader from '@/components/admin/AdminPageHeader';
 import { Search, Download, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';

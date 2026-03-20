@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const WA_TOKEN = import.meta.env.VITE_WHATSAPP_TOKEN;
 const WA_PHONE_ID = import.meta.env.VITE_WHATSAPP_PHONE_ID || '868455029689394';
-const N8N_WEBHOOK = import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://shreerangtrendz.app.n8n.cloud/webhook/whatsapp-incoming';
+const N8N_WEBHOOK = import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://n8n.shreerangtrendz.com/webhook/wa-bot';
 
 // ── STAT CARD ────────────────────────────────────────────────────────────────
 function StatCard({ icon, label, value, sub, color = '#25D366', trend }) {

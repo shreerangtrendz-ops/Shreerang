@@ -259,7 +259,7 @@ export default function AdminDashboard() {
           <span style={{ background:roleMeta.color+'25', border:`1px solid ${roleMeta.color}50`, color:roleMeta.color, borderRadius:20, padding:'4px 12px', fontSize:12, fontWeight:700 }}>
             {roleMeta.icon} {roleMeta.label}
           </span>
-          <button onClick={loadDashboard} style={{ background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.2)', color:'#fff', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:12, fontWeight:600 }}>â» Refresh</button>
+          <button onClick={loadDashboard} style={{ background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.2)', color:'#fff', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:12, fontWeight:600 }}>↻ Refresh</button>
         </div>
       </div>
 
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
             <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                 <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>📈 6-Month Sales</div>
-                <button onClick={()=>navigate('/admin/analytics')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>Analytics â</button>
+                <button onClick={()=>navigate('/admin/analytics')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>Analytics →</button>
               </div>
               {loading ? <div style={{ color:T.textDim }}>Loading...</div> : (
                 <>
@@ -324,7 +324,7 @@ export default function AdminDashboard() {
             <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                 <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>⚖️ Aging</div>
-                <button onClick={()=>navigate('/admin/outstanding-receivable')} style={{ background:'#FFF3F3', border:'1px solid rgba(231,76,60,.2)', color:T.red, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>View â</button>
+                <button onClick={()=>navigate('/admin/outstanding-receivable')} style={{ background:'#FFF3F3', border:'1px solid rgba(231,76,60,.2)', color:T.red, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>View →</button>
               </div>
               {loading ? <div style={{ color:T.textDim }}>Loading...</div> : (
                 <>
@@ -340,7 +340,7 @@ export default function AdminDashboard() {
             <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
                 <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>🏆 Top Agents</div>
-                <button onClick={()=>navigate('/admin/agent-commission')} style={{ background:'#F3E8FF', border:'1px solid rgba(155,89,182,.2)', color:T.purple, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>All â</button>
+                <button onClick={()=>navigate('/admin/agent-commission')} style={{ background:'#F3E8FF', border:'1px solid rgba(155,89,182,.2)', color:T.purple, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>All →</button>
               </div>
               {loading ? <div style={{ color:T.textDim }}>Loading...</div> : topAgents.length===0 ? (
                 <div style={{ color:T.textDim, fontSize:12, textAlign:'center', paddingTop:20 }}>No agent data yet</div>
@@ -350,7 +350,7 @@ export default function AdminDashboard() {
                 return (
                   <div key={a.name} style={{ marginBottom:8 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', marginBottom:2 }}>
-                      <span style={{ fontSize:11, color:T.text }}>{medals[i]} {a.name.length>14?a.name.slice(0,14)+'â¦':a.name}</span>
+                      <span style={{ fontSize:11, color:T.text }}>{medals[i]} {a.name.length>14?a.name.slice(0,14)+'…':a.name}</span>
                       <span style={{ fontSize:11, fontWeight:700, color:T.green }}>{fmtL(a.revenue)}</span>
                     </div>
                     <div style={{ background:T.bg, borderRadius:3, height:5 }}>
@@ -369,7 +369,7 @@ export default function AdminDashboard() {
             <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>📋 Recent Orders</div>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={()=>navigate('/admin/orders/new')} style={{ background:T.green, color:'#fff', border:'none', borderRadius:8, padding:'6px 14px', cursor:'pointer', fontSize:12, fontWeight:700 }}>+ New Order</button>
-              <button onClick={()=>navigate('/admin/orders')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>View All â</button>
+              <button onClick={()=>navigate('/admin/orders')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:8, padding:'6px 12px', cursor:'pointer', fontSize:12, fontWeight:600 }}>View All →</button>
             </div>
           </div>
           {loading ? <div style={{ color:T.textDim, fontSize:13 }}>Loading...</div>
@@ -402,12 +402,12 @@ export default function AdminDashboard() {
             <div onClick={()=>navigate('/admin/production-floor')} style={{ background:'linear-gradient(135deg,#EEF6FF,#E8FFF4)', border:'1px solid rgba(36,104,200,.2)', borderRadius:14, padding:'20px 24px', cursor:'pointer' }}>
               <div style={{ fontFamily:"'Playfair Display', serif", fontSize:18, fontWeight:700, color:T.navy }}>🏭 Production Floor</div>
               <div style={{ fontSize:13, color:T.textMuted, marginTop:4 }}>Challans, dispatch & QC</div>
-              <span style={{ marginTop:12, display:'inline-block', background:'#2468C820', color:T.blue, padding:'4px 14px', borderRadius:20, fontSize:12, fontWeight:700 }}>Open â</span>
+              <span style={{ marginTop:12, display:'inline-block', background:'#2468C820', color:T.blue, padding:'4px 14px', borderRadius:20, fontSize:12, fontWeight:700 }}>Open →</span>
             </div>
             <div onClick={()=>navigate('/admin/mto-orders')} style={{ background:'linear-gradient(135deg,#FFF7ED,#FFFAEE)', border:'1px solid rgba(230,126,34,.2)', borderRadius:14, padding:'20px 24px', cursor:'pointer' }}>
-              <div style={{ fontFamily:"'Playfair Display', serif", fontSize:18, fontWeight:700, color:T.navy }}>âï¸ MTO Pipeline</div>
+              <div style={{ fontFamily:"'Playfair Display', serif", fontSize:18, fontWeight:700, color:T.navy }}>⚙️ MTO Pipeline</div>
               <div style={{ fontSize:13, color:T.textMuted, marginTop:4 }}>Make-to-order Kanban</div>
-              <span style={{ marginTop:12, display:'inline-block', background:'#E67E2220', color:T.orange, padding:'4px 14px', borderRadius:20, fontSize:12, fontWeight:700 }}>Open â</span>
+              <span style={{ marginTop:12, display:'inline-block', background:'#E67E2220', color:T.orange, padding:'4px 14px', borderRadius:20, fontSize:12, fontWeight:700 }}>Open →</span>
             </div>
           </div>
         )}
@@ -430,7 +430,7 @@ export default function AdminDashboard() {
 
         {/* QUICK ACTIONS GRID */}
         <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
-          <div style={{ fontFamily:"'Playfair Display', serif", fontSize:16, fontWeight:700, color:T.navy, marginBottom:14 }}>â¡ Quick Actions <span style={{ fontSize:12, fontWeight:400, color:T.textDim }}>({visibleActions.length} available)</span></div>
+          <div style={{ fontFamily:"'Playfair Display', serif", fontSize:16, fontWeight:700, color:T.navy, marginBottom:14 }}>⚡ Quick Actions <span style={{ fontSize:12, fontWeight:400, color:T.textDim }}>({visibleActions.length} available)</span></div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(144px,1fr))', gap:10 }}>
             {visibleActions.map(action=>(
               <button key={action.to} onClick={()=>navigate(action.to)}
@@ -451,7 +451,7 @@ export default function AdminDashboard() {
           <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
             <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy, marginBottom:14, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               🕐 Recent Activity
-              <button onClick={()=>navigate('/admin/activity-logs')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>View All â</button>
+              <button onClick={()=>navigate('/admin/activity-logs')} style={{ background:T.tealLight, border:`1px solid ${T.border}`, color:T.teal, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>View All →</button>
             </div>
             {recentActivity.map(act=>(
               <div key={act.id} style={{ display:'flex', gap:10, padding:'8px 0', borderBottom:`1px solid ${T.border}60` }}>

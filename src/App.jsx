@@ -98,6 +98,7 @@ import SalesOrderForm from '@/pages/admin/sales/SalesOrderForm';
 // â”€â”€â”€ Admin: Reports (new) â”€â”€â”€â”€â”€â”€â”€â”€
 import PartyLedger from '@/pages/reports/PartyLedger';
 import DayBook from '@/pages/reports/DayBook';
+import AgentCommissionPage from '@/pages/admin/AgentCommissionPage';
 import DesignProfitability from '@/pages/reports/DesignProfitability';
 import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
 import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
@@ -245,6 +246,7 @@ const App = () => {
 
                     {/* Reports */}
                     <Route path="reports/party-ledger" element={<PartyLedger />} />
+              <Route path="agent-commission" element={<AgentCommissionPage />} />
                     <Route path="reports/day-book" element={<DayBook />} />
                     <Route path="reports/design-profitability" element={<DesignProfitability />} />
 

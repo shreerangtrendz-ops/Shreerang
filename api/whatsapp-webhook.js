@@ -306,6 +306,21 @@ async function sendCatalogueImages(phone, category, subcategory, mode = 'new_onl
 }
 
 // ── AI Reply Engines ───────────────────────────────
+
+async function detectAndTranslate(text) {
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: `Detect language and translate to English. Text: "${text.replace(/"/g, '\'')}" Return JSON only: {"lang_code":"ISO 639-1","lang_name":"Language name","english_translation":"translation","is_english":true/false}` }] }], generationConfig: { maxOutputTokens: 150, temperature: 0 } })
+    });
+    const d = await r.json();
+    const raw = d?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const m = raw.match(/{[\s\S]*?}/);
+    if (m) return JSON.parse(m[0]);
+  } catch(e) {}
+  return { lang_code: 'en', lang_name: 'English', english_translation: text, is_english: true };
+}
+
 async function geminiReply(text, name, lang, context = '') {
   try {
     const langName = lang === 'hi' ? 'Hindi' : lang === 'gu' ? 'Gujarati' : 'English';

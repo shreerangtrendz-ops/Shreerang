@@ -8,7 +8,7 @@ const PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '868455029689394';
 const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'shreerang_secure_verify_2026';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zdekydcscwhuusliwqaz.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY; // updated 2026-03-20
 const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY;
 
 // ── Team Contacts ─────────────────────────────────

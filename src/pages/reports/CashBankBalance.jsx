@@ -1,217 +1,200 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
+
+const T = { teal:'#2BA898', navy:'#0B2E2B', green:'#1E9E5A', red:'#E74C3C', gold:'#E8A800',
+            blue:'#2468C8', bg:'#F0F9F7', surface:'#fff', border:'#D0EDE8', text:'#0B2E2B', muted:'#6A9B95' };
+const fmt = n => '\u20B9' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'}) : '-';
 
 export default function CashBankBalance() {
-    const [balances, setBalances] = useState([]);
-    const [history, setHistory] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('today');
+  const [loading, setLoading] = useState(true);
+  const [vouchers, setVouchers] = useState([]);
+  const [cashBank, setCashBank] = useState([]);
+  const [tab, setTab] = useState('transactions');
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [stats, setStats] = useState({receipts:0, payments:0, netFlow:0, count:0});
 
-    useEffect(() => { fetchData(); }, []);
+  const loadData = useCallback(async () => {
+    setLoading(true);
 
-    async function fetchData() {
-        setLoading(true);
-        const today = new Date().toISOString().split('T')[0];
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Get tally vouchers (receipts + payments)
+    let q = supabase.from('tally_vouchers')
+      .select('*')
+      .in('voucher_type', ['receipt','payment','Receipt','Payment'])
+      .order('voucher_date', {ascending:false})
+      .limit(500);
+    if (dateFrom) q = q.gte('voucher_date', dateFrom);
+    if (dateTo) q = q.lte('voucher_date', dateTo);
+    const { data: vData } = await q;
 
-        // Today's balances
-        const { data: todayData } = await supabase
-            .from('cash_bank_ledger')
-            .select('*')
-            .eq('balance_date', today)
-            .order('account_type');
+    // Also get cash_bank_ledger
+    const { data: cbData } = await supabase.from('cash_bank_ledger').select('*').order('account_name');
 
-        // 7-day history for chart
-        const { data: histData } = await supabase
-            .from('cash_bank_ledger')
-            .select('*')
-            .gte('balance_date', sevenDaysAgo)
-            .order('balance_date', { ascending: true });
+    const vList = vData || [];
+    const receipts = vList.filter(v => v.voucher_type?.toLowerCase() === 'receipt');
+    const payments = vList.filter(v => v.voucher_type?.toLowerCase() === 'payment');
 
-        setBalances(todayData || []);
-        setHistory(histData || []);
-        setLoading(false);
-    }
+    setVouchers(vList);
+    setCashBank(cbData || []);
+    setStats({
+      receipts: receipts.reduce((s,v)=>s+(v.amount||0),0),
+      payments: payments.reduce((s,v)=>s+(v.amount||0),0),
+      netFlow: receipts.reduce((s,v)=>s+(v.amount||0),0) - payments.reduce((s,v)=>s+(v.amount||0),0),
+      count: vList.length
+    });
+    setLoading(false);
+  }, [dateFrom, dateTo]);
 
-    function formatCurrency(n) {
-        return '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
-    }
+  useEffect(() => { loadData(); }, [loadData]);
 
-    const totalCash = balances
-        .filter(b => b.account_type === 'cash')
-        .reduce((s, b) => s + Number(b.balance || 0), 0);
+  const filtered = vouchers.filter(v => {
+    const matchSearch = !search || (v.party_name||'').toLowerCase().includes(search.toLowerCase()) || (v.voucher_number||'').toLowerCase().includes(search.toLowerCase());
+    const matchType = typeFilter === 'all' || v.voucher_type?.toLowerCase() === typeFilter;
+    return matchSearch && matchType;
+  });
 
-    const totalBank = balances
-        .filter(b => b.account_type === 'bank')
-        .reduce((s, b) => s + Number(b.balance || 0), 0);
+  return (
+    <div style={{background:T.bg,minHeight:'100vh',padding:24}}>
+      <Helmet><title>Cash & Bank — Shreerang</title></Helmet>
 
-    const totalBalance = totalCash + totalBank;
-
-    // Group history by date for mini chart
-    const dateGroups = {};
-    for (const row of history) {
-        if (!dateGroups[row.balance_date]) dateGroups[row.balance_date] = 0;
-        dateGroups[row.balance_date] += Number(row.balance || 0);
-    }
-    const chartDates = Object.keys(dateGroups).sort();
-    const chartValues = chartDates.map(d => dateGroups[d]);
-    const maxVal = Math.max(...chartValues, 1);
-
-    return (
-        <div className="p-6 max-w-5xl mx-auto">
-            {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Cash & Bank Balance</h1>
-                <p className="text-gray-500 text-sm mt-1">
-                    Live balances synced from Tally · Updated daily
-                </p>
-            </div>
-
-            {loading ? (
-                <div className="p-8 text-center text-gray-400">Loading...</div>
-            ) : (
-                <>
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="bg-gray-900 rounded-xl p-5 text-white">
-                            <p className="text-sm text-gray-400">Total Available</p>
-                            <p className="text-3xl font-bold mt-1">{formatCurrency(totalBalance)}</p>
-                            <p className="text-xs text-gray-500 mt-1">Cash + All Banks</p>
-                        </div>
-                        <div className="bg-green-50 border border-green-200 rounded-xl p-5">
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xl">💵</span>
-                                <p className="text-sm text-green-700 font-medium">Cash in Hand</p>
-                            </div>
-                            <p className="text-2xl font-bold text-green-800">{formatCurrency(totalCash)}</p>
-                            <p className="text-xs text-green-500 mt-1">
-                                {balances.filter(b => b.account_type === 'cash').length} cash account(s)
-                            </p>
-                        </div>
-                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-                            <div className="flex items-center gap-2 mb-2">
-                                <span className="text-xl">🏦</span>
-                                <p className="text-sm text-blue-700 font-medium">Bank Balance</p>
-                            </div>
-                            <p className="text-2xl font-bold text-blue-800">{formatCurrency(totalBank)}</p>
-                            <p className="text-xs text-blue-500 mt-1">
-                                {balances.filter(b => b.account_type === 'bank').length} bank account(s)
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* 7-Day Chart */}
-                    {chartDates.length > 0 && (
-                        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
-                            <h3 className="font-semibold text-gray-900 mb-4">7-Day Cash Movement</h3>
-                            <div className="flex items-end gap-2 h-24">
-                                {chartDates.map((date, i) => (
-                                    <div key={date} className="flex-1 flex flex-col items-center gap-1">
-                                        <p className="text-xs text-gray-500">
-                                            {formatCurrency(chartValues[i])}
-                                        </p>
-                                        <div
-                                            className="w-full bg-blue-500 rounded-t"
-                                            style={{ height: `${(chartValues[i] / maxVal) * 60}px`, minHeight: '4px' }}
-                                        />
-                                        <p className="text-xs text-gray-400">
-                                            {new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Account Breakdown */}
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
-                        <div className="px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-semibold text-gray-900">Account-wise Balance</h3>
-                        </div>
-                        {balances.length === 0 ? (
-                            <div className="p-8 text-center text-gray-400">
-                                <p className="text-2xl mb-2">📊</p>
-                                <p className="text-sm">No balance data yet</p>
-                                <p className="text-xs mt-2 text-gray-300">
-                                    Balances will appear after Tally sync
-                                </p>
-                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-left max-w-sm mx-auto">
-                                    <p className="text-xs font-semibold text-amber-800">To populate this page:</p>
-                                    <p className="text-xs text-amber-700 mt-1">
-                                        Run this SQL in Supabase to manually enter today's balance from Tally:
-                                    </p>
-                                    <code className="text-xs text-amber-900 block mt-2 bg-amber-100 p-2 rounded">
-                                        INSERT INTO cash_bank_ledger (account_name, account_type, balance, balance_date, synced_from_tally){'\n'}
-                                        VALUES{'\n'}
-                                        ('Cash', 'cash', 0, CURRENT_DATE, false),{'\n'}
-                                        ('HDFC Bank', 'bank', 0, CURRENT_DATE, false);
-                                    </code>
-                                </div>
-                            </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Account</th>
-                                        <th className="text-left px-4 py-3 text-gray-500 font-medium">Type</th>
-                                        <th className="text-right px-4 py-3 text-gray-500 font-medium">Balance</th>
-                                        <th className="text-center px-4 py-3 text-gray-500 font-medium">Source</th>
-                                        <th className="text-center px-4 py-3 text-gray-500 font-medium">Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {balances.map(acc => (
-                                        <tr key={acc.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-3 font-medium text-gray-900">{acc.account_name}</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${acc.account_type === 'cash'
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-blue-100 text-blue-700'
-                                                    }`}>
-                                                    {acc.account_type === 'cash' ? '💵 Cash' : '🏦 Bank'}
-                                                </span>
-                                            </td>
-                                            <td className={`px-4 py-3 text-right font-bold ${Number(acc.balance) >= 0 ? 'text-gray-900' : 'text-red-600'
-                                                }`}>
-                                                {formatCurrency(acc.balance)}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {acc.synced_from_tally
-                                                    ? <span className="text-xs text-green-600">✅ Tally</span>
-                                                    : <span className="text-xs text-gray-400">Manual</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                                                {new Date(acc.balance_date).toLocaleDateString('en-IN')}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
-
-                    {/* Quick Entry */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                        <h3 className="font-semibold text-amber-900 mb-1">
-                            💡 No Tally sync for cash/bank yet?
-                        </h3>
-                        <p className="text-sm text-amber-700">
-                            Run this SQL daily until automatic sync is set up.
-                            Replace the 0 values with today's actual balances from Tally:
-                        </p>
-                        <pre className="mt-3 bg-amber-100 rounded-lg p-3 text-xs text-amber-900 overflow-x-auto">
-                            {`INSERT INTO cash_bank_ledger 
-  (account_name, account_type, balance, balance_date, synced_from_tally)
-VALUES
-  ('Cash',      'cash', 0, CURRENT_DATE, false),
-  ('HDFC Bank', 'bank', 0, CURRENT_DATE, false),
-  ('SBI',       'bank', 0, CURRENT_DATE, false)
-ON CONFLICT (account_name, balance_date) 
-DO UPDATE SET balance = EXCLUDED.balance;`}
-                        </pre>
-                    </div>
-                </>
-            )}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
+        <div>
+          <h1 style={{fontSize:24,fontWeight:800,color:T.navy,margin:0}}>🏦 Cash & Bank</h1>
+          <p style={{color:T.muted,fontSize:13,margin:'4px 0 0'}}>Receipts, payments and account balances from Tally</p>
         </div>
-    );
+        <button onClick={loadData} style={{padding:'8px 16px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:13,cursor:'pointer'}}>🔄 Refresh</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap'}}>
+        {[
+          {label:'Total Receipts',value:fmt(stats.receipts),color:T.green,icon:'📥'},
+          {label:'Total Payments',value:fmt(stats.payments),color:T.red,icon:'📤'},
+          {label:'Net Cash Flow',value:fmt(Math.abs(stats.netFlow)),color:stats.netFlow>=0?T.green:T.red,icon:stats.netFlow>=0?'📈':'📉'},
+          {label:'Transactions',value:stats.count,color:T.teal,icon:'🔄'},
+        ].map(s=>(
+          <div key={s.label} style={{background:T.surface,borderRadius:12,padding:'14px 18px',border:`1px solid ${T.border}`,flex:1,minWidth:130}}>
+            <div style={{fontSize:20,marginBottom:4}}>{s.icon}</div>
+            <div style={{fontSize:11,color:T.muted,fontWeight:600}}>{s.label}</div>
+            <div style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Account Balances */}
+      {cashBank.length > 0 && (
+        <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,padding:20,marginBottom:20}}>
+          <h3 style={{fontSize:14,fontWeight:700,color:T.navy,margin:'0 0 14px'}}>🏦 Account Balances</h3>
+          <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+            {cashBank.map(acc=>(
+              <div key={acc.id} style={{background:T.bg,borderRadius:8,padding:'12px 16px',border:`1px solid ${T.border}`,minWidth:160}}>
+                <div style={{fontSize:11,color:T.muted,fontWeight:600}}>{acc.account_type?.toUpperCase()}</div>
+                <div style={{fontSize:14,fontWeight:700,color:T.text,marginTop:2}}>{acc.account_name}</div>
+                <div style={{fontSize:18,fontWeight:800,color:T.green,marginTop:4}}>{fmt(acc.balance)}</div>
+                {acc.tally_ledger_name && <div style={{fontSize:10,color:T.muted,marginTop:2}}>{acc.tally_ledger_name}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:2,marginBottom:16}}>
+        {['transactions','summary'].map(t=>(
+          <button key={t} onClick={()=>setTab(t)}
+            style={{padding:'8px 18px',borderRadius:8,border:`1px solid ${T.border}`,background:tab===t?T.teal:T.surface,color:tab===t?'#fff':T.text,fontWeight:600,fontSize:13,cursor:'pointer',textTransform:'capitalize'}}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{background:T.surface,borderRadius:10,padding:14,border:`1px solid ${T.border}`,marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
+        <input placeholder="Search party / voucher..." value={search} onChange={e=>setSearch(e.target.value)}
+          style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,flex:1,minWidth:180,outline:'none'}}/>
+        {['all','receipt','payment'].map(f=>(
+          <button key={f} onClick={()=>setTypeFilter(f)}
+            style={{padding:'6px 14px',borderRadius:8,border:`1px solid ${T.border}`,background:typeFilter===f?T.teal:T.surface,color:typeFilter===f?'#fff':T.text,fontWeight:600,fontSize:12,cursor:'pointer',textTransform:'capitalize'}}>
+            {f==='all'?'All':f}
+          </button>
+        ))}
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+          style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:'none'}}/>
+        <span style={{color:T.muted,fontSize:13}}>to</span>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+          style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:'none'}}/>
+      </div>
+
+      {/* Transactions Table */}
+      {tab === 'transactions' && (
+        <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
+          <div style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,fontSize:12,color:T.muted,fontWeight:600}}>
+            {filtered.length} transactions
+          </div>
+          {loading ? (
+            <div style={{padding:40,textAlign:'center',color:T.muted}}>Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{padding:40,textAlign:'center',color:T.muted}}>
+              <div style={{fontSize:32,marginBottom:8}}>🏦</div>
+              <div>No transactions found. Sync from Tally Sync page to import receipts & payments.</div>
+            </div>
+          ) : (
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead>
+                <tr style={{background:T.bg}}>
+                  {['Voucher #','Date','Party','Type','Amount'].map(h=>(
+                    <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:700,color:T.muted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((v,i)=>(
+                  <tr key={v.id} style={{background:i%2===0?T.surface:T.bg}}>
+                    <td style={{padding:'10px 14px',fontSize:13,fontWeight:600,color:T.teal}}>{v.voucher_number||'-'}</td>
+                    <td style={{padding:'10px 14px',fontSize:13}}>{fmtDate(v.voucher_date)}</td>
+                    <td style={{padding:'10px 14px',fontSize:13,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.party_name||'-'}</td>
+                    <td style={{padding:'10px 14px'}}>
+                      <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:v.voucher_type?.toLowerCase()==='receipt'?'#D1FAE5':'#FEE2E2',color:v.voucher_type?.toLowerCase()==='receipt'?'#065F46':'#991B1B'}}>
+                        {v.voucher_type}
+                      </span>
+                    </td>
+                    <td style={{padding:'10px 14px',fontSize:14,fontWeight:800,color:v.voucher_type?.toLowerCase()==='receipt'?T.green:T.red}}>{fmt(v.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Summary tab - daily */}
+      {tab === 'summary' && (
+        <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,padding:20}}>
+          <h3 style={{fontSize:14,fontWeight:700,color:T.navy,margin:'0 0 14px'}}>Daily Summary</h3>
+          {(() => {
+            const dayMap = {};
+            vouchers.forEach(v => {
+              const day = v.voucher_date?.split('T')[0] || v.voucher_date;
+              if (!day) return;
+              if (!dayMap[day]) dayMap[day] = {receipts:0, payments:0};
+              if (v.voucher_type?.toLowerCase()==='receipt') dayMap[day].receipts += v.amount||0;
+              else dayMap[day].payments += v.amount||0;
+            });
+            return Object.entries(dayMap).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,30).map(([day,d])=>(
+              <div key={day} style={{display:'flex',alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${T.border}`,gap:16}}>
+                <div style={{fontSize:13,fontWeight:600,color:T.text,width:120}}>{fmtDate(day)}</div>
+                <div style={{fontSize:13,color:T.green,flex:1}}>In: {fmt(d.receipts)}</div>
+                <div style={{fontSize:13,color:T.red,flex:1}}>Out: {fmt(d.payments)}</div>
+                <div style={{fontSize:13,fontWeight:700,color:d.receipts-d.payments>=0?T.green:T.red}}>Net: {fmt(Math.abs(d.receipts-d.payments))}</div>
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+    </div>
+  );
 }

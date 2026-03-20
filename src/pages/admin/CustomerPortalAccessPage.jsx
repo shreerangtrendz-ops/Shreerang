@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const ACCESS_CATEGORIES = [
   { id: 'catalogue', label: 'Product Catalogue', icon: '📁', desc: 'View full fabric catalogue' },

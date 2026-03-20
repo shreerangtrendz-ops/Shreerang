@@ -323,7 +323,7 @@ export default function AdminDashboard() {
 
             <div style={{ background:T.surface, borderRadius:14, padding:'18px 20px', border:`1px solid ${T.border}`, boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>â±ï¸ Aging</div>
+                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:15, fontWeight:700, color:T.navy }}>⚖️ Aging</div>
                 <button onClick={()=>navigate('/admin/outstanding-receivable')} style={{ background:'#FFF3F3', border:'1px solid rgba(231,76,60,.2)', color:T.red, borderRadius:7, padding:'4px 10px', cursor:'pointer', fontSize:11, fontWeight:600 }}>View â</button>
               </div>
               {loading ? <div style={{ color:T.textDim }}>Loading...</div> : (

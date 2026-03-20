@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Send, MessageCircle, RefreshCw } from 'lucide-react';
+import { Search, Send, MessageCircle, RefreshCw, Globe } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -9,6 +9,86 @@ import FormErrorBoundary from '@/components/common/FormErrorBoundary';
 
 const PHONE_ID = '868455029689394';
 const WA_TOKEN = 'EAAKigiKCL4gBQwTbZCZCZAGKoyMkvLWZBGW91JowEdRqhZAAgJmr0oAFsmklZB0cEZC9BIx8bQ4MkWoZCmNE6Gpcubom3zEsyicNByu2wiE35LujumllbekSySFSms9yl77uvAX83ntx7oUqj9paZBZAbtrnQeqgUl3SudiGS90hspkPaGXjYeXZAwfUb2Uhd4xjL2cxwZDZD';
+
+// Language flag emoji map
+const LANG_FLAGS = {
+  'hi': '🇮🇳', 'gu': '🇮🇳', 'mr': '🇮🇳', 'pa': '🇮🇳', 'bn': '🇧🇩',
+  'ar': '🇸🇦', 'fa': '🇮🇷', 'ur': '🇵🇰', 'tr': '🇹🇷', 'fr': '🇫🇷',
+  'es': '🇪🇸', 'de': '🇩🇪', 'pt': '🇵🇹', 'it': '🇮🇹', 'ru': '🇷🇺',
+  'zh': '🇨🇳', 'ja': '🇯🇵', 'ko': '🇰🇷', 'nl': '🇳🇱', 'sv': '🇸🇪',
+  'en': '🇬🇧', 'ms': '🇲🇾', 'id': '🇮🇩', 'th': '🇹🇭', 'vi': '🇻🇳',
+};
+
+function LangBadge({ lang }) {
+  if (!lang || lang === 'English') return null;
+  return (
+    <span style={{ fontSize: 10, background: '#EEF2FF', color: '#4F46E5', padding: '1px 6px', borderRadius: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <Globe size={9} /> {lang}
+    </span>
+  );
+}
+
+// Message bubble component with translation toggle
+function MessageBubble({ msg }) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const isOut = msg.direction === 'outgoing';
+  const hasTranslation = msg.translated_text && msg.translated_text !== msg.message_text && msg.language_detected !== 'English';
+
+  // For dashboard: show English translation by default for incoming non-English messages
+  const displayText = isOut
+    ? msg.message_text  // outgoing: always English (team sees what bot sent in English)
+    : (showOriginal ? msg.message_text : (msg.translated_text || msg.message_text)); // incoming: English translation default
+
+  const fmt = (ts) => ts ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  return (
+    <div style={{ display: 'flex', justifyContent: isOut ? 'flex-end' : 'flex-start', marginBottom: 6 }}>
+      <div style={{ maxWidth: '72%' }}>
+        {/* Language badge for incoming non-English */}
+        {!isOut && msg.language_detected && msg.language_detected !== 'English' && (
+          <div style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <LangBadge lang={msg.language_detected} />
+            {hasTranslation && (
+              <button
+                onClick={() => setShowOriginal(!showOriginal)}
+                style={{ fontSize: 10, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+              >
+                {showOriginal ? 'Show English' : 'Show original'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div style={{
+          background: isOut ? '#DCF8C6' : '#fff',
+          padding: '8px 12px', borderRadius: 10,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+          fontSize: 13, color: '#111'
+        }}>
+          {/* Translation indicator */}
+          {!isOut && hasTranslation && !showOriginal && (
+            <div style={{ fontSize: 10, color: '#6B7280', marginBottom: 4, fontStyle: 'italic' }}>
+              🌐 Translated from {msg.language_detected}
+            </div>
+          )}
+
+          <p style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{displayText}</p>
+
+          {/* For outgoing: show note that customer received in their language */}
+          {isOut && msg.metadata?.sent_in_lang && msg.metadata.sent_in_lang !== 'English' && (
+            <div style={{ fontSize: 10, color: '#6B7280', marginTop: 4, fontStyle: 'italic' }}>
+              📤 Sent to customer in {msg.metadata.sent_in_lang}
+            </div>
+          )}
+
+          <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 3, textAlign: 'right' }}>
+            {fmt(msg.created_at)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const WhatsAppInbox = () => {
   const [conversations, setConversations] = useState([]);
@@ -47,9 +127,8 @@ const WhatsAppInbox = () => {
   useEffect(() => { loadConversations(); }, []);
   useEffect(() => { if (selectedConv?.id) loadMessages(selectedConv.id); }, [selectedConv?.id]);
 
-  // Real-time: new messages
   useEffect(() => {
-    const ch = supabase.channel('wa-inbox-live')
+    const ch = supabase.channel('wa-inbox-live-v2')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, (payload) => {
         const msg = payload.new;
         if (msg.conversation_id === selectedConv?.id) {
@@ -58,9 +137,10 @@ const WhatsAppInbox = () => {
         }
         loadConversations();
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_conversations' }, () => {
-        loadConversations();
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, (payload) => {
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_conversations' }, () => loadConversations())
       .subscribe();
     return () => supabase.removeChannel(ch);
   }, [selectedConv?.id, loadConversations]);
@@ -81,9 +161,11 @@ const WhatsAppInbox = () => {
           direction: 'outgoing',
           message_type: 'text',
           message_text: messageText,
+          translated_text: messageText,
+          language_detected: 'English',
           status: 'sent',
           created_at: new Date().toISOString(),
-          metadata: {}
+          metadata: { sent_by: 'agent', dashboard_view: 'english' }
         });
         setMessageText('');
       }
@@ -92,124 +174,120 @@ const WhatsAppInbox = () => {
   };
 
   const fmt = (ts) => ts ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
-  const fmtDate = (ts) => {
-    if (!ts) return '';
-    const diff = new Date().setHours(0,0,0,0) - new Date(ts).setHours(0,0,0,0);
-    if (diff === 0) return 'Today'; if (diff === 86400000) return 'Yesterday';
-    return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  };
   const filtered = conversations.filter(c =>
     (c.customer_name || c.phone_number || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <FormErrorBoundary>
-      <div className="flex h-[calc(100vh-4rem)] bg-white rounded-lg border border-slate-200 overflow-hidden">
-        <div className="w-80 border-r border-slate-200 flex flex-col">
-          <div className="p-4 border-b bg-slate-50">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                <MessageCircle className="h-5 w-5 text-green-600" />
-                WhatsApp Inbox
-                <span className="text-xs font-medium text-green-600 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block" />LIVE
-                </span>
-              </h2>
-              <span className="text-xs text-slate-400">{conversations.length} chats</span>
+      <div style={{ display: 'flex', height: 'calc(100vh - 4rem)', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+
+        {/* Sidebar */}
+        <div style={{ width: 300, borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MessageCircle size={16} color="#25D366" /> WhatsApp Inbox
+                <span style={{ fontSize: 10, background: '#25D366', color: '#fff', padding: '1px 7px', borderRadius: 10, fontWeight: 600 }}>LIVE</span>
+              </span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>{conversations.length} chats</span>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input placeholder="Search..." className="pl-9 bg-white text-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            {/* Team notice */}
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontSize: 11, color: '#1D4ED8' }}>
+              🇬🇧 Dashboard shows <strong>English translations</strong> — bot replies in customer's language
+            </div>
+            <div style={{ position: 'relative' }}>
+              <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <Input placeholder="Search..." style={{ paddingLeft: 28, fontSize: 12 }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
           </div>
-          <ScrollArea className="flex-1">
-            <div className="divide-y divide-slate-100">
-              {filtered.length === 0 && <div className="p-6 text-center text-slate-400 text-sm">No conversations yet</div>}
-              {filtered.map(conv => (
-                <div key={conv.id} onClick={() => setSelectedConv(conv)}
-                  className={`p-3 cursor-pointer hover:bg-slate-50 transition-colors ${selectedConv?.id === conv.id ? 'bg-green-50 border-l-2 border-l-green-500' : ''}`}>
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-9 w-9 shrink-0">
-                      <AvatarFallback className="bg-green-100 text-green-700 text-xs font-bold">
-                        {(conv.customer_name || conv.phone_number || '?').substring(0,2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between">
-                        <span className="text-sm font-medium text-slate-900 truncate">{conv.customer_name || conv.phone_number}</span>
-                        <span className="text-[10px] text-slate-400 shrink-0">{fmt(conv.last_message_at)}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 truncate">{conv.phone_number}</p>
+
+          <ScrollArea style={{ flex: 1 }}>
+            {filtered.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No conversations yet</div>}
+            {filtered.map(conv => (
+              <div key={conv.id} onClick={() => setSelectedConv(conv)}
+                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', background: selectedConv?.id === conv.id ? '#F0FDF4' : 'transparent', borderLeft: selectedConv?.id === conv.id ? '3px solid #25D366' : '3px solid transparent' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#059669', flexShrink: 0 }}>
+                    {(conv.customer_name || conv.phone_number || '?').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {conv.customer_name || conv.phone_number}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0 }}>{fmt(conv.last_message_at)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conv.phone_number}</span>
+                      {conv.language && conv.language !== 'English' && conv.language !== 'EN' && (
+                        <span style={{ fontSize: 9, background: '#EEF2FF', color: '#4F46E5', padding: '1px 5px', borderRadius: 8, fontWeight: 600, flexShrink: 0 }}>{conv.language}</span>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </ScrollArea>
         </div>
 
+        {/* Chat area */}
         {selectedConv ? (
-          <div className="flex-1 flex flex-col">
-            <div className="p-3 border-b bg-white flex items-center gap-3">
-              <Avatar className="h-9 w-9">
-                <AvatarFallback className="bg-green-100 text-green-700 text-xs font-bold">
-                  {(selectedConv.customer_name || selectedConv.phone_number || '?').substring(0,2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <div className="font-medium text-slate-900 text-sm">{selectedConv.customer_name || selectedConv.phone_number}</div>
-                <div className="text-xs text-green-600">● {selectedConv.phone_number}</div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#059669' }}>
+                {(selectedConv.customer_name || selectedConv.phone_number || '?').substring(0, 2).toUpperCase()}
               </div>
-              <Button variant="ghost" size="sm" onClick={() => loadMessages(selectedConv.id)} title="Refresh">
-                <RefreshCw className="h-4 w-4" />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{selectedConv.customer_name || selectedConv.phone_number}</div>
+                <div style={{ fontSize: 11, color: '#25D366', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  ● {selectedConv.phone_number}
+                  {selectedConv.language && selectedConv.language !== 'EN' && selectedConv.language !== 'English' && (
+                    <span style={{ color: '#6B7280' }}>· Speaks {selectedConv.language}</span>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 11, background: '#EFF6FF', color: '#1D4ED8', padding: '4px 10px', borderRadius: 8, fontWeight: 500 }}>
+                🇬🇧 English view
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => loadMessages(selectedConv.id)}>
+                <RefreshCw size={14} />
               </Button>
             </div>
 
-            <ScrollArea className="flex-1 p-4 bg-[#f0f2f5]">
-              <div className="space-y-1">
-                {messages.map((msg, idx) => {
-                  const isOut = msg.direction === 'outgoing';
-                  const showDate = idx === 0 || fmtDate(messages[idx-1]?.created_at) !== fmtDate(msg.created_at);
-                  return (
-                    <div key={msg.id || idx}>
-                      {showDate && (
-                        <div className="text-center my-3">
-                          <span className="bg-white text-slate-400 text-xs px-3 py-1 rounded-full shadow-sm">{fmtDate(msg.created_at)}</span>
-                        </div>
-                      )}
-                      <div className={`flex ${isOut ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] px-3 py-2 rounded-lg shadow-sm text-sm ${isOut ? 'bg-[#dcf8c6]' : 'bg-white'}`}>
-                          <p className="whitespace-pre-wrap break-words text-slate-800">{msg.message_text || ''}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5 text-right">{fmt(msg.created_at)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
+            {/* Messages */}
+            <ScrollArea style={{ flex: 1, padding: 16, background: '#F0F2F5' }}>
+              {messages.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>No messages yet</div>
+              )}
+              {messages.map((msg, idx) => <MessageBubble key={msg.id || idx} msg={msg} />)}
+              <div ref={messagesEndRef} />
             </ScrollArea>
 
-            <div className="p-3 border-t bg-white flex gap-2">
-              <Input
-                placeholder="Type a message... (Enter to send)"
-                value={messageText}
-                onChange={e => setMessageText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
-                className="flex-1 text-sm"
-                disabled={sending}
-              />
+            {/* Input */}
+            <div style={{ padding: '10px 14px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8, alignItems: 'center', background: '#fff' }}>
+              <div style={{ flex: 1 }}>
+                <Input
+                  placeholder="Type in English — customer will receive it as-is (Enter to send)"
+                  value={messageText}
+                  onChange={e => setMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }}}
+                  style={{ fontSize: 13 }}
+                  disabled={sending}
+                />
+              </div>
               <Button onClick={handleSend} disabled={!messageText.trim() || sending}
-                className="bg-green-500 hover:bg-green-600 text-white h-9 w-9 p-0 shrink-0">
-                <Send className="h-4 w-4" />
+                style={{ background: '#25D366', color: '#fff', width: 36, height: 36, padding: 0, borderRadius: 8, flexShrink: 0 }}>
+                <Send size={14} />
               </Button>
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-slate-400">
-              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">Select a conversation</p>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ textAlign: 'center', color: '#94a3b8' }}>
+              <MessageCircle size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+              <p style={{ fontSize: 13 }}>Select a conversation</p>
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { supabase } from '@/lib/customSupabaseClient';
 
-const WA_TOKEN = import.meta.env.VITE_WHATSAPP_TOKEN || 'EAAKigiKCL4gBQwTbZCZCZAGKoyMkvLWZBGW91JowEdRqhZAAgJmr0oAFsmklZB0cEZC9BIx8bQ4MkWoZCmNE6Gpcubom3zEsyicNByu2wiE35LujumllbekSySFSms9yl77uvAX83ntx7oUqj9paZBZAbtrnQeqgUl3SudiGS90hspkPaGXjYeXZAwfUb2Uhd4xjL2cxwZDZD';
+const WA_TOKEN = import.meta.env.VITE_WHATSAPP_TOKEN || '';
 const PHONE_ID = '868455029689394';
 const WA_API = `https://graph.facebook.com/v18.0/${PHONE_ID}/messages`;
 

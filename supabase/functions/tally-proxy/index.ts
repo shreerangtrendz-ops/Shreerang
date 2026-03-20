@@ -43,7 +43,7 @@ serve(async (req) => {
     console.log(`[tally-proxy] Forwarding XML to Tally at ${tallyUrl} (${xmlBody.length} bytes)`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 90000); // 90s for large ledger exports
+    const timeout = setTimeout(() => controller.abort(), 90000);
 
     let responseText = "";
     try {
@@ -70,14 +70,12 @@ serve(async (req) => {
       });
     }
 
-    // Detect Tally showing Import dialog (only when File to Import prompt appears)
-    // Note: Day Book returns IMPORTDATA wrapper which is normal - do NOT block that
-    if (responseText.includes("File to Import") || 
+    if (responseText.includes("File to Import") ||
         (responseText.includes("IMPORTFILE") && responseText.includes("LONGPROMPT"))) {
       return new Response(JSON.stringify({
         success: false,
         error: "TALLY_IMPORT_DIALOG_OPEN",
-        hint: "Tally is showing Import dialog. This may resolve automatically - retry sync.",
+        hint: "Tally is showing Import dialog. Press ESC in Tally and retry.",
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

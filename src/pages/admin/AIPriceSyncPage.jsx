@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 

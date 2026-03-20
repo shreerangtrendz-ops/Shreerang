@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const DRIVE_FOLDER_ID = import.meta.env.VITE_GOOGLE_DRIVE_FOLDER_ID || '1SVva3o8BTswoF_rQCyIwiXLEx_m3YPl6';
 const BUNNY_CDN_URL = import.meta.env.VITE_BUNNY_CDN_URL || '';

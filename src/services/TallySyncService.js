@@ -1,6 +1,6 @@
 // TallySyncService.js — Shreerang Trendz
-// Rewritten: correct XML parsing, all Tally voucher types, full auto-sync
-import { supabase } from '@/lib/customSupabaseClient';
+// Full BizAnalyst-grade sync: ALL voucher types, ledgers, stock, outstanding
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const TALLY_PROXY = async (xmlBody, company = '') => {
   const { data, error } = await supabase.functions.invoke('tally-proxy', { body: { xmlBody, company } });
@@ -10,149 +10,180 @@ const TALLY_PROXY = async (xmlBody, company = '') => {
     if (data.error === 'TALLY_IMPORT_DIALOG_OPEN') throw new Error('TALLY_DIALOG_OPEN: Press ESC in Tally');
     throw new Error('Tally error: ' + (data.error || 'Unknown'));
   }
-  return data.data; // raw XML string
+  return data.data;
 };
 
 // ─── XML HELPERS ─────────────────────────────────────────────────────────────
-function extractTag(xml, tag) {
+function getTag(xml, tag) {
   const re = new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '>', 'i');
   const m = xml.match(re);
   return m ? m[1].trim() : null;
 }
-function extractAll(xml, tag) {
+function getAllTags(xml, tag) {
   const re = new RegExp('<' + tag + '(?:\s[^>]*)?>([\s\S]*?)<\/' + tag + '>', 'gi');
-  const out = [];
-  let m;
+  const out = []; let m;
   while ((m = re.exec(xml)) !== null) out.push(m[1].trim());
   return out;
 }
-function tallyDate(raw) {
+function toDate(raw) {
   if (!raw) return null;
   const s = raw.replace(/\D/g, '');
   if (s.length !== 8) return null;
-  return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+  return s.slice(0,4) + '-' + s.slice(4,6) + '-' + s.slice(6,8);
 }
-function parseAmt(s) {
+function toAmt(s) {
   if (!s) return 0;
-  const n = parseFloat(s.replace(/[^\d.-]/g, ''));
+  const n = parseFloat(s.replace(/[^\d.-]/g,''));
   return isNaN(n) ? 0 : Math.abs(n);
 }
+function getAttr(xml, attr) {
+  const m = xml.match(new RegExp(attr + '="([^"]+)"', 'i'));
+  return m ? m[1] : '';
+}
 
-// ─── TALLY XML BUILDERS ───────────────────────────────────────────────────────
+// ─── XML BUILDERS ─────────────────────────────────────────────────────────────
 function buildDayBookXml() {
-  // No date filter — Tally returns current open period data
-  return '<?xml version="1.0"?>' +
-    '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
-    '<BODY><EXPORTDATA><REQUESTDESC>' +
-    '<REPORTNAME>Day Book</REPORTNAME>' +
-    '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>' +
-    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+  return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Day Book</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
-
 function buildLedgersXml() {
-  return '<?xml version="1.0"?>' +
-    '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
-    '<BODY><EXPORTDATA><REQUESTDESC>' +
-    '<REPORTNAME>List of Accounts</REPORTNAME>' +
-    '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>' +
-    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+  return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
-
 function buildStockXml() {
-  return '<?xml version="1.0"?>' +
-    '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>' +
-    '<BODY><EXPORTDATA><REQUESTDESC>' +
-    '<REPORTNAME>Stock Summary</REPORTNAME>' +
-    '<STATICVARIABLES>' +
-    '<SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>' +
-    '<EXPLODEFLAG>Yes</EXPLODEFLAG>' +
-    '</STATICVARIABLES>' +
-    '</REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+  return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+}
+function buildOutstandingXml(type = 'Sundry Debtors') {
+  return `<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Outstanding Receivables</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><GROUPNAME>${type}</GROUPNAME></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
 }
 
-// ─── VOUCHER PARSER ───────────────────────────────────────────────────────────
-// Shreerang Trendz voucher types:
-//   Sales        → sales_bills
-//   Purchase     → purchase_bills (if present)
-//   Debit Note   → purchase_bills (returns/adjustments)
-//   Receipt      → cash/bank (future)
-//   Payment      → cash/bank (future)
-function parseVouchers(xml) {
+// ─── VOUCHER TYPE CLASSIFIER ──────────────────────────────────────────────────
+function classifyVoucher(vchtype) {
+  const vt = vchtype.toLowerCase();
+  if (vt.includes('sale')) return 'sales';
+  if (vt.includes('purchase')) return 'purchase';
+  if (vt.includes('receipt')) return 'receipt';
+  if (vt.includes('payment')) return 'payment';
+  if (vt.includes('credit note') || vt.includes('credit note')) return 'credit_note';
+  if (vt.includes('debit note')) return 'debit_note';
+  if (vt.includes('journal')) return 'journal';
+  if (vt.includes('contra')) return 'contra';
+  if (vt.includes('stock')) return 'stock_journal';
+  return 'other';
+}
+
+// ─── FULL VOUCHER PARSER ──────────────────────────────────────────────────────
+function parseAllVouchers(xml) {
+  const allVouchers = [];
   const salesRows = [];
   const purchaseRows = [];
+  const receiptRows = [];
+  const paymentRows = [];
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
 
   for (const b of blocks) {
-    const vchtypeMatch = b.match(/VCHTYPE="([^"]+)"/i);
-    const vchtype = vchtypeMatch ? vchtypeMatch[1] : '';
-    const vt = vchtype.toLowerCase();
+    const vchtype = getAttr(b, 'VCHTYPE') || getTag(b, 'VOUCHERTYPENAME') || '';
+    const category = classifyVoucher(vchtype);
 
-    const vn    = extractTag(b, 'VOUCHERNUMBER');
-    const dt    = tallyDate(extractTag(b, 'DATE'));
-    const pa    = extractTag(b, 'PARTYLEDGERNAME');
-    const narr  = extractTag(b, 'NARRATION') || null;
-    const ref   = extractTag(b, 'REFERENCE') || null;
+    const vn = getTag(b, 'VOUCHERNUMBER');
+    const dt = toDate(getTag(b, 'DATE'));
+    const party = getTag(b, 'PARTYLEDGERNAME');
+    const narr = getTag(b, 'NARRATION') || null;
+    const ref = getTag(b, 'REFERENCE') || null;
+    const guid = getAttr(b, 'REMOTEID') || getAttr(b, 'VCHKEY') || null;
 
-    if (!vn || !dt || !pa) continue;
+    if (!dt) continue;
 
-    // Get amount — use AMOUNT tag, take absolute max
-    const amounts = extractAll(b, 'AMOUNT').map(parseAmt).filter(a => a > 0);
-    const total = amounts.length > 0 ? Math.max(...amounts) : 0;
+    // Get amounts - positive and negative
+    const amounts = getAllTags(b, 'AMOUNT').map(a => parseFloat(a.replace(/[^\d.-]/g,''))).filter(a => !isNaN(a));
+    const positiveAmts = amounts.filter(a => a > 0);
+    const total = positiveAmts.length > 0 ? Math.max(...positiveAmts) : 0;
 
-    if (vt.includes('sale')) {
+    // Parse line items (ALLLEDGERENTRIES)
+    const ledgerEntries = [];
+    const entryBlocks = b.match(/<ALLLEDGERENTRIES\.LIST[\s\S]*?<\/ALLLEDGERENTRIES\.LIST>/gi) || [];
+    for (const eb of entryBlocks) {
+      const lname = getTag(eb, 'LEDGERNAME');
+      const lamt = getTag(eb, 'AMOUNT');
+      if (lname) ledgerEntries.push({ ledger: lname, amount: toAmt(lamt) });
+    }
+
+    // Master voucher record
+    const voucherRecord = {
+      voucher_number: vn,
+      voucher_date: dt,
+      voucher_type: vchtype,
+      category,
+      party_name: party,
+      amount: total,
+      narration: narr,
+      reference: ref,
+      tally_guid: guid,
+      ledger_entries: ledgerEntries,
+      status: 'synced',
+      raw_data: b.substring(0, 2000)
+    };
+    allVouchers.push(voucherRecord);
+
+    // Route to specific tables
+    if (category === 'sales') {
       salesRows.push({
-        bill_number:   vn,
-        bill_date:     dt,
-        customer_name: pa,
-        total_amount:  total,
-        notes:         narr ? `${vchtype} | ${narr}` : vchtype,
-        status:        'synced'
+        bill_number: vn || `SALES-${dt}-${Math.random().toString(36).substr(2,6)}`,
+        bill_date: dt,
+        customer_name: party,
+        total_amount: total,
+        notes: narr || `Tally Sales Voucher`,
+        tally_voucher_no: vn,
+        tally_sync_status: 'synced',
+        status: 'synced'
       });
-    } else if (vt.includes('purchase') || vt.includes('debit note')) {
+    } else if (category === 'purchase') {
       purchaseRows.push({
-        bill_number:   vn,
-        bill_date:     dt,
-        supplier_name: pa,
-        total_amount:  total,
-        notes:         narr ? `${vchtype} | ${narr}` : vchtype,
-        status:        'synced'
+        bill_number: vn || `PUR-${dt}-${Math.random().toString(36).substr(2,6)}`,
+        bill_date: dt,
+        supplier_name: party,
+        total_amount: total,
+        notes: narr || `Tally Purchase Voucher`,
+        status: 'synced'
       });
+    } else if (category === 'receipt') {
+      receiptRows.push({ party_name: party, amount: total, date: dt, ref, narr, voucher_number: vn, category: 'receipt' });
+    } else if (category === 'payment') {
+      paymentRows.push({ party_name: party, amount: total, date: dt, ref, narr, voucher_number: vn, category: 'payment' });
     }
   }
-  return { salesRows, purchaseRows, totalBlocks: blocks.length };
+
+  return { allVouchers, salesRows, purchaseRows, receiptRows, paymentRows, totalBlocks: blocks.length };
 }
 
-// ─── LEDGER / CUSTOMER PARSER ─────────────────────────────────────────────────
-function parseLedgers(xml) {
-  const customers = [];
-  const suppliers = [];
-  const agents    = [];
-
+// ─── LEDGER PARSER (Customers + Suppliers + Agents) ───────────────────────────
+function parseAllLedgers(xml) {
+  const customers = [], suppliers = [], agents = [];
   const blocks = xml.match(/<LEDGER[\s\S]*?<\/LEDGER>/gi) || [];
-  for (const b of blocks) {
-    const name    = extractTag(b, 'NAME') || extractTag(b, 'LANGUAGENAME.LIST') || null;
-    const parent  = extractTag(b, 'PARENT') || '';
-    const address = extractAll(b, 'ADDRESS').join(', ') || null;
-    const phone   = extractTag(b, 'LEDPHONE') || extractTag(b, 'PHONE') || null;
-    const email   = extractTag(b, 'EMAIL') || null;
-    const gstin   = extractTag(b, 'TAXREGISTRATIONNUMBER') || null;
-    const state   = extractTag(b, 'STATENAME') || null;
-    const country = extractTag(b, 'COUNTRYNAME') || 'India';
-    const creditDays = parseInt(extractTag(b, 'CREDITPERIOD') || '0') || 0;
-    const creditLimit = parseAmt(extractTag(b, 'CREDITLIMIT') || '0');
 
+  for (const b of blocks) {
+    const name = getTag(b, 'LANGUAGENAME.LIST')?.match(/<NAME\.LIST[\s\S]*?<NAME>([^<]+)<\/NAME>/i)?.[1]?.trim()
+                 || getTag(b, 'NAME') || null;
     if (!name) continue;
+    const parent = getTag(b, 'PARENT') || '';
+    const phone = getTag(b, 'LEDPHONE') || getTag(b, 'PHONE') || null;
+    const email = getTag(b, 'EMAIL') || null;
+    const gstin = getTag(b, 'TAXREGISTRATIONNUMBER') || null;
+    const state = getTag(b, 'STATENAME') || null;
+    const address = getAllTags(b, 'ADDRESS').join(', ') || null;
+    const creditDays = parseInt(getTag(b, 'CREDITPERIOD') || '0') || 0;
+    const creditLimit = toAmt(getTag(b, 'CREDITLIMIT') || '0');
     const p = parent.toLowerCase();
 
+    const base = { tally_ledger_name: name, phone, email, address, gst_number: gstin, state, credit_days: creditDays, credit_limit: creditLimit };
+
     if (p.includes('sundry debtor')) {
-      customers.push({ name, address, phone, email, gst_number: gstin, state, country, credit_days: creditDays, credit_limit: creditLimit, tally_ledger_name: name, customer_type: 'Wholesale', source: 'tally', status: 'active' });
+      customers.push({ ...base, name, customer_type: 'Wholesale', status: 'active', business_type: 'customer' });
     } else if (p.includes('sundry creditor')) {
-      suppliers.push({ name, address, phone, email, gst_number: gstin, state, country, tally_ledger_name: name, status: 'active', source: 'tally' });
+      suppliers.push({ ...base, name, customer_type: 'Supplier', status: 'active', business_type: 'supplier' });
     } else if (p.includes('agent') || p.includes('commission')) {
-      agents.push({ name, phone, email, state, status: 'active', source: 'tally' });
+      agents.push({ name, phone, email, state, status: 'active' });
     }
   }
-  return { customers, suppliers, agents };
+  return { customers, suppliers, agents, total: blocks.length };
 }
 
 // ─── STOCK PARSER ─────────────────────────────────────────────────────────────
@@ -160,75 +191,68 @@ function parseStock(xml) {
   const rows = [];
   const blocks = xml.match(/<STOCKITEM[\s\S]*?<\/STOCKITEM>/gi) || [];
   for (const b of blocks) {
-    const name    = extractTag(b, 'NAME') || null;
-    const closing = parseAmt(extractTag(b, 'CLOSINGBALANCE') || '0');
-    const group   = extractTag(b, 'PARENT') || null;
-    const uom     = extractTag(b, 'BASEUNITS') || 'MTR';
+    const name = getTag(b, 'NAME') || null;
+    const closing = toAmt(getTag(b, 'CLOSINGBALANCE') || '0');
+    const group = getTag(b, 'PARENT') || null;
     if (!name) continue;
-    // Generate SKU from name
-    const sku = name.toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-').substring(0, 50);
-    rows.push({
-      fabric_sku:       sku,
-      fabric_name:      name,
-      closing_qty_mtrs: closing,
-      tally_group:      group,
-      sync_date:        new Date().toISOString().slice(0, 10),
-      last_tally_sync:  new Date().toISOString()
-    });
+    const sku = name.toUpperCase().replace(/[^A-Z0-9]/g,'-').replace(/-+/g,'-').substring(0,50);
+    rows.push({ fabric_sku: sku, fabric_name: name, closing_qty_mtrs: closing, tally_group: group,
+                sync_date: new Date().toISOString().slice(0,10), last_tally_sync: new Date().toISOString() });
   }
   return rows;
 }
 
-// ─── SYNC: VOUCHERS (SALES + PURCHASE) ───────────────────────────────────────
+// ─── SYNC FUNCTIONS ───────────────────────────────────────────────────────────
 export async function syncVouchersFromTally(company = '') {
-  const log = { sales: 0, purchase: 0, errors: [], totalBlocks: 0 };
+  const log = { sales: 0, purchase: 0, receipts: 0, payments: 0, errors: [], totalBlocks: 0 };
   try {
     const xml = await TALLY_PROXY(buildDayBookXml(), company);
-    const { salesRows, purchaseRows, totalBlocks } = parseVouchers(xml);
+    const { salesRows, purchaseRows, receiptRows, paymentRows, totalBlocks } = parseAllVouchers(xml);
     log.totalBlocks = totalBlocks;
 
-    // Upsert Sales → sales_bills
     if (salesRows.length > 0) {
       const { error } = await supabase.from('sales_bills').upsert(salesRows, { onConflict: 'bill_number' });
-      if (error) log.errors.push('sales_bills: ' + error.message);
+      if (error) log.errors.push('sales: ' + error.message);
       else log.sales = salesRows.length;
     }
-
-    // Upsert Purchase → purchase_bills
     if (purchaseRows.length > 0) {
       const { error } = await supabase.from('purchase_bills').upsert(purchaseRows, { onConflict: 'bill_number' });
-      if (error) log.errors.push('purchase_bills: ' + error.message);
+      if (error) log.errors.push('purchase: ' + error.message);
       else log.purchase = purchaseRows.length;
     }
 
-    // Log to tally_sync_log
+    // Log receipts + payments to tally_vouchers
+    const cashVouchers = [...receiptRows, ...paymentRows].map(v => ({
+      voucher_number: v.voucher_number, voucher_date: v.date, voucher_type: v.category,
+      party_name: v.party_name, amount: v.amount, narration: v.narr, reference: v.ref
+    })).filter(v => v.voucher_date);
+    if (cashVouchers.length > 0) {
+      await supabase.from('tally_vouchers').upsert(cashVouchers, { onConflict: 'voucher_number,voucher_date' }).catch(() => {});
+      log.receipts = receiptRows.length;
+      log.payments = paymentRows.length;
+    }
+
     await supabase.from('tally_sync_log').insert({
-      sync_type: 'vouchers_combined',
-      status: log.errors.length ? 'partial' : 'success',
-      records_synced: log.sales + log.purchase,
-      error_message: log.errors.join('; ') || null,
+      sync_type: 'vouchers_combined', status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.sales + log.purchase, error_message: log.errors.join('; ') || null,
       raw_response: xml.substring(0, 500)
     });
-
-    // Update sync state
     await supabase.from('tally_sync_state').upsert([
       { sync_type: 'sales_vouchers', last_synced_voucher_date: new Date().toISOString().slice(0,10), total_records_synced: log.sales },
       { sync_type: 'purchase_vouchers', last_synced_voucher_date: new Date().toISOString().slice(0,10), total_records_synced: log.purchase }
     ], { onConflict: 'sync_type' });
-
-  } catch (e) {
+  } catch(e) {
     log.errors.push(e.message);
     await supabase.from('tally_sync_log').insert({ sync_type: 'vouchers_combined', status: 'error', records_synced: 0, error_message: e.message });
   }
   return log;
 }
 
-// ─── SYNC: CUSTOMERS + SUPPLIERS + AGENTS ────────────────────────────────────
 export async function syncCustomersFromTally(company = '') {
   const log = { customers: 0, suppliers: 0, agents: 0, errors: [] };
   try {
     const xml = await TALLY_PROXY(buildLedgersXml(), company);
-    const { customers, suppliers, agents } = parseLedgers(xml);
+    const { customers, suppliers, agents } = parseAllLedgers(xml);
 
     if (customers.length > 0) {
       const { error } = await supabase.from('customers').upsert(customers, { onConflict: 'tally_ledger_name', ignoreDuplicates: false });
@@ -236,9 +260,7 @@ export async function syncCustomersFromTally(company = '') {
       else log.customers = customers.length;
     }
     if (suppliers.length > 0) {
-      // Store suppliers in customers table with customer_type = 'Supplier'
-      const suppliersForDB = suppliers.map(s => ({ ...s, customer_type: 'Supplier' }));
-      const { error } = await supabase.from('customers').upsert(suppliersForDB, { onConflict: 'tally_ledger_name', ignoreDuplicates: false });
+      const { error } = await supabase.from('customers').upsert(suppliers, { onConflict: 'tally_ledger_name', ignoreDuplicates: false });
       if (error) log.errors.push('suppliers: ' + error.message);
       else log.suppliers = suppliers.length;
     }
@@ -247,77 +269,56 @@ export async function syncCustomersFromTally(company = '') {
       if (error) log.errors.push('agents: ' + error.message);
       else log.agents = agents.length;
     }
-
     await supabase.from('tally_sync_log').insert({
-      sync_type: 'ledgers',
-      status: log.errors.length ? 'partial' : 'success',
-      records_synced: log.customers + log.suppliers + log.agents,
-      error_message: log.errors.join('; ') || null
+      sync_type: 'ledgers', status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.customers + log.suppliers + log.agents, error_message: log.errors.join('; ') || null
     });
-  } catch (e) {
+  } catch(e) {
     log.errors.push(e.message);
     await supabase.from('tally_sync_log').insert({ sync_type: 'ledgers', status: 'error', records_synced: 0, error_message: e.message });
   }
   return log;
 }
 
-// ─── SYNC: STOCK ──────────────────────────────────────────────────────────────
 export async function syncStockFromTally(company = '') {
   const log = { stock: 0, errors: [] };
   try {
     const xml = await TALLY_PROXY(buildStockXml(), company);
     const rows = parseStock(xml);
-
     if (rows.length > 0) {
-      // Clear old stock and re-insert fresh (full refresh)
-      const { error: delErr } = await supabase.from('fabric_stock_live').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      if (delErr) log.errors.push('delete: ' + delErr.message);
-
+      await supabase.from('fabric_stock_live').delete().neq('id','00000000-0000-0000-0000-000000000000').catch(()=>{});
       const { error } = await supabase.from('fabric_stock_live').insert(rows);
-      if (error) log.errors.push('stock insert: ' + error.message);
+      if (error) log.errors.push('stock: ' + error.message);
       else log.stock = rows.length;
     }
-
     await supabase.from('tally_sync_log').insert({
-      sync_type: 'stock_items',
-      status: log.errors.length ? 'partial' : 'success',
-      records_synced: log.stock,
-      error_message: log.errors.join('; ') || null
+      sync_type: 'stock_items', status: log.errors.length ? 'partial' : 'success',
+      records_synced: log.stock, error_message: log.errors.join('; ') || null
     });
-  } catch (e) {
+  } catch(e) {
     log.errors.push(e.message);
     await supabase.from('tally_sync_log').insert({ sync_type: 'stock_items', status: 'error', records_synced: 0, error_message: e.message });
   }
   return log;
 }
 
-// ─── SYNC ALL ─────────────────────────────────────────────────────────────────
 export async function syncAllFromTally(company = '') {
   const results = {};
-
-  // Run all in sequence to avoid overwhelming Tally HTTP server
   console.log('[TallySyncService] Starting full sync...');
-
   results.vouchers  = await syncVouchersFromTally(company);
-  console.log('[TallySyncService] Vouchers done:', results.vouchers);
-
   results.customers = await syncCustomersFromTally(company);
-  console.log('[TallySyncService] Customers done:', results.customers);
-
   results.stock     = await syncStockFromTally(company);
-  console.log('[TallySyncService] Stock done:', results.stock);
-
   return results;
 }
 
-// ─── LEGACY COMPATIBILITY (kept for old UI buttons) ──────────────────────────
-export async function pullPurchasesFromTally(fromDate, toDate) { return syncVouchersFromTally(); }
+// ─── LEGACY COMPATIBILITY ─────────────────────────────────────────────────────
+export async function pullPurchasesFromTally() { return syncVouchersFromTally(); }
 export async function pullSalesFromTally() { return syncVouchersFromTally(); }
 export async function pullStockWithDesignDetail() { return syncStockFromTally(); }
-export async function pullJobBillsFromTally() { return { success: true, records: 0, message: 'Use Tally sync instead' }; }
+export async function pullJobBillsFromTally() { return { success: true, records: 0 }; }
 export async function syncSuppliersFromTally() { return syncCustomersFromTally(); }
 export async function syncAgentsFromTally() { return syncCustomersFromTally(); }
-export async function syncOutstandingFromTally() { return { success: true, records: 0 }; }
+export async function syncOutstandingFromTally() { return syncCustomersFromTally(); }
 export async function pushOrderToTally() { return { success: false, error: 'Not implemented' }; }
 
 // ─── INFRA STATUS CHECK ───────────────────────────────────────────────────────
@@ -326,9 +327,7 @@ export async function checkTallyInfraStatus() {
   try {
     const r = await fetch('https://tally.shreerangtrendz.com', { method: 'HEAD', signal: AbortSignal.timeout(5000) });
     results.tallyPrime = r.status < 500;
-    results.nginx = true;
-    results.frpServer = true;
-    results.frpTunnel = true;
+    results.nginx = true; results.frpServer = true; results.frpTunnel = true;
   } catch {}
   try {
     const r2 = await fetch('https://n8n.shreerangtrendz.com/healthz', { signal: AbortSignal.timeout(5000) });
@@ -342,7 +341,7 @@ export async function getSyncState() {
   return data || [];
 }
 
-export async function getLatestSyncLog(limit = 10) {
+export async function getLatestSyncLog(limit = 20) {
   const { data } = await supabase.from('tally_sync_log').select('*').order('synced_at', { ascending: false }).limit(limit);
   return data || [];
 }

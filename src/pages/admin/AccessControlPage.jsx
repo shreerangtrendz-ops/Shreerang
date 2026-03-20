@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const ROLES = [
   { id: 'admin', label: 'Admin', icon: '👑', color: 'bg-red-100 text-red-700', desc: 'Full system access' },

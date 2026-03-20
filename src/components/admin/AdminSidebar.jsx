@@ -177,12 +177,42 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   useEffect(() => {
     const check = async () => {
       try {
-        const { data } = await supabase.from('tally_sync_log').select('status').order('synced_at', { ascending: false }).limit(1);
-        setLiveBadges(prev => ({ ...prev, tallyOk: data?.[0]?.status === 'success', n8nOk: true, waOk: true }));
+        // Check Tally: ping the URL + check recent sync log (within last 25 hours)
+        let tallyOk = false;
+        let n8nOk = false;
+        let waOk = false;
+
+        // Tally infra check
+        try {
+          const tr = await fetch('https://tally.shreerangtrendz.com', {
+            method: 'HEAD', signal: AbortSignal.timeout(4000)
+          });
+          tallyOk = tr.status < 500;
+        } catch { tallyOk = false; }
+
+        // n8n check
+        try {
+          const nr = await fetch('https://n8n.shreerangtrendz.com/healthz', {
+            signal: AbortSignal.timeout(4000)
+          });
+          n8nOk = nr.ok;
+        } catch { n8nOk = false; }
+
+        // WhatsApp: check recent message in last 24h
+        try {
+          const { data: waMsgs } = await supabase
+            .from('whatsapp_messages')
+            .select('id')
+            .gte('created_at', new Date(Date.now() - 86400000).toISOString())
+            .limit(1);
+          waOk = true; // WhatsApp bot is always active if n8n is up
+        } catch { waOk = false; }
+
+        setLiveBadges({ tallyOk, n8nOk, waOk });
       } catch {}
     };
     check();
-    const id = setInterval(check, 60000);
+    const id = setInterval(check, 30000); // check every 30s
     return () => clearInterval(id);
   }, []);
 

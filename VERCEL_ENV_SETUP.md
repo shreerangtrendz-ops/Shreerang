@@ -19,7 +19,7 @@ Go to: **Vercel Dashboard → shreerangtrendz → Settings → Environment Varia
 
 | Variable | Value | Notes |
 |----------|-------|-------|
-| `GEMINI_API_KEY` | `AIzaSyA86vpx6KothltoItlZa-oL3CVvgjnFvmw` | Fast replies — already set |
+| `GEMINI_API_KEY` | `AIzaSyBL_WgaHc4pC0KkmxU5sJ9KqRZkAibd3yo` | Fast replies — already set |
 | `ANTHROPIC_API_KEY` | `sk-ant-...` | Get from console.anthropic.com — for Claude Haiku |
 
 ---

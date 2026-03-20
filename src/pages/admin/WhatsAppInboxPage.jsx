@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Send, RefreshCw, MessageSquare, Phone, Image, X, Check, CheckCheck, Edit2 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
-const WHATSAPP_TOKEN = 'EAAKigiKCL4gBQwTbZCZCZAGKoyMkvLWZBGW91JowEdRqhZAAgJmr0oAFsmklZB0cEZC9BIx8bQ4MkWoZCmNE6Gpcubom3zEsyicNByu2wiE35LujumllbekSySFSms9yl77uvAX83ntx7oUqj9paZBZAbtrnQeqgUl3SudiGS90hspkPaGXjYeXZAwfUb2Uhd4xjL2cxwZDZD';
+const WHATSAPP_TOKEN = import.meta.env.VITE_WHATSAPP_TOKEN || '';
 const PHONE_ID = '868455029689394';
 const WA_API = `https://graph.facebook.com/v18.0/${PHONE_ID}/messages`;
 const WA_HEADERS = { 'Authorization': `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' };

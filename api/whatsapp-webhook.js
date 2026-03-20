@@ -375,6 +375,18 @@ async function getOrderStatus(phone) {
 
 // ── Main Handler ───────────────────────────────────
 export default async function handler(req, res) {
+  // Trigger order notification via n8n
+  if (req.method === 'POST' && req.query?.type === 'order') {
+    const orderData = req.body;
+    try {
+      await fetch('https://n8n.shreerangtrendz.com/webhook/new-order-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData)
+      });
+    } catch(e) { console.error('Order notify error:', e); }
+  }
+
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'], token = req.query['hub.verify_token'], challenge = req.query['hub.challenge'];
     if (mode === 'subscribe' && token === VERIFY_TOKEN) return res.status(200).send(challenge);

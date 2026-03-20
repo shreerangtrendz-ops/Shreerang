@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 import { ensureArray } from '@/lib/arrayValidation';
 import { useToast } from '@/components/ui/use-toast';
 

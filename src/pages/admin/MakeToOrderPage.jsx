@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const STAGES = [
   { id: 'inquiry', label: 'Inquiry', color: 'bg-gray-100 border-gray-300', dot: 'bg-gray-400' },

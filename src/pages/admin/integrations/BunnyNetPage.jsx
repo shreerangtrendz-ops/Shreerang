@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 const BUNNY_API_KEY = import.meta.env.VITE_BUNNY_API_KEY || '';
 const BUNNY_CDN_URL = import.meta.env.VITE_BUNNY_CDN_URL || '';

@@ -1,255 +1,218 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { customSupabase as supabase } from '@/lib/customSupabaseClient';
-import { useToast } from '@/components/ui/use-toast';
-import AdminPageHeader from '@/components/admin/AdminPageHeader';
-import { Search, Download, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
+const T = { teal:'#2BA898', navy:'#0B2E2B', green:'#1E9E5A', red:'#E74C3C', gold:'#E8A800',
+            blue:'#2468C8', bg:'#F0F9F7', surface:'#fff', border:'#D0EDE8', text:'#0B2E2B', muted:'#6A9B95' };
+const fmt = n => '\u20B9' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'2-digit'}) : '-';
 
 export default function PartyLedgerPage() {
-  const { toast } = useToast();
-  const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [ledgerEntries, setLedgerEntries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [selectedParty, setSelectedParty] = useState('');
+  const [ledger, setLedger] = useState([]);
   const [search, setSearch] = useState('');
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 3);
-    return d.toISOString().split('T')[0];
-  });
-  const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [partySearch, setPartySearch] = useState('');
+  const [summary, setSummary] = useState({debit:0, credit:0, balance:0, count:0});
 
   useEffect(() => {
-    loadCustomers();
+    supabase.from('customers').select('id,name,tally_ledger_name,phone,city,state').order('name').limit(500)
+      .then(({data}) => setCustomers(data||[]));
   }, []);
 
-  async function loadCustomers() {
-    const { data } = await supabase
-      .from('customers')
-      .select('id, name, phone, tally_ledger_name, city')
-      .neq('business_type', 'supplier')
-      .order('name')
-      .limit(500);
-    setCustomers(data || []);
-  }
-
-  async function loadLedger(customerId) {
+  const loadLedger = useCallback(async (party) => {
+    if (!party) return;
     setLoading(true);
-    try {
-      // Fetch orders (debits)
-      const { data: orders } = await supabase
-        .from('sales_orders')
-        .select('id, order_no, created_at, total_amount, status, tally_sync_status')
-        .eq('customer_id', customerId)
-        .gte('created_at', fromDate)
-        .lte('created_at', toDate + 'T23:59:59')
-        .order('created_at');
 
-      // Fetch payments received
-      const { data: payments } = await supabase
-        .from('payment_followups')
-        .select('id, payment_date, actual_received, payment_mode, notes')
-        .eq('customer_id', customerId)
-        .gte('payment_date', fromDate)
-        .lte('payment_date', toDate)
-        .eq('status', 'received')
-        .order('payment_date');
+    // Get sales bills for this party
+    const { data: sales } = await supabase.from('sales_bills')
+      .select('*').ilike('customer_name', `%${party}%`)
+      .order('bill_date', {ascending:true});
 
-      // Merge and sort by date
-      const entries = [];
-      let runningBalance = 0;
+    // Get purchase bills for this party (if supplier)
+    const { data: purchases } = await supabase.from('purchase_bills')
+      .select('*').ilike('supplier_name', `%${party}%`)
+      .order('bill_date', {ascending:true});
 
-      const allTxns = [
-        ...(orders || []).map(o => ({
-          date: o.created_at?.split('T')[0],
-          type: 'invoice',
-          ref: o.order_no,
-          debit: o.total_amount || 0,
-          credit: 0,
-          status: o.status,
-          tally: o.tally_sync_status,
-        })),
-        ...(payments || []).map(p => ({
-          date: p.payment_date,
-          type: 'payment',
-          ref: `PMT-${p.id?.slice(0,8)}`,
-          debit: 0,
-          credit: p.actual_received || 0,
-          status: 'received',
-          tally: '-',
-          notes: p.notes,
-          mode: p.payment_mode,
-        })),
-      ].sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Get vouchers (receipts/payments)
+    const { data: vouchers } = await supabase.from('tally_vouchers')
+      .select('*').ilike('party_name', `%${party}%`)
+      .order('voucher_date', {ascending:true});
 
-      allTxns.forEach(t => {
-        runningBalance += t.debit - t.credit;
-        entries.push({ ...t, balance: runningBalance });
+    // Build unified ledger
+    const entries = [];
+    (sales||[]).forEach(b => entries.push({
+      date: b.bill_date, type:'Sales', ref: b.bill_number, debit: b.total_amount||0, credit:0, narration: b.notes||'Sales Bill'
+    }));
+    (purchases||[]).forEach(b => entries.push({
+      date: b.bill_date, type:'Purchase', ref: b.bill_number, debit:0, credit: b.total_amount||0, narration: b.notes||'Purchase Bill'
+    }));
+    (vouchers||[]).forEach(v => {
+      const isReceipt = v.voucher_type?.toLowerCase() === 'receipt';
+      entries.push({
+        date: v.voucher_date, type: v.voucher_type, ref: v.voucher_number||'-',
+        debit: isReceipt ? v.amount||0 : 0,
+        credit: !isReceipt ? v.amount||0 : 0,
+        narration: v.narration||v.voucher_type
       });
+    });
 
-      setLedgerEntries(entries);
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: err.message });
-    }
+    // Sort by date
+    entries.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+    // Calculate running balance
+    let balance = 0;
+    const withBalance = entries.map(e => {
+      balance += (e.debit - e.credit);
+      return {...e, balance};
+    });
+
+    setLedger(withBalance);
+    const totalDebit = entries.reduce((s,e) => s+e.debit, 0);
+    const totalCredit = entries.reduce((s,e) => s+e.credit, 0);
+    setSummary({debit:totalDebit, credit:totalCredit, balance:totalDebit-totalCredit, count:entries.length});
     setLoading(false);
-  }
+  }, []);
 
-  const filteredCustomers = customers.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
+  useEffect(() => { if (selectedParty) loadLedger(selectedParty); }, [selectedParty, loadLedger]);
+
+  const filteredCustomers = customers.filter(c => 
+    !partySearch || (c.name||'').toLowerCase().includes(partySearch.toLowerCase())
   );
 
-  const totals = ledgerEntries.reduce((acc, e) => ({
-    debit: acc.debit + e.debit,
-    credit: acc.credit + e.credit,
-  }), { debit: 0, credit: 0 });
+  const filteredLedger = ledger.filter(e => {
+    const matchDate = (!dateFrom || (e.date||'') >= dateFrom) && (!dateTo || (e.date||'') <= dateTo);
+    const matchSearch = !search || (e.ref||'').toLowerCase().includes(search.toLowerCase()) || (e.narration||'').toLowerCase().includes(search.toLowerCase());
+    return matchDate && matchSearch;
+  });
 
-  const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
-
-  function exportCSV() {
-    const headers = 'Date,Type,Reference,Debit,Credit,Balance\n';
-    const rows = ledgerEntries.map(e =>
-      `${e.date},${e.type},${e.ref},${e.debit},${e.credit},${e.balance}`
-    ).join('\n');
-    const blob = new Blob([headers + rows], { type: 'text/csv' });
+  const handleExport = () => {
+    const csv = ['Date,Type,Reference,Debit,Credit,Balance,Narration',
+      ...filteredLedger.map(e => `${e.date},${e.type},${e.ref},${e.debit},${e.credit},${e.balance},"${e.narration}"`)
+    ].join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = `party-ledger-${selectedCustomer?.name}-${fromDate}.csv`;
-    a.click();
-  }
+    const a = document.createElement('a'); a.href=url; a.download=`Ledger_${selectedParty}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
 
   return (
-    <div>
-      <AdminPageHeader
-        title="Party Ledger"
-        subtitle="View account statement for any customer — invoices & payments"
-      />
-      <div className="p-6 flex gap-4">
-        {/* Customer list */}
-        <div className="w-72 bg-white rounded-xl border flex flex-col" style={{ height: 'calc(100vh - 140px)' }}>
-          <div className="p-3 border-b">
-            <Input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search customer..." />
+    <div style={{background:T.bg,minHeight:'100vh',padding:24}}>
+      <Helmet><title>Party Ledger — Shreerang</title></Helmet>
+
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
+        <div>
+          <h1 style={{fontSize:24,fontWeight:800,color:T.navy,margin:0}}>📒 Party Ledger</h1>
+          <p style={{color:T.muted,fontSize:13,margin:'4px 0 0'}}>Full transaction statement for any customer or supplier</p>
+        </div>
+        {selectedParty && (
+          <button onClick={handleExport} style={{padding:'8px 16px',background:T.green,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:13,cursor:'pointer'}}>
+            📥 Export CSV
+          </button>
+        )}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:16}}>
+        {/* Party List */}
+        <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden',height:'fit-content',maxHeight:'80vh',display:'flex',flexDirection:'column'}}>
+          <div style={{padding:12,borderBottom:`1px solid ${T.border}`}}>
+            <input placeholder="Search customer..." value={partySearch} onChange={e=>setPartySearch(e.target.value)}
+              style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,width:'100%',boxSizing:'border-box',outline:'none'}}/>
           </div>
-          <div className="overflow-y-auto flex-1">
-            {filteredCustomers.map(c => (
-              <div key={c.id}
-                onClick={() => { setSelectedCustomer(c); loadLedger(c.id); }}
-                className={`px-4 py-3 cursor-pointer border-b hover:bg-gray-50 transition-colors ${selectedCustomer?.id === c.id ? 'bg-green-50 border-l-4 border-l-green-600' : ''}`}>
-                <div className="font-medium text-sm">{c.name}</div>
-                <div className="text-xs text-gray-400">{c.city || c.phone || '—'}</div>
+          <div style={{overflow:'auto',flex:1}}>
+            {filteredCustomers.map(c=>(
+              <div key={c.id} onClick={()=>setSelectedParty(c.name||c.tally_ledger_name)}
+                style={{padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${T.border}`,background:selectedParty===(c.name||c.tally_ledger_name)?T.teal+'15':'transparent',borderLeft:selectedParty===(c.name||c.tally_ledger_name)?`3px solid ${T.teal}`:'3px solid transparent'}}
+                onMouseEnter={e=>e.currentTarget.style.background=T.teal+'10'}
+                onMouseLeave={e=>e.currentTarget.style.background=selectedParty===(c.name||c.tally_ledger_name)?T.teal+'15':'transparent'}>
+                <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name||c.tally_ledger_name}</div>
+                <div style={{fontSize:11,color:T.muted}}>{c.city||''} {c.state||''}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Ledger panel */}
-        <div className="flex-1 flex flex-col gap-4">
-          {/* Date filters */}
-          <div className="flex gap-3 items-center bg-white rounded-xl border p-3">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-500">From</label>
-              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
-                className="border rounded px-2 py-1.5 text-sm" />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-500">To</label>
-              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
-                className="border rounded px-2 py-1.5 text-sm" />
-            </div>
-            <Button size="sm" variant="outline" onClick={() => selectedCustomer && loadLedger(selectedCustomer.id)}>
-              <RefreshCw className="w-4 h-4 mr-1" />Apply
-            </Button>
-            {ledgerEntries.length > 0 && (
-              <Button size="sm" variant="outline" onClick={exportCSV}>
-                <Download className="w-4 h-4 mr-1" />Export CSV
-              </Button>
-            )}
-          </div>
-
-          {!selectedCustomer ? (
-            <div className="bg-white rounded-xl border flex items-center justify-center" style={{ height: 300 }}>
-              <div className="text-center text-gray-400">
-                <div className="text-4xl mb-2">👈</div>
-                <div className="text-sm">Select a customer to view their ledger</div>
-              </div>
+        {/* Ledger */}
+        <div>
+          {!selectedParty ? (
+            <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,padding:40,textAlign:'center',color:T.muted}}>
+              <div style={{fontSize:48,marginBottom:12}}>📒</div>
+              <div style={{fontSize:16,fontWeight:600}}>Select a customer</div>
+              <div style={{fontSize:13,marginTop:4}}>Choose from the list to view their full ledger</div>
             </div>
           ) : (
             <>
-              {/* Summary cards */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* Summary */}
+              <div style={{display:'flex',gap:12,marginBottom:16}}>
                 {[
-                  { label: 'Total Billed', value: fmt(totals.debit), icon: <TrendingUp className="w-5 h-5 text-blue-600" />, color: 'bg-blue-50 border-blue-200' },
-                  { label: 'Total Received', value: fmt(totals.credit), icon: <TrendingDown className="w-5 h-5 text-green-600" />, color: 'bg-green-50 border-green-200' },
-                  { label: 'Net Outstanding', value: fmt(totals.debit - totals.credit), icon: <span className="text-lg">💰</span>, color: (totals.debit - totals.credit) > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200' },
-                ].map(c => (
-                  <div key={c.label} className={`rounded-xl border p-4 flex items-center gap-3 ${c.color}`}>
-                    {c.icon}
-                    <div>
-                      <div className="text-xs text-gray-500">{c.label}</div>
-                      <div className="text-xl font-bold">{c.value}</div>
-                    </div>
+                  {label:'Total Debit',value:fmt(summary.debit),color:T.red},
+                  {label:'Total Credit',value:fmt(summary.credit),color:T.green},
+                  {label:'Balance',value:fmt(Math.abs(summary.balance)),color:summary.balance>0?T.red:T.green,sub:summary.balance>0?'Receivable':'Payable'},
+                  {label:'Entries',value:summary.count,color:T.teal},
+                ].map(s=>(
+                  <div key={s.label} style={{background:T.surface,borderRadius:10,padding:'12px 16px',border:`1px solid ${T.border}`,flex:1}}>
+                    <div style={{fontSize:11,color:T.muted,fontWeight:600}}>{s.label}</div>
+                    <div style={{fontSize:18,fontWeight:800,color:s.color}}>{s.value}</div>
+                    {s.sub && <div style={{fontSize:10,color:T.muted}}>{s.sub}</div>}
                   </div>
                 ))}
               </div>
 
-              {/* Ledger table */}
-              <div className="bg-white rounded-xl border overflow-hidden">
-                <div className="px-4 py-3 border-b bg-gray-50 font-semibold text-sm">
-                  Account Ledger — {selectedCustomer.name}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="text-left px-4 py-2 text-gray-500 font-medium">Date</th>
-                        <th className="text-left px-4 py-2 text-gray-500 font-medium">Type</th>
-                        <th className="text-left px-4 py-2 text-gray-500 font-medium">Reference</th>
-                        <th className="text-right px-4 py-2 text-gray-500 font-medium">Debit (₹)</th>
-                        <th className="text-right px-4 py-2 text-gray-500 font-medium">Credit (₹)</th>
-                        <th className="text-right px-4 py-2 text-gray-500 font-medium">Balance (₹)</th>
+              {/* Filters */}
+              <div style={{background:T.surface,borderRadius:10,padding:12,border:`1px solid ${T.border}`,marginBottom:12,display:'flex',gap:10,alignItems:'center'}}>
+                <input placeholder="Search ref / narration..." value={search} onChange={e=>setSearch(e.target.value)}
+                  style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,flex:1,outline:'none'}}/>
+                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+                  style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:'none'}}/>
+                <span style={{color:T.muted}}>to</span>
+                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+                  style={{padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:'none'}}/>
+              </div>
+
+              {/* Ledger Table */}
+              <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
+                {loading ? (
+                  <div style={{padding:40,textAlign:'center',color:T.muted}}>Loading ledger...</div>
+                ) : filteredLedger.length === 0 ? (
+                  <div style={{padding:40,textAlign:'center',color:T.muted}}>No transactions found for {selectedParty}</div>
+                ) : (
+                  <table style={{width:'100%',borderCollapse:'collapse'}}>
+                    <thead>
+                      <tr style={{background:T.bg}}>
+                        {['Date','Type','Reference','Debit','Credit','Balance','Narration'].map(h=>(
+                          <th key={h} style={{padding:'10px 12px',textAlign:'left',fontSize:11,fontWeight:700,color:T.muted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {loading ? (
-                        <tr><td colSpan={6} className="text-center py-8 text-gray-400">Loading...</td></tr>
-                      ) : ledgerEntries.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-8 text-gray-400">No transactions in this period</td></tr>
-                      ) : ledgerEntries.map((e, i) => (
-                        <tr key={i} className={`border-b hover:bg-gray-50 ${e.type === 'payment' ? 'bg-green-50/30' : ''}`}>
-                          <td className="px-4 py-2.5 text-gray-600">{e.date}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${e.type === 'payment' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {e.type === 'payment' ? `💵 Payment${e.mode ? ` (${e.mode})` : ''}` : '🧾 Invoice'}
+                      {filteredLedger.map((e,i)=>(
+                        <tr key={i} style={{background:i%2===0?T.surface:T.bg}}>
+                          <td style={{padding:'8px 12px',fontSize:12,whiteSpace:'nowrap'}}>{fmtDate(e.date)}</td>
+                          <td style={{padding:'8px 12px'}}>
+                            <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:20,background:e.type==='Sales'?'#DBEAFE':e.type==='Purchase'?'#FEE2E2':'#D1FAE5',color:e.type==='Sales'?T.blue:e.type==='Purchase'?T.red:T.green}}>
+                              {e.type}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-xs">{e.ref}</td>
-                          <td className="px-4 py-2.5 text-right font-medium text-red-600">
-                            {e.debit > 0 ? fmt(e.debit) : '—'}
-                          </td>
-                          <td className="px-4 py-2.5 text-right font-medium text-green-600">
-                            {e.credit > 0 ? fmt(e.credit) : '—'}
-                          </td>
-                          <td className={`px-4 py-2.5 text-right font-bold ${e.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {fmt(Math.abs(e.balance))} {e.balance > 0 ? 'Dr' : 'Cr'}
-                          </td>
+                          <td style={{padding:'8px 12px',fontSize:12,fontWeight:600,color:T.teal}}>{e.ref}</td>
+                          <td style={{padding:'8px 12px',fontSize:12,fontWeight:700,color:T.red}}>{e.debit>0?fmt(e.debit):'-'}</td>
+                          <td style={{padding:'8px 12px',fontSize:12,fontWeight:700,color:T.green}}>{e.credit>0?fmt(e.credit):'-'}</td>
+                          <td style={{padding:'8px 12px',fontSize:12,fontWeight:800,color:e.balance>0?T.red:T.green}}>{fmt(Math.abs(e.balance))}</td>
+                          <td style={{padding:'8px 12px',fontSize:11,color:T.muted,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.narration}</td>
                         </tr>
                       ))}
                     </tbody>
-                    {ledgerEntries.length > 0 && (
-                      <tfoot className="bg-gray-50 border-t-2 font-bold">
-                        <tr>
-                          <td colSpan={3} className="px-4 py-2.5 text-sm">TOTALS</td>
-                          <td className="px-4 py-2.5 text-right text-red-600">{fmt(totals.debit)}</td>
-                          <td className="px-4 py-2.5 text-right text-green-600">{fmt(totals.credit)}</td>
-                          <td className={`px-4 py-2.5 text-right ${(totals.debit - totals.credit) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {fmt(Math.abs(totals.debit - totals.credit))} {(totals.debit - totals.credit) > 0 ? 'Dr' : 'Cr'}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    )}
+                    <tfoot>
+                      <tr style={{background:T.navy}}>
+                        <td colSpan={3} style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:'#fff'}}>TOTAL</td>
+                        <td style={{padding:'10px 12px',fontSize:13,fontWeight:800,color:'#FECACA'}}>{fmt(filteredLedger.reduce((s,e)=>s+e.debit,0))}</td>
+                        <td style={{padding:'10px 12px',fontSize:13,fontWeight:800,color:'#BBF7D0'}}>{fmt(filteredLedger.reduce((s,e)=>s+e.credit,0))}</td>
+                        <td colSpan={2} style={{padding:'10px 12px',fontSize:13,fontWeight:800,color:'#fff'}}>{fmt(Math.abs(summary.balance))} {summary.balance>0?'(Dr)':'(Cr)'}</td>
+                      </tr>
+                    </tfoot>
                   </table>
-                </div>
+                )}
               </div>
             </>
           )}

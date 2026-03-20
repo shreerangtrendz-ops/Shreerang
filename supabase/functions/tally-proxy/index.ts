@@ -43,7 +43,7 @@ serve(async (req) => {
     console.log(`[tally-proxy] Forwarding XML to Tally at ${tallyUrl} (${xmlBody.length} bytes)`);
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 90000); // 90s for large ledger exports
 
     let responseText = "";
     try {
@@ -62,7 +62,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: false,
         error: isTimeout
-          ? "Tally request timed out after 25 seconds - check if Tally HTTP server is running on port 9000"
+          ? "Tally request timed out after 90 seconds - check if Tally HTTP server is running on port 9000"
           : `Tally connection failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
       }), {
         status: 200,

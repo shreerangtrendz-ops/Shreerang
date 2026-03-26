@@ -7,7 +7,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 // ─── NAVIGATION STRUCTURE ─────────────────────────────────────────────────────
 const ALL_GROUPS = [
   {
-    id: 'overview', label: 'Command', icon: '⬡',
+    id: 'overview', label: 'Command Center', icon: '⬡',
     roles: ['admin','manager','accounts','operations','sales','sales_executive','production_staff','payment_recovery','viewer'],
     items: [
       { icon: '⬡',  label: 'Dashboard',    to: '/admin/dashboard',      roles: ['admin','manager','accounts','operations','sales','sales_executive','production_staff','payment_recovery','viewer'] },
@@ -16,99 +16,67 @@ const ALL_GROUPS = [
     ]
   },
   {
-    id: 'catalogue', label: 'Catalogue', icon: '🧵',
-    roles: ['admin','manager'],
+    id: 'crm', label: 'CRM & Sales', icon: '🤝',
+    roles: ['admin','manager','operations','sales','sales_executive','accounts'],
     items: [
-      { icon: '🔩', label: 'Base Fabric',     to: '/admin/fabric/base-fabric-form',    roles: ['admin','manager'] },
-      { icon: '🧵', label: 'Finish Fabric',   to: '/admin/fabric/finish-fabric-form',  roles: ['admin','manager'] },
-      { icon: '🗂',  label: 'Fabric Catalogue',to: '/admin/fabric/finish',              roles: ['admin','manager'] },
-      { icon: '🎨', label: 'Design Upload',   to: '/admin/design/upload',              roles: ['admin','manager'], badge: 'NEW' },
-      { icon: '💰', label: 'Designs & Pricing',to: '/admin/fabric/finish',             roles: ['admin','manager'] },
-      { icon: '📈', label: 'Design Velocity', to: '/admin/design-velocity',            roles: ['admin','manager'], badge: 'AI' },
-      { icon: '📦', label: 'Bulk Import',     to: '/admin/fabric-master/bulk-import',  roles: ['admin'] },
-      { icon: '🖼',  label: 'Media Library',  to: '/admin/media-library',              roles: ['admin','manager'] },
-    ]
-  },
-  {
-    id: 'accounts', label: 'Accounts', icon: '💰',
-    roles: ['admin','manager','accounts'],
-    items: [
-      { icon: '🔄', label: 'Tally Sync',       to: '/admin/tally-sync',                  roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📥', label: 'Purchase Bills',    to: '/admin/accounting/purchase-bills',   roles: ['admin','manager','accounts'] },
-      { icon: '📤', label: 'Sales Bills',       to: '/admin/accounting/sales-bills',      roles: ['admin','manager','accounts'] },
-      { icon: '🔧', label: 'Job Work Bills',    to: '/admin/accounting/job-work-bills',   roles: ['admin','manager','accounts'] },
-      { icon: '💬', label: 'Quotations',        to: '/admin/accounting/quotations',       roles: ['admin','manager','accounts'] },
-      { icon: '📈', label: 'Outstanding Recv',  to: '/admin/outstanding-receivable',      roles: ['admin','manager','accounts'] },
-      { icon: '📉', label: 'Outstanding Pay',   to: '/admin/outstanding-payable',         roles: ['admin','manager','accounts'] },
-      { icon: '🏦', label: 'Cash & Bank',       to: '/admin/cash-bank',                   roles: ['admin','manager','accounts'] },
-      { icon: '💲', label: 'Price Database',    to: '/admin/price-database',              roles: ['admin','manager'] },
-      { icon: '🧮', label: 'Cost Engine',       to: '/admin/cost/cost-sheet',             roles: ['admin','manager'] },
-    ]
-  },
-  {
-    id: 'reports', label: 'Reports', icon: '📑',
-    roles: ['admin','manager','accounts'],
-    items: [
-      { icon: '📒', label: 'Party Ledger',     to: '/admin/reports/party-ledger',    roles: ['admin','manager','accounts'] },
-      { icon: '📅', label: 'Day Book',         to: '/admin/reports/day-book',        roles: ['admin','manager','accounts'] },
-      { icon: '📊', label: 'Sales Report',     to: '/admin/reports/sales',           roles: ['admin','manager','accounts'] },
-      { icon: '📊', label: 'Purchase Report',  to: '/admin/reports/purchase',        roles: ['admin','manager','accounts'] },
-      { icon: '🧾', label: 'GST Summary',      to: '/admin/reports/gst-summary',     roles: ['admin','manager','accounts'] },
-      { icon: '⚖️',  label: 'Trial Balance',   to: '/admin/reports/trial-balance',   roles: ['admin','manager','accounts'] },
-      { icon: '💼', label: 'P&L Statement',    to: '/admin/reports/profit-loss',     roles: ['admin','manager'] },
-      { icon: '🏛️',  label: 'Balance Sheet',   to: '/admin/reports/balance-sheet',   roles: ['admin','manager'] },
-      { icon: '🏆', label: 'Agent Commission', to: '/admin/agent-commission',        roles: ['admin','manager'] },
-    ]
-  },
-  {
-    id: 'operations', label: 'Operations', icon: '📦',
-    roles: ['admin','manager','operations','sales','sales_executive'],
-    items: [
-      { icon: '📋', label: 'Sales Orders',       to: '/admin/orders',              roles: ['admin','manager','operations','sales','sales_executive'] },
       { icon: '👥', label: 'Customers',          to: '/admin/customers',           roles: ['admin','manager','operations','sales','sales_executive'] },
-      { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
-      { icon: '🏭', label: 'Production Floor',   to: '/admin/production-floor',    roles: ['admin','manager','operations','production_staff'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',            roles: ['admin','manager','operations'] },
-      { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',         roles: ['admin','manager','operations'] },
+      { icon: '📱', label: 'WhatsApp Inbox',     to: '/admin/whatsapp-inbox',      roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '💬', label: 'Quotations',         to: '/admin/accounting/quotations',roles: ['admin','manager','accounts'] },
+      { icon: '📋', label: 'Sales Orders',       to: '/admin/orders',              roles: ['admin','manager','operations','sales','sales_executive'] },
       { icon: '🎯', label: 'Make-to-Order',      to: '/admin/mto-orders',          roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '🖼', label: 'Design Gallery',     to: '/admin/design-gallery',       roles: ['admin','manager','sales_executive','office_team'], badge: 'NEW' },
+      { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
+      { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable',roles: ['admin','manager','accounts'] },
+    ]
+  },
+  {
+    id: 'catalogue', label: 'Catalogue & Stock', icon: '🏪',
+    roles: ['admin','manager','operations','sales_executive'],
+    items: [
+      { icon: '🖼', label: 'Design Gallery',     to: '/admin/design-gallery',       roles: ['admin','manager','sales_executive'], badge: 'NEW' },
+      { icon: '🔩', label: 'Base Fabric',        to: '/admin/fabric/base-fabric-form',roles: ['admin','manager'] },
+      { icon: '🧵', label: 'Finish Fabric',      to: '/admin/fabric/finish',        roles: ['admin','manager'] },
+      { icon: '📦', label: 'Live Stock',         to: '/admin/stock',                roles: ['admin','manager','operations'] },
+      { icon: '⚠️', label: 'Low Stock Alerts',   to: '/admin/stock/alerts',         roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '📥', label: 'Stock In / Out',     to: '/admin/stock/inward',         roles: ['admin','manager','operations'] },
+      { icon: '🗂', label: 'Media Library',      to: '/admin/media-library',        roles: ['admin','manager'] },
+    ]
+  },
+  {
+    id: 'production', label: 'Production & Job Work', icon: '🏭',
+    roles: ['admin','manager','operations','accounts'],
+    items: [
+      { icon: '🏭', label: 'Production Floor',   to: '/admin/production-floor',     roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',          roles: ['admin','manager','operations'] },
+      { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',             roles: ['admin','manager','operations'] },
       { icon: '💰', label: 'MTO Cost Templates', to: '/admin/mto-cost-template',    roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '🔩', label: 'Manufacturing',      to: '/admin/manufacturing',       roles: ['admin','manager','operations'] },
+      { icon: '🧮', label: 'Cost Engine',        to: '/admin/cost/cost-sheet',      roles: ['admin','manager'] },
     ]
   },
   {
-    id: 'stock', label: 'Stock & Inventory', icon: '🏪',
-    roles: ['admin','manager','operations'],
+    id: 'accounting', label: 'Accounting & Sync', icon: '🧾',
+    roles: ['admin','manager','accounts'],
     items: [
-      { icon: '📦', label: 'Live Stock',         to: '/admin/stock',               roles: ['admin','manager','operations'] },
-      { icon: '🔍', label: 'Stock Search',       to: '/admin/stock/search',        roles: ['admin','manager','operations'] },
-      { icon: '📊', label: 'Stock Analytics',    to: '/admin/stock/analytics',     roles: ['admin','manager'] },
-      { icon: '⚠️',  label: 'Low Stock Alerts',  to: '/admin/stock/alerts',        roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📥', label: 'Stock Inward',       to: '/admin/stock/inward',        roles: ['admin','manager','operations'] },
-      { icon: '📤', label: 'Stock Outward',      to: '/admin/stock/outward',       roles: ['admin','manager','operations'] },
-    ]
-  },
-  {
-    id: 'marketing', label: 'Marketing & WhatsApp', icon: '📢',
-    roles: ['admin','manager'],
-    items: [
-      { icon: '📱', label: 'WhatsApp Inbox',    to: '/admin/whatsapp-inbox',     roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '🤖', label: 'WhatsApp Bot',      to: '/admin/whatsapp',           roles: ['admin','manager'], badge: 'ON', badgeClass: 'ok' },
-      { icon: '📢', label: 'Broadcast',         to: '/admin/whatsapp-broadcast', roles: ['admin','manager'], badge: 'NEW' },
-      { icon: '🖼️',  label: 'Fabric Catalogue', to: '/admin/fabric-catalogue',   roles: ['admin','manager'], badge: 'AUTO' },
+      { icon: '🔄', label: 'Tally Sync Hub',     to: '/admin/tally-sync',           roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '📥', label: 'Purchase Bills',     to: '/admin/accounting/purchase-bills',roles: ['admin','manager','accounts'] },
+      { icon: '📤', label: 'Sales Bills',        to: '/admin/accounting/sales-bills',roles: ['admin','manager','accounts'] },
+      { icon: '🔧', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills',roles: ['admin','manager','accounts'] },
+      { icon: '📅', label: 'Day Book',           to: '/admin/reports/day-book',     roles: ['admin','manager','accounts'] },
+      { icon: '📒', label: 'Party Ledger',       to: '/admin/reports/party-ledger', roles: ['admin','manager','accounts'] },
+      { icon: '🏦', label: 'Cash & Bank',        to: '/admin/cash-bank',            roles: ['admin','manager','accounts'] },
+      { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable',  roles: ['admin','manager','accounts'] },
+      { icon: '💼', label: 'P&L / Balance Sheet',to: '/admin/reports/profit-loss',  roles: ['admin','manager'] },
     ]
   },
   {
     id: 'settings', label: 'Settings', icon: '⚙️',
     roles: ['admin'],
     items: [
-      { icon: '🛡',  label: 'Access Control',  to: '/admin/access-control',              roles: ['admin'] },
-      { icon: '🔧', label: 'Field Config',     to: '/admin/settings/dropdown-manager',   roles: ['admin'] },
-      { icon: '🔢', label: 'HSN Codes',        to: '/admin/settings/hsn-codes',          roles: ['admin'] },
-      { icon: '🏭', label: 'Job Work Units',   to: '/admin/settings/job-units',          roles: ['admin'] },
-      { icon: '🔖', label: 'SKU Formula',      to: '/admin/settings/sku-formula',        roles: ['admin'] },
-      { icon: '☁️',  label: 'Cloud Storage',   to: '/admin/cloud-sync',                  roles: ['admin'] },
-      { icon: '💾', label: 'Backup',           to: '/admin/backup-control',              roles: ['admin'] },
+      { icon: '🛡', label: 'Access Control',    to: '/admin/access-control',       roles: ['admin'] },
+      { icon: '🤖', label: 'WhatsApp Bot',      to: '/admin/whatsapp',             roles: ['admin'], badge: 'ON', badgeClass: 'ok' },
+      { icon: '🔧', label: 'Field Config',      to: '/admin/settings/dropdown-manager',roles: ['admin'] },
+      { icon: '🔢', label: 'HSN Codes',         to: '/admin/settings/hsn-codes',   roles: ['admin'] },
+      { icon: '☁️', label: 'Cloud Storage',     to: '/admin/cloud-sync',           roles: ['admin'] },
+      { icon: '💾', label: 'System Backup',     to: '/admin/backup-control',       roles: ['admin'] },
     ]
   }
 ];

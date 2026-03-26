@@ -258,7 +258,7 @@ export default function TallySyncDashboard() {
   useEffect(() => { checkInfrastructure(); const iv = setInterval(checkInfrastructure, 60000); return () => clearInterval(iv); }, []);
 
   /*  data load  */
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadPendingCount(); }, []);
   async function loadData() {
     const today = new Date().toISOString().split('T')[0];
     const [
@@ -307,6 +307,8 @@ export default function TallySyncDashboard() {
   /* SYNC ALL — unified one-click sync */
   const [syncingAll, setSyncingAll] = useState(false);
   const [syncProgress, setSyncProgress] = useState([]);
+  const [pendingPushCount, setPendingPushCount] = useState(0);
+  const [pushing, setPushing] = useState(false);
 
   async function handleSyncAll() {
     setSyncingAll(true);
@@ -329,6 +331,41 @@ export default function TallySyncDashboard() {
       toast({ title: ' Sync All Failed', description: e.message, variant: 'destructive' });
     } finally {
       setSyncingAll(false);
+    }
+  }
+
+  /* Load pending push count */
+  async function loadPendingCount() {
+    const [{ count: s }, { count: p }, { count: j }] = await Promise.all([
+      supabase.from('sales_bills').select('*', { count:'exact', head:true }).eq('tally_sync_status','pending').eq('status','pending_push'),
+      supabase.from('purchase_bills').select('*', { count:'exact', head:true }).eq('tally_sync_status','pending').eq('status','pending_push'),
+      supabase.from('job_work_bills').select('*', { count:'exact', head:true }).eq('tally_sync_status','pending').eq('status','pending_push'),
+    ]);
+    setPendingPushCount((s||0) + (p||0) + (j||0));
+  }
+
+  /* PUSH TO TALLY — send web-created vouchers to Tally server */
+  async function handlePushToTally() {
+    if (pendingPushCount === 0) { toast({ title: 'Nothing to Push', description: 'No bills are queued for Tally push yet.' }); return; }
+    setPushing(true);
+    try {
+      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tally-push-vouchers`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000)
+      });
+      const j = await r.json();
+      if (j.success) {
+        toast({ title: '✅ Pushed to Tally!', description: `${j.pushed} voucher(s) sent to Tally Prime. ${j.failed > 0 ? j.failed + ' failed.' : ''}` });
+      } else {
+        toast({ title: '❌ Push Failed', description: j.error || 'Check Tally server connection.', variant: 'destructive' });
+      }
+    } catch(e) {
+      toast({ title: '❌ Push Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setPushing(false);
+      await loadPendingCount();
+      await loadData();
     }
   }
 
@@ -359,7 +396,13 @@ export default function TallySyncDashboard() {
           </button>
           <button onClick={handleSyncAll} disabled={syncingAll} style={{ display:'flex', alignItems:'center', gap:6, background: syncingAll ? 'rgba(232,168,0,.15)' : '#1D8A7C', color: syncingAll ? '#D4920A' : '#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:11, fontWeight:800, cursor: syncingAll ? 'not-allowed' : 'pointer', letterSpacing:'.4px' }}>
             <RefreshCcw size={13} style={{ animation: syncingAll ? 'spin 1s linear infinite' : 'none' }} />
-            {syncingAll ? ' Syncing...' : ' Sync All From Tally'}
+            {syncingAll ? '⏳ Syncing...' : '↓ Sync All From Tally'}
+          </button>
+          <button onClick={handlePushToTally} disabled={pushing || pendingPushCount === 0} title={`${pendingPushCount} bills staged for Tally push`} style={{ display:'flex', alignItems:'center', gap:6, position:'relative', background: pushing ? 'rgba(232,168,0,.15)' : pendingPushCount > 0 ? 'linear-gradient(135deg,#C86020,#E87040)' : 'rgba(200,96,32,.12)', color: pushing ? '#D4920A' : pendingPushCount > 0 ? '#fff' : '#C86020', border: pendingPushCount > 0 ? 'none' : '1px solid rgba(200,96,32,.3)', borderRadius:8, padding:'8px 18px', fontSize:11, fontWeight:800, cursor: pushing || pendingPushCount === 0 ? 'not-allowed' : 'pointer', letterSpacing:'.4px', opacity: pendingPushCount === 0 ? 0.5 : 1 }}>
+            {pushing ? '⏳ Pushing...' : '↑ Push to Tally'}
+            {pendingPushCount > 0 && !pushing && (
+              <span style={{ position:'absolute', top:-6, right:-6, background:'#ef4444', color:'#fff', fontSize:9, fontWeight:900, borderRadius:100, minWidth:18, height:18, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px', border:'2px solid #fff' }}>{pendingPushCount}</span>
+            )}
           </button>
         </div>
       </div>

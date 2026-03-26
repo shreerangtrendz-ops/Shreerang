@@ -10,8 +10,15 @@ export default function PurchaseBillsPage() {
   const [syncing, setSyncing] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const emptyForm = { 
+    bill_number:'', bill_date:'', supplier_name:'', gst_number:'',
+    hsn_code:'', fabric_type:'', notes:'',
+    transporter_name:'', lr_no:'', lr_date:'', destination:'',
+    igst_amount:'', cgst_amount:'', sgst_amount:'', round_off:'', total_amount:'',
+    line_items: [{ item_name:'', quantity:'', rate:'', amount:'' }]
+  };
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ bill_number:'', bill_date:'', supplier_name:'', item_name:'', quantity:'', rate:'', total_amount:'', hsn_code:'', fabric_type:'', notes:'' });
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { fetchBills(); }, []);
@@ -43,11 +50,46 @@ export default function PurchaseBillsPage() {
 
   async function saveBill() {
     if (!form.bill_number || !form.bill_date || !form.supplier_name) { alert('Bill No, Date, Supplier required'); return; }
+    if (form.line_items.some(l => !l.item_name || !l.amount)) { alert('All line items must have a Name and Amount'); return; }
+    
     setSaving(true);
-    const row = { ...form, quantity: parseFloat(form.quantity)||0, rate: parseFloat(form.rate)||0, total_amount: parseFloat(form.total_amount)||0, status: 'manual' };
+    const cleanItems = form.line_items.map(l => ({
+      item_name: l.item_name,
+      quantity: parseFloat(l.quantity) || 0,
+      rate: parseFloat(l.rate) || 0,
+      amount: parseFloat(l.amount) || 0
+    }));
+    
+    const itemsTotal = cleanItems.reduce((s, a) => s + a.amount, 0);
+    const taxTotal = (parseFloat(form.igst_amount)||0) + (parseFloat(form.cgst_amount)||0) + (parseFloat(form.sgst_amount)||0);
+    const roundOff = parseFloat(form.round_off)||0;
+    const finalTotal = parseFloat(form.total_amount) || (itemsTotal + taxTotal + roundOff);
+
+    const row = { 
+      bill_number: form.bill_number,
+      bill_date: form.bill_date,
+      supplier_name: form.supplier_name,
+      gst_number: form.gst_number || null,
+      transporter_name: form.transporter_name || null,
+      lr_no: form.lr_no || null,
+      lr_date: form.lr_date || null,
+      destination: form.destination || null,
+      hsn_code: form.hsn_code || null,
+      fabric_type: form.fabric_type || null,
+      notes: form.notes || null,
+      line_items: cleanItems,
+      igst_amount: parseFloat(form.igst_amount) || 0,
+      cgst_amount: parseFloat(form.cgst_amount) || 0,
+      sgst_amount: parseFloat(form.sgst_amount) || 0,
+      round_off: parseFloat(form.round_off) || 0,
+      total_amount: finalTotal,
+      status: 'pending_push', 
+      tally_sync_status: 'pending'
+    };
+    
     const { error } = await supabase.from('purchase_bills').upsert(row, { onConflict: 'bill_number' });
     if (error) alert('Error: ' + error.message);
-    else { setShowForm(false); setForm({ bill_number:'', bill_date:'', supplier_name:'', item_name:'', quantity:'', rate:'', total_amount:'', hsn_code:'', fabric_type:'', notes:'' }); fetchBills(); }
+    else { setShowForm(false); setForm(emptyForm); fetchBills(); }
     setSaving(false);
   }
 
@@ -147,39 +189,81 @@ export default function PurchaseBillsPage() {
         </div>
       </div>
 
-      {/* Manual Entry Modal */}
       {showForm && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-          <div style={{ background:'#fff', borderRadius:14, padding:24, width:520, maxHeight:'80vh', overflowY:'auto' }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between' }}>
-              Add Purchase Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#6A9B95' }}>×</button>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: 20 }}>
+          <div style={{ background:'#fff', borderRadius:14, padding:24, width:'100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between', color:'#0B2E2B' }}>
+              Create Custom Purchase Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>×</button>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              {[
-                ['bill_number','Bill Number *'],['bill_date','Bill Date *'],
-                ['supplier_name','Supplier Name *'],['fabric_type','Fabric Type'],
-                ['item_name','Item Name'],['hsn_code','HSN Code'],
-                ['quantity','Quantity'],['rate','Rate per Metre'],
-                ['total_amount','Total Amount *'],
-              ].map(([key,label]) => (
-                <div key={key} style={{ gridColumn: key==='notes'?'1/-1':'auto' }}>
-                  <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{label}</label>
-                  <input type={['quantity','rate','total_amount'].includes(key)?'number':key==='bill_date'?'date':'text'}
-                    value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))}
-                    style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
-                </div>
-              ))}
-              <div style={{ gridColumn:'1/-1' }}>
-                <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>Notes</label>
-                <textarea value={form.notes} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
-                  style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box', minHeight:60 }} />
+            
+            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>1. Primary Details</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                {[['bill_number','Bill No *'],['bill_date','Date *','date'],['supplier_name','Supplier *'],['gst_number','Supplier GSTIN'],['hsn_code','Default HSN'],['fabric_type','Fabric Type']].map(([k,l,t])=>(
+                  <div key={k}>
+                    <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
+                    <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                  </div>
+                ))}
               </div>
             </div>
-            <div style={{ display:'flex', gap:10, marginTop:16 }}>
-              <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'10px' })}>
-                {saving ? 'Saving…' : 'Save Bill'}
+
+            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.05em' }}>2. Inventory Details (Line Items)</div>
+                <button onClick={() => setForm(p => ({...p, line_items: [...p.line_items, {item_name:'', quantity:'', rate:'', amount:''}]}))} style={BTN({ background:'#E2E8F0', color:'#475569', padding:'4px 10px' })}>+ Add Row</button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {form.line_items.map((li, idx) => (
+                  <div key={idx} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr 40px', gap:8, alignItems:'center' }}>
+                    <input placeholder="Fabric / Item Name *" value={li.item_name} onChange={e=>{const nl=[...form.line_items]; nl[idx].item_name=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Qty (Mtrs)" value={li.quantity} onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Rate (₹)" value={li.rate} onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Total Amt *" value={li.amount} onChange={e=>{const nl=[...form.line_items]; nl[idx].amount=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13, background:'#F1F5F9', fontWeight:600 }} />
+                    <button onClick={()=>{const nl=form.line_items.filter((_,i)=>i!==idx); setForm(p=>({...p,line_items:nl}))}} style={{ background:'none', border:'none', color:'#EF4444', cursor:'pointer', fontSize:18 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+              <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, border:'1px solid #E2E8F0' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>3. Inward Logistics</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  {[['transporter_name','Transporter'],['lr_no','LR / E-Way No'],['lr_date','LR Date','date'],['destination','Origin City']].map(([k,l,t])=>(
+                    <div key={k}>
+                      <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
+                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background:'#F0FDF4', padding:16, borderRadius:8, border:'1px solid #BBF7D0' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#166534', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>4. Taxes & Final Billing</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  {[['igst_amount','IGST Amt','number'],['cgst_amount','CGST Amt','number'],['sgst_amount','SGST Amt','number'],['round_off','Round Off','number'],['total_amount','Grand Total (₹) *','number']].map(([k,l,t])=>(
+                    <div key={k}>
+                      <label style={{ fontSize:11, fontWeight:600, color:'#166534', display:'block', marginBottom:4 }}>{l}</label>
+                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid #86EFAC', fontSize:13, boxSizing:'border-box', background:k==='total_amount'?'#DCFCE7':'#fff', fontWeight:k==='total_amount'?700:400 }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: 16 }}>
+                <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>Notes</label>
+                <textarea value={form.notes||''} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
+                  style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box', minHeight:60 }} />
+            </div>
+
+            <div style={{ display:'flex', gap:10, marginTop:20 }}>
+              <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'12px', fontSize:14 })}>
+                {saving?'Posting CRM Bill…':'Save CRM Bill (Prepared for Tally Sync)'}
               </button>
-              <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74' })}>Cancel</button>
+              <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74', padding:'12px 24px' })}>Close</button>
             </div>
           </div>
         </div>

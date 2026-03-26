@@ -9,7 +9,14 @@ export default function SalesBillsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ bill_number:'', bill_date:'', customer_name:'', item_name:'', quantity:'', rate:'', total_amount:'', commission_percent:'', notes:'' });
+  const emptyForm = { 
+    bill_number:'', bill_date:'', customer_name:'', gst_number:'',
+    agent_name:'', commission_percent:'', notes:'',
+    transporter_name:'', lr_no:'', lr_date:'', destination:'',
+    igst_amount:'', cgst_amount:'', sgst_amount:'', round_off:'', total_amount:'',
+    line_items: [{ item_name:'', quantity:'', rate:'', amount:'' }]
+  };
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { fetchBills(); }, []);
@@ -39,13 +46,50 @@ export default function SalesBillsPage() {
 
   async function saveBill() {
     if (!form.bill_number || !form.bill_date || !form.customer_name) { alert('Bill No, Date, Customer required'); return; }
+    if (form.line_items.some(l => !l.item_name || !l.amount)) { alert('All line items must have a Name and Amount'); return; }
+    
     setSaving(true);
-    const row = { ...form, quantity:parseFloat(form.quantity)||0, rate:parseFloat(form.rate)||0,
-      total_amount:parseFloat(form.total_amount)||0, commission_percent:parseFloat(form.commission_percent)||0,
-      commission_amount:(parseFloat(form.total_amount)||0)*(parseFloat(form.commission_percent)||0)/100, status:'manual' };
+    // Sanitize and calculate totals
+    const cleanItems = form.line_items.map(l => ({
+      item_name: l.item_name,
+      quantity: parseFloat(l.quantity) || 0,
+      rate: parseFloat(l.rate) || 0,
+      amount: parseFloat(l.amount) || 0
+    }));
+    
+    // Auto-calculate total if left blank but items exist
+    const itemsTotal = cleanItems.reduce((s, a) => s + a.amount, 0);
+    const taxTotal = (parseFloat(form.igst_amount)||0) + (parseFloat(form.cgst_amount)||0) + (parseFloat(form.sgst_amount)||0);
+    const roundOff = parseFloat(form.round_off)||0;
+    const finalTotal = parseFloat(form.total_amount) || (itemsTotal + taxTotal + roundOff);
+
+    // Primary Canonical Object
+    const row = { 
+      bill_number: form.bill_number,
+      bill_date: form.bill_date,
+      customer_name: form.customer_name,
+      gst_number: form.gst_number || null,
+      transporter_name: form.transporter_name || null,
+      lr_no: form.lr_no || null,
+      lr_date: form.lr_date || null,
+      destination: form.destination || null,
+      agent_name: form.agent_name || null,
+      commission_percent: parseFloat(form.commission_percent) || 0,
+      commission_amount: finalTotal * (parseFloat(form.commission_percent)||0) / 100,
+      notes: form.notes || null,
+      line_items: cleanItems,
+      igst_amount: parseFloat(form.igst_amount) || 0,
+      cgst_amount: parseFloat(form.cgst_amount) || 0,
+      sgst_amount: parseFloat(form.sgst_amount) || 0,
+      round_off: parseFloat(form.round_off) || 0,
+      total_amount: finalTotal,
+      status: 'pending_push', /* Tally web push queue */
+      tally_sync_status: 'pending'
+    };
+
     const { error } = await supabase.from('sales_bills').upsert(row, { onConflict:'bill_number' });
     if (error) alert('Error: ' + error.message);
-    else { setShowForm(false); fetchBills(); }
+    else { setShowForm(false); fetchBills(); setForm(emptyForm); }
     setSaving(false);
   }
 
@@ -137,27 +181,74 @@ export default function SalesBillsPage() {
       </div>
 
       {showForm && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-          <div style={{ background:'#fff', borderRadius:14, padding:24, width:480 }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:16, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between' }}>
-              Add Sales Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>×</button>
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: 20 }}>
+          <div style={{ background:'#fff', borderRadius:14, padding:24, width:'100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between', color:'#0B2E2B' }}>
+              Create Custom Sales Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>×</button>
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              {[['bill_number','Bill No *'],['bill_date','Date *'],['customer_name','Customer *'],['item_name','Item'],
-                ['quantity','Qty'],['rate','Rate'],['total_amount','Total *'],['commission_percent','Comm %']].map(([k,l])=>(
-                <div key={k}>
-                  <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
-                  <input type={['quantity','rate','total_amount','commission_percent'].includes(k)?'number':k==='bill_date'?'date':'text'}
-                    value={form[k]} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
-                    style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+            
+            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>1. Primary Details</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                {[['bill_number','Bill No *'],['bill_date','Date *','date'],['customer_name','Customer *'],['gst_number','Customer GSTIN'],['agent_name','Sales Agent'],['commission_percent','Agent Comm %','number']].map(([k,l,t])=>(
+                  <div key={k}>
+                    <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
+                    <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.05em' }}>2. Inventory Details (Line Items)</div>
+                <button onClick={() => setForm(p => ({...p, line_items: [...p.line_items, {item_name:'', quantity:'', rate:'', amount:''}]}))} style={BTN({ background:'#E2E8F0', color:'#475569', padding:'4px 10px' })}>+ Add Row</button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {form.line_items.map((li, idx) => (
+                  <div key={idx} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr 40px', gap:8, alignItems:'center' }}>
+                    <input placeholder="Fabric / Item Name *" value={li.item_name} onChange={e=>{const nl=[...form.line_items]; nl[idx].item_name=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Qty (Mtrs)" value={li.quantity} onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Rate (₹)" value={li.rate} onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
+                    <input type="number" placeholder="Total Amt *" value={li.amount} onChange={e=>{const nl=[...form.line_items]; nl[idx].amount=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13, background:'#F1F5F9', fontWeight:600 }} />
+                    <button onClick={()=>{const nl=form.line_items.filter((_,i)=>i!==idx); setForm(p=>({...p,line_items:nl}))}} style={{ background:'none', border:'none', color:'#EF4444', cursor:'pointer', fontSize:18 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+              <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, border:'1px solid #E2E8F0' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>3. Dispatch Tracker</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  {[['transporter_name','Transporter'],['lr_no','LR / E-Way No'],['lr_date','LR Date','date'],['destination','Destination City']].map(([k,l,t])=>(
+                    <div key={k}>
+                      <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
+                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div style={{ background:'#F0FDF4', padding:16, borderRadius:8, border:'1px solid #BBF7D0' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#166534', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>4. Taxes & Final Billing</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  {[['igst_amount','IGST Amt','number'],['cgst_amount','CGST Amt','number'],['sgst_amount','SGST Amt','number'],['round_off','Round Off','number'],['total_amount','Grand Total (₹) *','number']].map(([k,l,t])=>(
+                    <div key={k}>
+                      <label style={{ fontSize:11, fontWeight:600, color:'#166534', display:'block', marginBottom:4 }}>{l}</label>
+                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid #86EFAC', fontSize:13, boxSizing:'border-box', background:k==='total_amount'?'#DCFCE7':'#fff', fontWeight:k==='total_amount'?700:400 }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div style={{ display:'flex', gap:10, marginTop:16 }}>
-              <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'10px' })}>
-                {saving?'Saving…':'Save Bill'}
+
+            <div style={{ display:'flex', gap:10, marginTop:20 }}>
+              <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'12px', fontSize:14 })}>
+                {saving?'Posting CRM Bill…':'Save CRM Bill (Prepared for Tally Sync)'}
               </button>
-              <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74' })}>Cancel</button>
+              <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74', padding:'12px 24px' })}>Close</button>
             </div>
           </div>
         </div>

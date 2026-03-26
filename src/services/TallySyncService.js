@@ -109,6 +109,31 @@ function parseAllVouchers(xml) {
       if (lname) ledgerEntries.push({ ledger: lname, amount: toAmt(lamt) });
     }
 
+    // Phase 3 Deep Sync: Inventory Items Extraction
+    const line_items = [];
+    const invBlocks = b.match(/<ALLINVENTORYENTRIES\.LIST[\s\S]*?<\/ALLINVENTORYENTRIES\.LIST>/gi) || [];
+    for (const inv of invBlocks) {
+      const matchTag = (xmlBlock, tag) => {
+        const m = xmlBlock.match(new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, 'i')) || xmlBlock.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 'i'));
+        return m ? m[1].replace(/&#4[A-Za-z0-9]+;/g, '').trim() : null; // Safe fallback stripping specific XML entities if any
+      };
+      
+      const itemName = matchTag(inv, 'STOCKITEMNAME');
+      const qtyStr = matchTag(inv, 'BILLEDQTY') || '0';
+      const rateStr = matchTag(inv, 'RATE') || '0';
+      const amtStrNode = matchTag(inv, 'AMOUNT') || '0';
+
+      if (itemName) {
+        line_items.push({
+          item_name: itemName,
+          quantity: parseFloat(qtyStr.replace(/[^\d.-]/g, '')) || 0,
+          rate: parseFloat(rateStr.replace(/[^\d.-]/g, '')) || 0,
+          amount: parseFloat(amtStrNode.replace(/-/g, '')) || 0
+        });
+      }
+    }
+    const pItem = line_items.length > 0 ? line_items[0] : {};
+
     // Master voucher record
     const voucherRecord = {
       voucher_number: vn,
@@ -132,6 +157,10 @@ function parseAllVouchers(xml) {
         bill_number: vn || `SALES-${dt}-${Math.random().toString(36).substr(2,6)}`,
         bill_date: dt,
         customer_name: party,
+        item_name: pItem.item_name || '',
+        quantity: pItem.quantity || 0,
+        rate: pItem.rate || 0,
+        line_items: line_items,
         total_amount: total,
         notes: narr || `Tally Sales Voucher`,
         tally_voucher_no: vn,
@@ -143,6 +172,10 @@ function parseAllVouchers(xml) {
         bill_number: vn || `PUR-${dt}-${Math.random().toString(36).substr(2,6)}`,
         bill_date: dt,
         supplier_name: party,
+        item_name: pItem.item_name || '',
+        quantity: pItem.quantity || 0,
+        rate: pItem.rate || 0,
+        line_items: line_items,
         total_amount: total,
         notes: narr || `Tally Purchase Voucher`,
         status: 'synced'
@@ -154,8 +187,11 @@ function parseAllVouchers(xml) {
         mill_name: party,
         process_type: category === 'material_out' ? 'Issue to Mill' : 'Receive from Mill',
         notes: narr || `Tally Job Work Voucher`,
-        metres_issued: category === 'material_out' ? total : 0,
-        metres_received: category === 'material_in' ? total : 0
+        grey_fabric_name: category === 'material_out' ? pItem.item_name || '' : null,
+        finished_fabric_name: category === 'material_in' ? pItem.item_name || '' : null,
+        metres_issued: category === 'material_out' ? (pItem.quantity || total) : 0,
+        metres_received: category === 'material_in' ? (pItem.quantity || total) : 0,
+        line_items: line_items
       });
     } else if (category === 'receipt') {
       receiptRows.push({ party_name: party, amount: total, date: dt, ref, narr, voucher_number: vn, category: 'receipt' });

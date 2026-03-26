@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -111,6 +111,9 @@ import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
 import DesignGalleryPage from '@/pages/admin/design/DesignGalleryPage';
 import MTOCostTemplatePage from '@/pages/admin/MTOCostTemplatePage';
+import StockManagement from '@/pages/admin/StockManagement';
+import StockManager from '@/pages/admin/inventory/StockManager';
+
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -263,6 +266,12 @@ const App = () => {
                     <Route path="job-workers" element={<JobWorkersPage />} />
                     <Route path="challans" element={<JobCardsList />} />
                     <Route path="manufacturing" element={<ManufacturingEntryPage />} />
+                    <Route path="production-floor" element={<ProductionTracker />} />
+                    
+                    {/* Stock & Inventory */}
+                    <Route path="stock" element={<StockManagement />} />
+                    <Route path="stock/alerts" element={<StockManager />} />
+                    <Route path="stock/inward" element={<ComingSoonPage title="Stock In/Out" icon="📦" desc="Stock inventory movement system." breadcrumb="Inventory → Transact" />} />
 
                     {/* Admin catch-all */}
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

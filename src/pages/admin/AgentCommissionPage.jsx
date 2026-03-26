@@ -50,20 +50,24 @@ export default function AgentCommissionPage() {
     setSyncing(false);
   };
 
-  // Calculate per-agent commission from bills (using agent_name field or commission fields)
+  // Calculate per-agent commission from canonical bills (using broker_name and commission_amount)
   const agentBills = {};
   bills.forEach(b => {
-    const agent = b.agent_name || b.notes?.match(/agent[:\s]+([^,|]+)/i)?.[1] || 'Unassigned';
-    if (!agentBills[agent]) agentBills[agent] = {bills:[], total:0};
+    const agent = b.broker_name || b.agent_name || b.notes?.match(/agent[:\s]+([^,|]+)/i)?.[1] || 'Unassigned';
+    if (!agentBills[agent]) agentBills[agent] = {bills:[], total:0, comm:0};
     agentBills[agent].bills.push(b);
     agentBills[agent].total += b.total_amount||0;
+    
+    // Check if canonical commission_amount got populated by API, else fallback to total * commRate
+    const calcComm = b.commission_amount ? Number(b.commission_amount) : ((b.total_amount||0) * (b.comm_rate || commRate) / 100);
+    agentBills[agent].comm += calcComm;
   });
 
   const agentRows = Object.entries(agentBills).map(([name, data]) => ({
     name,
     bills: data.bills.length,
     sales: data.total,
-    commission: data.total * commRate / 100
+    commission: data.comm
   })).sort((a,b) => b.sales-a.sales);
 
   return (

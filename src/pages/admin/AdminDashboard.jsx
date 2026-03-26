@@ -163,7 +163,7 @@ export default function AdminDashboard() {
         supabase.from('purchase_bills').select('*',{count:'exact',head:true}),
         supabase.from('sales_bills').select('total_amount').gte('bill_date',mStart).lte('bill_date',today),
         supabase.from('purchase_bills').select('total_amount').gte('bill_date',mStart).lte('bill_date',today),
-        supabase.from('outstanding_receivable').select('outstanding_amount'),
+        supabase.from('tally_ledgers').select('bill_outstanding, bill_date').gt('bill_outstanding', 0),
         supabase.from('sales_bills').select('total_amount,bill_date').gte('bill_date',months6[0].key+'-01').order('bill_date',{ascending:true}),
         Promise.resolve({ data: [], error: null }),
         supabase.from('tally_sync_log').select('status,synced_at').order('synced_at',{ascending:false}).limit(1),
@@ -175,8 +175,8 @@ export default function AdminDashboard() {
 
       const salesMth = (salesBillsMonth||[]).reduce((s,r)=>s+Number(r.total_amount||0),0);
       const purchMth = (purchaseBillsMonth||[]).reduce((s,r)=>s+Number(r.total_amount||0),0);
-      const outTotal = (outstanding||[]).reduce((s,r)=>s+Number(r.outstanding_amount||0),0);
-      const outCount = (outstanding||[]).filter(r=>Number(r.outstanding_amount||0)>0).length;
+      const outTotal = (outstanding||[]).reduce((s,r)=>s+Number(r.bill_outstanding||0),0);
+      const outCount = (outstanding||[]).filter(r=>Number(r.bill_outstanding||0)>0).length;
 
       setKpi({ salesThisMonth:salesMth, purchaseThisMonth:purchMth, outstandingTotal:outTotal, outstandingCount:outCount, totalCustomers:customers||0, totalAgents:agents||0, totalStock:stock||0, pendingOrders:pendingOrders||0, pendingChallans:pendingChallans||0, pendingQuotes:pendingQuotes||0, totalSalesBills:totalSalesBills||0, totalPurchaseBills:totalPurchaseBills||0 });
 
@@ -186,7 +186,7 @@ export default function AdminDashboard() {
       const b90=new Date(today); b90.setDate(b90.getDate()-90);
       let aCurr=0,a30=0,a60=0,a90p=0;
       (outstanding||[]).forEach(o=>{
-        const amt=Number(o.outstanding_amount||0); if(amt<=0) return;
+        const amt=Number(o.bill_outstanding||0); if(amt<=0) return;
         const d=o.bill_date?new Date(o.bill_date):null;
         if (!d||d>=b30) aCurr+=amt; else if(d>=b60) a30+=amt; else if(d>=b90) a60+=amt; else a90p+=amt;
       });

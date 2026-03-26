@@ -97,7 +97,7 @@ export default function WhatsAppBroadcastPage() {
         return;
       }
 
-      let query = supabase.from('customers').select('id, name, phone, status, fabric_interest, price_tier');
+      let query = supabase.from('customers').select('id, name, phone, status, fabric_interest, price_tier').eq('business_type', 'customer');
 
       if (segmentId === 'leads') query = query.eq('status', 'lead');
       else if (segmentId === 'overdue') query = query.gt('outstanding_amount', 0);

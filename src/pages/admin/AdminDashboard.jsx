@@ -153,7 +153,7 @@ export default function AdminDashboard() {
         { data: outstanding }, { data: salesBills6M },
         { data: activity }, { data: syncLog },
       ] = await Promise.all([
-        supabase.from('customers').select('*',{count:'exact',head:true}),
+        supabase.from('customers').select('*',{count:'exact',head:true}).eq('business_type', 'customer'),
         supabase.from('sales_team').select('*',{count:'exact',head:true}),
         supabase.from('fabric_stock_live').select('*',{count:'exact',head:true}),
         supabase.from('sales_orders').select('*',{count:'exact',head:true}).eq('status','confirmed'),

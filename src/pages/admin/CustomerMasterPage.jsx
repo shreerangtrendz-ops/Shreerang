@@ -32,8 +32,8 @@ const CustomerMasterPage = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      let countQuery = supabase.from('customers').select('*', { count: 'exact', head: true });
-      let dataQuery = supabase.from('customers').select('id, name, firm_name, phone, email, area, city, customer_type, agent_name, payment_terms, business_type, source, created_at').order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      let countQuery = supabase.from('customers').select('*', { count: 'exact', head: true }).eq('business_type', 'customer');
+      let dataQuery = supabase.from('customers').select('id, name, firm_name, phone, email, area, city, customer_type, agent_name, payment_terms, business_type, source, created_at').eq('business_type', 'customer').order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
       // Filter by source tab
       if (sourceTab === 'crm') {
@@ -78,7 +78,7 @@ const CustomerMasterPage = () => {
         if (error) throw error;
         toast({ description: '✓ Customer updated.' });
       } else {
-        const { error } = await supabase.from('customers').insert([{ ...form, source: 'crm', created_at: new Date().toISOString() }]);
+        const { error } = await supabase.from('customers').insert([{ ...form, source: 'crm', created_at: new Date().toISOString(), business_type: 'customer' }]);
         if (error) throw error;
         toast({ description: '✓ Customer created.' });
       }

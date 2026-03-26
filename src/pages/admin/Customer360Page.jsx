@@ -27,7 +27,7 @@ export default function Customer360Page() {
   const [waMsgs, setWaMsgs] = useState([]);
 
   useEffect(() => {
-    supabase.from('customers').select('*').order('name').limit(1000)
+    supabase.from('customers').select('*').eq('business_type', 'customer').order('name').limit(1000)
       .then(({data}) => setCustomers(data||[]));
   }, []);
 

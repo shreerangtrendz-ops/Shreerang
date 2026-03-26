@@ -267,12 +267,12 @@ export default function TallySyncDashboard() {
       { data: errData }, { data: logData }
     ] = await Promise.all([
       supabase.from('products').select('*',{count:'exact',head:true}),
-      supabase.from('purchases').select('*',{count:'exact',head:true}).gte('bill_date', new Date(Date.now()-30*86400000).toISOString().split('T')[0]),
-      supabase.from('job_work_bills').select('*',{count:'exact',head:true}).gte('bill_date', new Date(Date.now()-30*86400000).toISOString().split('T')[0]),
+      supabase.from('purchase_bills').select('*',{count:'exact',head:true}).gte('bill_date', new Date(Date.now()-30*86400000).toISOString().split('T')[0]),
+      supabase.from('process_issues').select('*',{count:'exact',head:true}).gte('issue_date', new Date(Date.now()-30*86400000).toISOString().split('T')[0]),
       supabase.from('customers').select('*',{count:'exact',head:true}),
       supabase.from('suppliers').select('*',{count:'exact',head:true}),
       supabase.from('agents').select('*',{count:'exact',head:true}),
-      supabase.from('sales_orders').select('*',{count:'exact',head:true}).eq('status','outstanding'),
+      supabase.from('tally_ledgers').select('*',{count:'exact',head:true}).gt('bill_outstanding', 0),
       supabase.from('tally_sync_errors').select('*').order('created_at',{ascending:false}).limit(5),
       supabase.from('tally_sync_log').select('*').order('created_at',{ascending:false}).limit(20),
     ]);

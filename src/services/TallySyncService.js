@@ -58,6 +58,8 @@ function buildOutstandingXml(type = 'Sundry Debtors') {
 // ─── VOUCHER TYPE CLASSIFIER ──────────────────────────────────────────────────
 function classifyVoucher(vchtype) {
   const vt = vchtype.toLowerCase();
+  if (vt.includes('material out') || vt.includes('job work out')) return 'material_out';
+  if (vt.includes('material in') || vt.includes('job work in')) return 'material_in';
   if (vt.includes('sale')) return 'sales';
   if (vt.includes('purchase')) return 'purchase';
   if (vt.includes('receipt')) return 'receipt';
@@ -77,6 +79,7 @@ function parseAllVouchers(xml) {
   const purchaseRows = [];
   const receiptRows = [];
   const paymentRows = [];
+  const jobWorkRows = [];
   const blocks = xml.match(/<VOUCHER[\s\S]*?<\/VOUCHER>/gi) || [];
 
   for (const b of blocks) {
@@ -144,6 +147,16 @@ function parseAllVouchers(xml) {
         notes: narr || `Tally Purchase Voucher`,
         status: 'synced'
       });
+    } else if (category === 'material_out' || category === 'material_in') {
+      jobWorkRows.push({
+        voucher_number: vn || `JW-${dt}-${Math.random().toString(36).substr(2,6)}`,
+        issue_date: dt,
+        mill_name: party,
+        process_type: category === 'material_out' ? 'Issue to Mill' : 'Receive from Mill',
+        notes: narr || `Tally Job Work Voucher`,
+        metres_issued: category === 'material_out' ? total : 0,
+        metres_received: category === 'material_in' ? total : 0
+      });
     } else if (category === 'receipt') {
       receiptRows.push({ party_name: party, amount: total, date: dt, ref, narr, voucher_number: vn, category: 'receipt' });
     } else if (category === 'payment') {
@@ -151,7 +164,7 @@ function parseAllVouchers(xml) {
     }
   }
 
-  return { allVouchers, salesRows, purchaseRows, receiptRows, paymentRows, totalBlocks: blocks.length };
+  return { allVouchers, salesRows, purchaseRows, receiptRows, paymentRows, jobWorkRows, totalBlocks: blocks.length };
 }
 
 // ─── LEDGER PARSER (Customers + Suppliers + Agents) ───────────────────────────
@@ -204,10 +217,10 @@ function parseStock(xml) {
 
 // ─── SYNC FUNCTIONS ───────────────────────────────────────────────────────────
 export async function syncVouchersFromTally(company = '') {
-  const log = { sales: 0, purchase: 0, receipts: 0, payments: 0, errors: [], totalBlocks: 0 };
+  const log = { sales: 0, purchase: 0, receipts: 0, payments: 0, jobworks: 0, errors: [], totalBlocks: 0 };
   try {
     const xml = await TALLY_PROXY(buildDayBookXml(), company);
-    const { salesRows, purchaseRows, receiptRows, paymentRows, totalBlocks } = parseAllVouchers(xml);
+    const { salesRows, purchaseRows, receiptRows, paymentRows, jobWorkRows, totalBlocks } = parseAllVouchers(xml);
     log.totalBlocks = totalBlocks;
 
     if (salesRows.length > 0) {
@@ -232,9 +245,16 @@ export async function syncVouchersFromTally(company = '') {
       log.payments = paymentRows.length;
     }
 
+    // Log Job Works
+    if (jobWorkRows.length > 0) {
+      const { error } = await supabase.from('process_issues').upsert(jobWorkRows, { onConflict: 'voucher_number' }).catch(() => {});
+      if (error) log.errors.push('jobworks: ' + error.message);
+      else log.jobworks = jobWorkRows.length;
+    }
+
     await supabase.from('tally_sync_log').insert({
       sync_type: 'vouchers_combined', status: log.errors.length ? 'partial' : 'success',
-      records_synced: log.sales + log.purchase, error_message: log.errors.join('; ') || null,
+      records_synced: log.sales + log.purchase + log.jobworks, error_message: log.errors.join('; ') || null,
       raw_response: xml.substring(0, 500)
     });
     await supabase.from('tally_sync_state').upsert([
@@ -342,6 +362,6 @@ export async function getSyncState() {
 }
 
 export async function getLatestSyncLog(limit = 20) {
-  const { data } = await supabase.from('tally_sync_log').select('*').order('synced_at', { ascending: false }).limit(limit);
+  const { data } = await supabase.from('tally_sync_log').select('*').order('created_at', { ascending: false }).limit(limit);
   return data || [];
 }

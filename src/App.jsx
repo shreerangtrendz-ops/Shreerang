@@ -113,6 +113,7 @@ import DesignGalleryPage from '@/pages/admin/design/DesignGalleryPage';
 import MTOCostTemplatePage from '@/pages/admin/MTOCostTemplatePage';
 import StockManager from '@/pages/admin/inventory/StockManager';
 import LiveStockPage from '@/pages/admin/LiveStockPage';
+import JobWorkJobsPage from '@/pages/admin/JobWorkJobsPage';
 
 const App = () => {
   useEffect(() => {
@@ -267,6 +268,7 @@ const App = () => {
                     <Route path="challans" element={<JobCardsList />} />
                     <Route path="manufacturing" element={<ManufacturingEntryPage />} />
                     <Route path="production-floor" element={<ProductionTracker />} />
+                    <Route path="job-work-jobs" element={<JobWorkJobsPage />} />
                     
                     {/* Stock & Inventory */}
                     <Route path="stock" element={<LiveStockPage />} />

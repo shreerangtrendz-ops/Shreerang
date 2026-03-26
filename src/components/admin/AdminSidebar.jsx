@@ -46,6 +46,7 @@ const ALL_GROUPS = [
     roles: ['admin','manager','operations','accounts'],
     items: [
       { icon: '🏭', label: 'Production Floor',   to: '/admin/production-floor',     roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
+      { icon: '📋', label: 'Job Work Lots',      to: '/admin/job-work-jobs',        roles: ['admin','manager','operations'], badge: 'NEW' },
       { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',          roles: ['admin','manager','operations'] },
       { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',             roles: ['admin','manager','operations'] },
       { icon: '💰', label: 'MTO Cost Templates', to: '/admin/mto-cost-template',    roles: ['admin','manager','operations'], badge: 'NEW' },

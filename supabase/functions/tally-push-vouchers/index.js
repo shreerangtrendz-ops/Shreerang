@@ -138,6 +138,59 @@ function buildJobWorkXML(bill) {
   </TALLYMESSAGE>`;
 }
 
+function buildUnifiedJobWorkXML(job) {
+  // A unified Job Work Job pushes three vouchers: Material Out, Material In, and the Processing Invoice
+  // (Assuming data is fully populated and joined from process_issues and job_work_bills)
+  
+  const issueDate = formatTallyDate(job.issue_date || job.created_at);
+  const receiveDate = formatTallyDate(job.receive_date || job.updated_at);
+  const millName = job.mill_name;
+  
+  const materialOut = `
+  <TALLYMESSAGE xmlns:UDF="TallyUDF">
+    <VOUCHER VCHTYPE="Material Out" ACTION="Create">
+      <DATE>${issueDate}</DATE>
+      <VOUCHERNUMBER>OUT-${job.lot_number}</VOUCHERNUMBER>
+      <PARTYLEDGERNAME>${millName}</PARTYLEDGERNAME>
+      <ALLINVENTORYENTRIES.LIST>
+        <STOCKITEMNAME>${job.fabric_name || 'Raw Fabric'}</STOCKITEMNAME>
+        <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+        <BILLEDQTY>${(job.issue_qty_mtrs || 0).toFixed(3)} Nos</BILLEDQTY>
+        <NARRATION>Material issued to mill for ${job.process_type || 'processing'}</NARRATION>
+      </ALLINVENTORYENTRIES.LIST>
+    </VOUCHER>
+  </TALLYMESSAGE>`;
+
+  const materialIn = `
+  <TALLYMESSAGE xmlns:UDF="TallyUDF">
+    <VOUCHER VCHTYPE="Material In" ACTION="Create">
+      <DATE>${receiveDate}</DATE>
+      <VOUCHERNUMBER>IN-${job.lot_number}</VOUCHERNUMBER>
+      <PARTYLEDGERNAME>${millName}</PARTYLEDGERNAME>
+      <ALLINVENTORYENTRIES.LIST>
+        <STOCKITEMNAME>${job.fabric_name || 'Processed Fabric'}</STOCKITEMNAME>
+        <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+        <BILLEDQTY>${(job.received_qty_mtrs || 0).toFixed(3)} Nos</BILLEDQTY>
+        <NARRATION>Material received from mill after ${job.process_type || 'processing'} (${job.yield_loss_pct}% loss)</NARRATION>
+      </ALLINVENTORYENTRIES.LIST>
+    </VOUCHER>
+  </TALLYMESSAGE>`;
+
+  const invoice = `
+  <TALLYMESSAGE xmlns:UDF="TallyUDF">
+    <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+      <DATE>${receiveDate}</DATE>
+      <VOUCHERNUMBER>BILL-${job.lot_number}</VOUCHERNUMBER>
+      <PARTYLEDGERNAME>${millName}</PARTYLEDGERNAME>
+      ${buildLedgerEntry('Processing Charges', job.bill_amount, true)}
+      ${buildLedgerEntry(millName, job.bill_amount)}
+      <NARRATION>Processing charges for Lot ${job.lot_number}</NARRATION>
+    </VOUCHER>
+  </TALLYMESSAGE>`;
+
+  return materialOut + materialIn + invoice;
+}
+
 function wrapEnvelope(messages) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <ENVELOPE>
@@ -169,11 +222,18 @@ Deno.serve(async (req) => {
 
   try {
     // 1. Fetch all pending bills and orders
-    const [{ data: sales }, { data: purchases }, { data: jobWorks }, { data: salesOrders }] = await Promise.all([
+    const [
+      { data: sales }, 
+      { data: purchases }, 
+      { data: jobWorks }, 
+      { data: salesOrders },
+      { data: unifiedJobs }
+    ] = await Promise.all([
       supabase.from('sales_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
       supabase.from('purchase_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
       supabase.from('job_work_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
       supabase.from('sales_orders').select('*').eq('tally_sync_status', 'pending').limit(50),
+      supabase.from('job_work_jobs').select('*').eq('tally_sync_status', 'pending').eq('status', 'closed').limit(20)
     ]);
 
     const batches = [
@@ -181,6 +241,7 @@ Deno.serve(async (req) => {
       { bills: purchases || [], type: 'purchase_bills', builder: buildPurchaseXML },
       { bills: jobWorks || [], type: 'job_work_bills', builder: buildJobWorkXML },
       { bills: salesOrders || [], type: 'sales_orders', builder: buildSalesOrderXML },
+      { bills: unifiedJobs || [], type: 'job_work_jobs', builder: buildUnifiedJobWorkXML },
     ];
 
     for (const { bills, type, builder } of batches) {

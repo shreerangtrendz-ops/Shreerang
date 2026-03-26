@@ -221,8 +221,9 @@ function parseAllLedgers(xml) {
     const creditDays = parseInt(getTag(b, 'CREDITPERIOD') || '0') || 0;
     const creditLimit = toAmt(getTag(b, 'CREDITLIMIT') || '0');
     const p = parent.toLowerCase();
+    const cleanArea = parent.replace(/sundry debtors?/gi, '').replace(/^-+|-+$/g, '').trim();
 
-    const base = { tally_ledger_name: name, phone, email, address, gst_number: gstin, state, credit_days: creditDays, credit_limit: creditLimit };
+    const base = { tally_ledger_name: name, phone, email, address, gst_number: gstin, state, credit_days: creditDays, credit_limit: creditLimit, area: cleanArea || null };
 
     if (p.includes('sundry debtor')) {
       customers.push({ ...base, name, customer_type: 'Wholesale', status: 'active', business_type: 'customer' });

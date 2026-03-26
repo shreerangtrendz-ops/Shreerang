@@ -33,7 +33,7 @@ const CustomerMasterPage = () => {
     setLoading(true);
     try {
       let countQuery = supabase.from('customers').select('*', { count: 'exact', head: true }).eq('business_type', 'customer');
-      let dataQuery = supabase.from('customers').select('id, name, firm_name, phone, email, area, city, customer_type, agent_name, payment_terms, business_type, source, created_at').eq('business_type', 'customer').order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      let dataQuery = supabase.from('customers').select('id, name, firm_name, phone, email, area, city, state, customer_type, business_type, source, created_at, ai_purchase_memory, ai_wishlist').eq('business_type', 'customer').order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
       // Filter by source tab
       if (sourceTab === 'crm') {
@@ -195,12 +195,10 @@ const CustomerMasterPage = () => {
                 <tr>
                   <th>#</th>
                   <th>Name / Firm</th>
-                  <th>Phone</th>
-                  <th>City</th>
-                  <th>Type</th>
-                  <th>Source</th>
-                  <th>Agent</th>
-                  <th>Actions</th>
+                  <th>Contact</th>
+                  <th>Routing Area</th>
+                  <th>AI Purchase Memory</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,15 +216,31 @@ const CustomerMasterPage = () => {
                         <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: 12 }}>{c.name || '—'}</div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.firm_name || c.company_name || ''}</div>
                       </td>
-                      <td className="mono">{c.phone || '—'}</td>
-                      <td><span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.city || c.area || '—'}</span></td>
-                      <td>{typeBadge(c.customer_type || c.business_type)}</td>
-                      <td>{sourceBadge(c.source)}</td>
-                      <td style={{ fontSize: 11 }}>{c.agent_name || '—'}</td>
+                      <td className="mono" style={{ fontSize: 11 }}>{c.phone || c.email || '—'}</td>
                       <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--teal)', fontSize: 12 }}>{c.area || c.city || '—'}</div>
+                        {c.state && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.state}</div>}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {(!c.ai_purchase_memory || c.ai_purchase_memory.length === 0) && (!c.ai_wishlist || c.ai_wishlist.length === 0) && <span style={{ fontSize: 10, color: '#CBD5E1' }}>No data yet</span>}
+                          {(c.ai_purchase_memory || []).slice(0, 3).map((item, idx) => (
+                            <span key={`p-${idx}`} title="Purchased" style={{ background: '#F0F9FF', color: '#0284C7', border: '1px solid #BAE6FD', padding: '2px 6px', borderRadius: 4, fontSize: 10, whiteSpace: 'nowrap' }}>
+                              🛍️ {item}
+                            </span>
+                          ))}
+                          {(c.ai_purchase_memory?.length > 3) && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{c.ai_purchase_memory.length - 3}</span>}
+                          {(c.ai_wishlist || []).map((w, idx) => (
+                            <span key={`w-${idx}`} title="Wishlist/Intent" style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FFEDD5', padding: '2px 6px', borderRadius: 4, fontSize: 10, whiteSpace: 'nowrap' }}>
+                              ⚡ {w}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                           <button className="btn btn-outline btn-sm" onClick={() => { setForm(c); setModal('edit'); }}>Edit</button>
-                          <button className="btn btn-outline btn-sm" onClick={() => navigate(`/admin/customer-360?id=${c.id}`)}>360°</button>
+                          <button className="btn btn-outline btn-sm" onClick={() => navigate(`/admin/customer-360?id=${c.id}`)}>360° Profile</button>
                         </div>
                       </td>
                     </tr>

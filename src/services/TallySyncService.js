@@ -49,7 +49,7 @@ function buildLedgersXml() {
   return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
 function buildStockXml() {
-  return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
+  return '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Stock Summary</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><EXPLODEFLAG>Yes</EXPLODEFLAG><EXPLODEALLLEVELS>Yes</EXPLODEALLLEVELS></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>';
 }
 function buildOutstandingXml(type = 'Sundry Debtors') {
   return `<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Outstanding Receivables</REPORTNAME><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><GROUPNAME>${type}</GROUPNAME></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
@@ -162,6 +162,8 @@ function parseAllVouchers(xml) {
         rate: pItem.rate || 0,
         line_items: line_items,
         total_amount: total,
+        lr_no: getTag(b, 'BASICSHIPDOCUMENTNO') || getTag(b, 'EBWAYBILLNO') || null,
+        transporter_name: getTag(b, 'BASICSHIPDELIVERYNAME') || getTag(b, 'STATENAME') || null,
         notes: narr || `Tally Sales Voucher`,
         tally_voucher_no: vn,
         tally_sync_status: 'synced',
@@ -246,8 +248,27 @@ function parseStock(xml) {
     const group = getTag(b, 'PARENT') || null;
     if (!name) continue;
     const sku = name.toUpperCase().replace(/[^A-Z0-9]/g,'-').replace(/-+/g,'-').substring(0,50);
-    rows.push({ fabric_sku: sku, fabric_name: name, closing_qty_mtrs: closing, tally_group: group,
-                sync_date: new Date().toISOString().slice(0,10), last_tally_sync: new Date().toISOString() });
+    
+    // Phase 18: Extract Godowns from BATCHALLOCATIONS
+    const godowns = [];
+    const batchBlocks = b.match(/<BATCHALLOCATIONS\.LIST[\s\S]*?<\/BATCHALLOCATIONS\.LIST>/gi) || [];
+    for (const bb of batchBlocks) {
+      const gName = getTag(bb, 'GODOWNNAME') || 'Main Location';
+      const bQty = toAmt(getTag(bb, 'CLOSINGBALANCE') || '0');
+      if (bQty !== 0) {
+        godowns.push({ godown: gName, quantity: bQty });
+      }
+    }
+    
+    rows.push({ 
+      fabric_sku: sku, 
+      fabric_name: name, 
+      closing_qty_mtrs: closing, 
+      tally_group: group,
+      godown_balances: godowns,
+      sync_date: new Date().toISOString().slice(0,10), 
+      last_tally_sync: new Date().toISOString() 
+    });
   }
   return rows;
 }
@@ -263,7 +284,21 @@ export async function syncVouchersFromTally(company = '') {
     if (salesRows.length > 0) {
       const { error } = await supabase.from('sales_bills').upsert(salesRows, { onConflict: 'bill_number' });
       if (error) log.errors.push('sales: ' + error.message);
-      else log.sales = salesRows.length;
+      else {
+        log.sales = salesRows.length;
+        // Phase 16: Notify n8n for Sales Dispatch automated WhatsApp messages
+        const dispatches = salesRows.filter(r => r.lr_no);
+        if (dispatches.length > 0) {
+          try {
+            const N8N_WEBHOOK = import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://n8n.shreerangtrendz.com/webhook/wa-bot';
+            fetch(N8N_WEBHOOK, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'tally_sync_dispatch', vouchers: dispatches })
+            }).catch(e => console.error('n8n hook failed:', e));
+          } catch(e) {}
+        }
+      }
     }
     if (purchaseRows.length > 0) {
       const { error } = await supabase.from('purchase_bills').upsert(purchaseRows, { onConflict: 'bill_number' });
@@ -376,7 +411,23 @@ export async function pullJobBillsFromTally() { return { success: true, records:
 export async function syncSuppliersFromTally() { return syncCustomersFromTally(); }
 export async function syncAgentsFromTally() { return syncCustomersFromTally(); }
 export async function syncOutstandingFromTally() { return syncCustomersFromTally(); }
-export async function pushOrderToTally() { return { success: false, error: 'Not implemented' }; }
+export async function pushOrderToTally(orderId) { 
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tally-push-vouchers`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error || 'Failed to push');
+    return { success: true, voucherNo: 'Synced Check Tally' };
+  } catch(e) {
+    return { success: false, error: e.message };
+  }
+}
 
 // ─── INFRA STATUS CHECK ───────────────────────────────────────────────────────
 export async function checkTallyInfraStatus() {

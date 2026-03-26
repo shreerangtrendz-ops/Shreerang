@@ -111,8 +111,8 @@ import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
 import DesignGalleryPage from '@/pages/admin/design/DesignGalleryPage';
 import MTOCostTemplatePage from '@/pages/admin/MTOCostTemplatePage';
-import StockManagement from '@/pages/admin/StockManagement';
 import StockManager from '@/pages/admin/inventory/StockManager';
+import LiveStockPage from '@/pages/admin/LiveStockPage';
 
 const App = () => {
   useEffect(() => {
@@ -269,7 +269,7 @@ const App = () => {
                     <Route path="production-floor" element={<ProductionTracker />} />
                     
                     {/* Stock & Inventory */}
-                    <Route path="stock" element={<StockManagement />} />
+                    <Route path="stock" element={<LiveStockPage />} />
                     <Route path="stock/alerts" element={<StockManager />} />
                     <Route path="stock/inward" element={<ComingSoonPage title="Stock In/Out" icon="📦" desc="Stock inventory movement system." breadcrumb="Inventory → Transact" />} />
 

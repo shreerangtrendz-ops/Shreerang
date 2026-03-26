@@ -75,6 +75,32 @@ function buildSalesXML(bill) {
   </TALLYMESSAGE>`;
 }
 
+function buildSalesOrderXML(order) {
+  const lineItems = (order.order_details?.items || order.line_items || []).map(item => `
+    <ALLINVENTORYENTRIES.LIST>
+      <STOCKITEMNAME>${item.item_name || 'Fabric'}</STOCKITEMNAME>
+      <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+      <RATE>${(item.rate || 0).toFixed(2)}/Nos</RATE>
+      <AMOUNT>${(item.amount || 0).toFixed(2)}</AMOUNT>
+      <ACTUALQTY>${(item.quantity || 0).toFixed(3)} Nos</ACTUALQTY>
+      <BILLEDQTY>${(item.quantity || 0).toFixed(3)} Nos</BILLEDQTY>
+    </ALLINVENTORYENTRIES.LIST>`).join('');
+
+  return `
+  <TALLYMESSAGE xmlns:UDF="TallyUDF">
+    <VOUCHER VCHTYPE="Sales Order" ACTION="Create">
+      <DATE>${formatTallyDate(order.created_at || order.order_date || new Date().toISOString())}</DATE>
+      <VOUCHERNUMBER>${order.order_no || order.order_number}</VOUCHERNUMBER>
+      <PARTYLEDGERNAME>${order.customer_name || order.party_name}</PARTYLEDGERNAME>
+      ${order.shipping_address ? `<BASICSHIPDESTINATIONNAME>${order.shipping_address}</BASICSHIPDESTINATIONNAME>` : ''}
+      ${buildLedgerEntry(order.customer_name || order.party_name, order.total_amount, true)}
+      ${buildLedgerEntry('Sales Account', order.subtotal_amount || order.total_amount)}
+      ${lineItems}
+      <NARRATION>${order.notes || 'Field Sales Order via Shreerang App'}</NARRATION>
+    </VOUCHER>
+  </TALLYMESSAGE>`;
+}
+
 function buildPurchaseXML(bill) {
   const lineItems = (bill.line_items || []).map(buildInventoryEntry).join('');
   return `
@@ -142,17 +168,19 @@ Deno.serve(async (req) => {
   const results = { pushed: 0, failed: 0, errors: [] };
 
   try {
-    // 1. Fetch all pending bills
-    const [{ data: sales }, { data: purchases }, { data: jobWorks }] = await Promise.all([
+    // 1. Fetch all pending bills and orders
+    const [{ data: sales }, { data: purchases }, { data: jobWorks }, { data: salesOrders }] = await Promise.all([
       supabase.from('sales_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
       supabase.from('purchase_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
       supabase.from('job_work_bills').select('*').eq('tally_sync_status', 'pending').eq('status', 'pending_push').limit(50),
+      supabase.from('sales_orders').select('*').eq('tally_sync_status', 'pending').limit(50),
     ]);
 
     const batches = [
       { bills: sales || [], type: 'sales_bills', builder: buildSalesXML },
       { bills: purchases || [], type: 'purchase_bills', builder: buildPurchaseXML },
       { bills: jobWorks || [], type: 'job_work_bills', builder: buildJobWorkXML },
+      { bills: salesOrders || [], type: 'sales_orders', builder: buildSalesOrderXML },
     ];
 
     for (const { bills, type, builder } of batches) {

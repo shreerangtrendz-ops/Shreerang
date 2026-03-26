@@ -135,7 +135,7 @@ export default function AgentCommissionPage() {
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead>
               <tr style={{background:T.bg}}>
-                {['#','Agent','Bills','Sales Amount',`Commission (${commRate}%)','Payable'].map(h=>(
+                {['#','Agent','Bills','Sales Amount',`Commission (${commRate}%)`,'Payable'].map(h=>(
                   <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:700,color:T.muted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
                 ))}
               </tr>

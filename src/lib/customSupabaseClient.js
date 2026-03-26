@@ -10,4 +10,5 @@ export default customSupabaseClient;
 export { 
     customSupabaseClient,
     customSupabaseClient as supabase,
+    customSupabaseClient as customSupabase,
 };

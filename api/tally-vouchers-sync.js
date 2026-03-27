@@ -77,9 +77,7 @@ function parseAllVouchers(xml) {
 }
 
 function isTrulyBadResponse(body) {
-  if (!body || body.length < 500) return true;
-  if (body.includes('KASHVI APPARELS')) return true;
-  if (body.includes('26-Apr-2026')) return true;
+  if (!body || body.length < 50) return true;
   return false;
 }
 

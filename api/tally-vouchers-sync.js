@@ -303,5 +303,10 @@ export default async function handler(req, res) {
     else results.others = rows.length;
   }
 
-  res.status(200).json({ status: 'success', synced: results });
+  res.status(200).json({
+    status: 'success',
+    success: results.errors.length === 0,
+    records_synced: results.vouchers,
+    synced: results
+  });
 }

@@ -66,21 +66,17 @@ export default async function handler(req, res) {
 
   const results = [];
 
-  // 1. Sync Stock Items
-  console.log('[tally-nightly] Step 1/4: Stock items...');
-  results.push(await callSync('tally-stock-sync', 'Stock Items'));
+  // 1. Sync Masters (Stock + Ledgers combined)
+  console.log('[tally-nightly] Step 1/3: Masters (Stock & Ledgers)...');
+  results.push(await callSync('tally-masters-sync', 'Masters (Stock & Ledgers)'));
 
-  // 2. Sync Ledgers
-  console.log('[tally-nightly] Step 2/4: Ledgers...');
-  results.push(await callSync('tally-ledger-sync', 'Ledgers'));
+  // 2. Sync Purchase Vouchers (today's chunk)
+  console.log('[tally-nightly] Step 2/3: Purchase vouchers...');
+  results.push(await callSync('tally-vouchers-sync?type=purchase', 'Purchase Vouchers'));
 
-  // 3. Sync Purchase Vouchers (today's chunk)
-  console.log('[tally-nightly] Step 3/4: Purchase vouchers...');
-  results.push(await callSync('tally-sync?type=purchase', 'Purchase Vouchers'));
-
-  // 4. Sync Sales Vouchers (today's chunk)
-  console.log('[tally-nightly] Step 4/4: Sales vouchers...');
-  results.push(await callSync('tally-sync?type=sales', 'Sales Vouchers'));
+  // 3. Sync Sales Vouchers (today's chunk)
+  console.log('[tally-nightly] Step 3/3: Sales vouchers...');
+  results.push(await callSync('tally-vouchers-sync?type=sales', 'Sales Vouchers'));
 
   // Log summary
   await logNightlySync(results).catch(() => {});

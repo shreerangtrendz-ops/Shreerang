@@ -205,7 +205,8 @@ function buildPurchaseRow(v) {
 }
 
 function buildProcessRow(v) {
-  const isReceipt = v.vtype === 'REC FROM MILL';
+  const vTypeUpper = v.vtype.toUpperCase();
+  const isReceipt = vTypeUpper.includes('REC') || vTypeUpper.includes('IN');
   let itemName='', qty=0, rate=0, designNo='';
   const entries = isReceipt ? getInventoryEntriesIn(v._vxml) : getInventoryEntriesOut(v._vxml);
   if (entries.length > 0) {
@@ -259,8 +260,9 @@ export default async function handler(req, res) {
   
   const salesV    = parsedVouchers.filter(v => v.vtype === 'Sales' && v.date && v.vnum);
   const purchaseV = parsedVouchers.filter(v => v.vtype === 'Purchase' && v.date && v.vnum);
-  const processV  = parsedVouchers.filter(v => ['Issue to Mill','REC FROM MILL'].includes(v.vtype) && v.date);
-  const otherV    = parsedVouchers.filter(v => !['Sales','Purchase','Issue to Mill','REC FROM MILL'].includes(v.vtype) && v.date && v.vnum);
+  const jobworkTypes = ['Issue to Mill', 'REC FROM MILL', 'Material Out', 'Material In', 'Job Work Out Order', 'Job Work In Order', 'Job Work In', 'Job Work Out'];
+  const processV  = parsedVouchers.filter(v => jobworkTypes.includes(v.vtype) && v.date);
+  const otherV    = parsedVouchers.filter(v => !['Sales','Purchase', ...jobworkTypes].includes(v.vtype) && v.date && v.vnum);
 
   const results = { sales: 0, purchase: 0, process: 0, others: 0, errors: [] };
 

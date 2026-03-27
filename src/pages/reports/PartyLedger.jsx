@@ -45,7 +45,8 @@ export default function PartyLedgerPage() {
     // Build unified ledger
     const entries = [];
     (sales||[]).forEach(b => entries.push({
-      date: b.bill_date, type:'Sales', ref: b.bill_number, debit: b.total_amount||0, credit:0, narration: b.notes||'Sales Bill'
+      date: b.bill_date, type:'Sales', ref: b.bill_number, debit: b.total_amount||0, credit:0, 
+      narration: b.notes||'Sales Bill', broker: b.broker_name||'-'
     }));
     (purchases||[]).forEach(b => entries.push({
       date: b.bill_date, type:'Purchase', ref: b.bill_number, debit:0, credit: b.total_amount||0, narration: b.notes||'Purchase Bill'
@@ -56,7 +57,8 @@ export default function PartyLedgerPage() {
         date: v.voucher_date, type: v.voucher_type, ref: v.voucher_number||'-',
         debit: isReceipt ? v.amount||0 : 0,
         credit: !isReceipt ? v.amount||0 : 0,
-        narration: v.narration||v.voucher_type
+        narration: v.narration||v.voucher_type,
+        broker: v.broker_name||'-'
       });
     });
 
@@ -181,7 +183,7 @@ export default function PartyLedgerPage() {
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead>
                       <tr style={{background:T.bg}}>
-                        {['Date','Type','Reference','Debit','Credit','Balance','Narration'].map(h=>(
+                        {['Date','Type','Reference','Broker','Debit','Credit','Balance','Narration'].map(h=>(
                           <th key={h} style={{padding:'10px 12px',textAlign:'left',fontSize:11,fontWeight:700,color:T.muted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
                         ))}
                       </tr>
@@ -196,6 +198,7 @@ export default function PartyLedgerPage() {
                             </span>
                           </td>
                           <td style={{padding:'8px 12px',fontSize:12,fontWeight:600,color:T.teal}}>{e.ref}</td>
+                          <td style={{padding:'8px 12px',fontSize:11,color:T.blue,fontWeight:600}}>{e.broker||'-'}</td>
                           <td style={{padding:'8px 12px',fontSize:12,fontWeight:700,color:T.red}}>{e.debit>0?fmt(e.debit):'-'}</td>
                           <td style={{padding:'8px 12px',fontSize:12,fontWeight:700,color:T.green}}>{e.credit>0?fmt(e.credit):'-'}</td>
                           <td style={{padding:'8px 12px',fontSize:12,fontWeight:800,color:e.balance>0?T.red:T.green}}>{fmt(Math.abs(e.balance))}</td>

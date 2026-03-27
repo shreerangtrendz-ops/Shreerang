@@ -18,7 +18,7 @@ server {
     listen 80;
     server_name tally.shreerangtrendz.com;
     location / {
-        proxy_pass http://127.0.0.1:9000;
+        proxy_pass http://127.0.0.1:9005;
         proxy_set_header Host tally.shreerangtrendz.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 120s;
@@ -28,7 +28,7 @@ server {
     listen 80;
     server_name tally-test.shreerangtrendz.com;
     location / {
-        proxy_pass http://127.0.0.1:9000;
+        proxy_pass http://127.0.0.1:9005;
         proxy_set_header Host tally-test.shreerangtrendz.com;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 120s;
@@ -38,5 +38,5 @@ NGINXEOF
 
 nginx -t && systemctl reload nginx
 echo '=== TEST CURL ==='
-curl -s -X POST http://tally-test.shreerangtrendz.com:9000 -H 'Content-Type: text/xml' -d '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Companies</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' --max-time 10
+curl -s -X POST http://tally-test.shreerangtrendz.com:9005 -H 'Content-Type: text/xml' -d '<?xml version="1.0"?><ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Companies</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' --max-time 10
 echo 'DONE'

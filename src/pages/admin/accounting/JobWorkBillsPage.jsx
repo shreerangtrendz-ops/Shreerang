@@ -19,8 +19,26 @@ export default function JobWorkBillsPage() {
   useEffect(() => { fetchBills(); }, []);
   async function fetchBills() {
     setLoading(true);
-    const { data } = await supabase.from('job_work_bills').select('*').order('bill_date', { ascending:false });
-    setBills(data || []);
+    const [manual, synced] = await Promise.all([
+      supabase.from('job_work_bills').select('*').order('bill_date', { ascending:false }),
+      supabase.from('process_issues').select('*').order('issue_date', { ascending:false })
+    ]);
+    const combined = [
+      ...(manual.data || []).map(m => ({ ...m, source: 'Manual' })),
+      ...(synced.data || []).map(s => ({
+        ...s,
+        bill_number: s.voucher_number || `CH-${s.id}`,
+        bill_date: s.issue_date,
+        job_worker_name: s.mill_name,
+        design_number: s.design_no,
+        amount: s.job_amount,
+        quantity: s.metres_received || s.metres_issued,
+        rate: s.job_rate,
+        status: 'synced',
+        source: 'Tally'
+      }))
+    ];
+    setBills(combined.sort((a,b) => new Date(b.bill_date) - new Date(a.bill_date)));
     setLoading(false);
   }
   async function saveBill() {
@@ -90,7 +108,7 @@ export default function JobWorkBillsPage() {
         <div style={{ ...CARD, padding:0, overflow:'hidden' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead><tr style={{ background:'#F4FBFA' }}>
-              {['Bill No','Date','Job Worker','Design No','Process','Qty','Rate','Amount','Status'].map(h=>(
+              {['Bill No','Date','Job Worker','Design No','Process','Qty','Rate','Amount','Status','Source'].map(h=>(
                 <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:700, color:'#0B2E2B', borderBottom:'1px solid rgba(43,168,152,.15)', whiteSpace:'nowrap' }}>{h}</th>
               ))}
             </tr></thead>
@@ -109,11 +127,12 @@ export default function JobWorkBillsPage() {
                   <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:'#D4920A' }}>{fmt(b.amount)}</td>
                   <td style={{ padding:'9px 14px' }}>
                     <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
-                      background:b.status==='paid'?'#E8FFF4':b.status==='pending'?'#FFF3F3':'#FFF8E8',
-                      color:b.status==='paid'?'#1E9E5A':b.status==='pending'?'#ef4444':'#D4920A' }}>
+                      background:b.status==='paid'?'#E8FFF4':b.status==='synced'?'#F0F4FF':b.status==='pending'?'#FFF3F3':'#FFF8E8',
+                      color:b.status==='paid'?'#1E9E5A':b.status==='synced'?'#2468C8':b.status==='pending'?'#ef4444':'#D4920A' }}>
                       {b.status||'pending'}
                     </span>
                   </td>
+                  <td style={{ padding:'9px 14px', color:'#6A9B95', fontSize:11 }}>{b.source||'Manual'}</td>
                 </tr>
               ))}
             </tbody>

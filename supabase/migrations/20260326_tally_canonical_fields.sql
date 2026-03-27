@@ -19,8 +19,8 @@ ALTER TABLE sales_bills DROP COLUMN IF EXISTS party_name;
 ALTER TABLE sales_bills
   ADD COLUMN IF NOT EXISTS comm_rate         NUMERIC(10,4),
   ADD COLUMN IF NOT EXISTS item_name         TEXT,
-  ADD COLUMN IF NOT EXISTS quantity          NUMERIC(12,2),
-  ADD COLUMN IF NOT EXISTS rate              NUMERIC(10,2),
+  ADD COLUMN IF NOT EXISTS quantity_mtrs     NUMERIC(12,2),
+  ADD COLUMN IF NOT EXISTS rate_per_mtr      NUMERIC(10,2),
   ADD COLUMN IF NOT EXISTS commission_percent NUMERIC(6,2),
   ADD COLUMN IF NOT EXISTS commission_amount  NUMERIC(14,2);
 
@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS tally_vouchers (
   voucher_type   VARCHAR(60),
   party_name     VARCHAR(255),
   amount         NUMERIC(14,2) DEFAULT 0,
+  broker_name    TEXT,
+  comm_rate      NUMERIC(10,4),
+  comm_amount    NUMERIC(14,2),
   narration      TEXT,
   reference      TEXT,
   tally_guid     VARCHAR(200),

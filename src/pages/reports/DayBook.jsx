@@ -50,7 +50,8 @@ export default function DayBook() {
     (vouchersRes.data||[]).forEach(v => entries.push({
       date:v.voucher_date, type:v.voucher_type?.toLowerCase()||'other',
       ref:v.voucher_number||'-', party:v.party_name||'-',
-      amount:v.amount||0, narration:v.narration||v.voucher_type
+      amount:v.amount||0, narration:v.narration||v.voucher_type,
+      broker:v.broker_name||'-'
     }));
 
     entries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
@@ -176,7 +177,7 @@ export default function DayBook() {
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead>
               <tr style={{background:T.bg}}>
-                {['Date','Type','Reference','Party','Amount','Narration'].map(h=>(
+                {['Date','Type','Reference','Party','Broker','Amount','Narration'].map(h=>(
                   <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:700,color:T.muted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
                 ))}
               </tr>
@@ -192,6 +193,7 @@ export default function DayBook() {
                     </td>
                     <td style={{padding:'9px 14px',fontSize:12,fontWeight:600,color:T.teal}}>{v.ref}</td>
                     <td style={{padding:'9px 14px',fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.party}</td>
+                    <td style={{padding:'9px 14px',fontSize:12,color:T.blue,fontWeight:600}}>{v.broker||'-'}</td>
                     <td style={{padding:'9px 14px',fontSize:13,fontWeight:800,color:v.type==='sales'||v.type==='receipt'?T.green:T.red}}>{fmt(v.amount)}</td>
                     <td style={{padding:'9px 14px',fontSize:11,color:T.muted,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.narration}</td>
                   </tr>

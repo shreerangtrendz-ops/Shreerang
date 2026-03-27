@@ -294,6 +294,9 @@ export default async function handler(req, res) {
       voucher_date: v.date,
       party_name: v.party,
       amount: v.totalAmount,
+      broker_name: v.brokerName,
+      comm_rate: v.commRate,
+      comm_amount: v.commAmount,
       narration: v.narration,
       tally_sync_status: 'synced',
       tally_synced_at: new Date().toISOString()

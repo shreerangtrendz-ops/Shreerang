@@ -62,7 +62,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: false,
         error: isTimeout
-          ? "Tally request timed out after 90 seconds - check if Tally HTTP server is running on port 9000"
+          ? "Tally request timed out after 90 seconds - check if Tally HTTP server is running on port 9005"
           : `Tally connection failed: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
       }), {
         status: 200,

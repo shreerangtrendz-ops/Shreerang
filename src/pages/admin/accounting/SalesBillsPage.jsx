@@ -163,8 +163,8 @@ export default function SalesBillsPage() {
                   <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.bill_date}</td>
                   <td style={{ padding:'9px 14px', fontWeight:500 }}>{b.customer_name}</td>
                   <td style={{ padding:'9px 14px', color:'#4A7A74', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.item_name||'—'}</td>
-                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity||'—'}</td>
-                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate?fmt(b.rate):'—'}</td>
+                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity_mtrs||'—'}</td>
+                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate_per_mtr?fmt(b.rate_per_mtr):'—'}</td>
                   <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:'#1E9E5A' }}>{fmt(b.total_amount)}</td>
                   <td style={{ padding:'9px 14px', textAlign:'right', color:'#D4920A' }}>{b.commission_percent?b.commission_percent+'%':'—'}</td>
                   <td style={{ padding:'9px 14px' }}>

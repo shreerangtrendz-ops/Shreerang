@@ -1,9 +1,20 @@
+// api/tally-outstanding-sync.js
+// Consolidated Outstanding Sync (Receivables/Sundry Debtors)
+// Supports: 1. Push from n8n (POST with XML body)
+//           2. Pull from Tally (GET/POST without body - triggers Tally Export)
+
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-);
+const SUPABASE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzQ0OTg1NSwiZXhwIjoyMDc5MDI1ODU1fQ.fcHpUL4HXJZyW64vtKhZHOPKtYXBIfGeUbBlkkz1oGg';
+const TALLY_EDGE = 'https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-proxy';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const OUTSTANDING_XML = `<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Outstanding Receivables</REPORTNAME>
+  <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+  </REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>`;
 
 function getXmlVal(xml, tag) {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
@@ -27,14 +38,8 @@ function parseAllBills(xml) {
   return blocks;
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-
-  const body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
-  
-  if (!body || body.length < 50) return res.status(400).json({ error: 'Empty payload' });
-
-  const billBlocks = parseAllBills(body);
+async function processOutstanding(xml, results) {
+  const billBlocks = parseAllBills(xml);
   const parsedBills = billBlocks.map(bxml => {
     return {
       bill_name: getXmlVal(bxml, 'NAME'),
@@ -51,22 +56,45 @@ export default async function handler(req, res) {
     outstandingMap[b.party_name] += b.bill_outstanding; 
   }
 
-  const results = { affected_ledgers: 0, errors: [] };
-
   if (Object.keys(outstandingMap).length > 0) {
     const rowsToUpsert = Object.keys(outstandingMap).map(party => ({
       name: party,
-      bill_outstanding: outstandingMap[party],
+      bill_outstanding: Math.abs(outstandingMap[party]),
       updated_at: new Date().toISOString()
     }));
 
     const { error } = await supabase.from('tally_ledgers').upsert(rowsToUpsert, { onConflict: 'name' });
-    if (error) {
-      results.errors.push(`Outstanding update error: ${error.message}`);
-    } else {
-      results.affected_ledgers = rowsToUpsert.length;
-    }
+    if (error) results.errors.push(`Outstanding error: ${error.message}`);
+    else results.affected_ledgers = rowsToUpsert.length;
   }
+}
 
-  res.status(200).json({ status: 'success', synced: results });
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const results = { affected_ledgers: 0, errors: [] };
+  const rawBody = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+  
+  try {
+    if (rawBody && rawBody.length > 100) {
+      await processOutstanding(rawBody, results);
+    } else {
+      const r = await fetch(TALLY_EDGE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_KEY, 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ xmlBody: OUTSTANDING_XML }),
+        signal: AbortSignal.timeout(40000)
+      });
+      const data = await r.json();
+      if (data.data) await processOutstanding(data.data, results);
+    }
+
+    res.status(200).json({ status: 'success', synced: results, success: results.errors.length ===0 });
+  } catch (err) {
+    res.status(200).json({ status: 'error', error: err.message, success: false });
+  }
 }

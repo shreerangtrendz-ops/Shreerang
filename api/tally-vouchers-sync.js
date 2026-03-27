@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-);
+const SUPABASE_URL = 'https://zdekydcscwhuusliwqaz.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzQ0OTg1NSwiZXhwIjoyMDc5MDI1ODU1fQ.fcHpUL4HXJZyW64vtKhZHOPKtYXBIfGeUbBlkkz1oGg';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Helper functions for XML Regex Parsing (Fast, No memory overhead)
 function toISO(d) { return d.toISOString().slice(0,10); }
@@ -306,7 +306,7 @@ export default async function handler(req, res) {
   res.status(200).json({
     status: 'success',
     success: results.errors.length === 0,
-    records_synced: results.vouchers,
+    records_synced: results.sales + results.purchase + results.process + results.others,
     synced: results
   });
 }

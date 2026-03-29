@@ -99,6 +99,8 @@ import SalesOrderForm from '@/pages/admin/sales/SalesOrderForm';
 import PartyLedger from '@/pages/reports/PartyLedger';
 import DayBook from '@/pages/reports/DayBook';
 import AgentCommissionPage from '@/pages/admin/AgentCommissionPage';
+import MillPerformancePage from '@/pages/admin/MillPerformancePage';
+import BrokerAnalyticsPage from '@/pages/admin/BrokerAnalyticsPage';
 import DesignProfitability from '@/pages/reports/DesignProfitability';
 import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
 import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
@@ -262,6 +264,8 @@ const App = () => {
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />
+                    <Route path="mill-performance" element={<MillPerformancePage />} />
+                    <Route path="broker-analytics" element={<BrokerAnalyticsPage />} />
                     <Route path="activity-logs" element={<ActivityLogsPage />} />
                     <Route path="media-library" element={<MediaLibraryPage />} />
                     <Route path="job-workers" element={<JobWorkersPage />} />

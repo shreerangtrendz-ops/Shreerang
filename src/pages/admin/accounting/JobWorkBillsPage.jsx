@@ -20,8 +20,8 @@ export default function JobWorkBillsPage() {
   async function fetchBills() {
     setLoading(true);
     const [manual, synced] = await Promise.all([
-      supabase.from('job_work_bills').select('*').order('bill_date', { ascending:false }),
-      supabase.from('process_issues').select('*').order('issue_date', { ascending:false })
+      supabase.from('job_work_bills').select('*').order('bill_date', { ascending:false }).limit(10000),
+      supabase.from('process_issues').select('*').order('issue_date', { ascending:false }).limit(10000)
     ]);
     const combined = [
       ...(manual.data || []).map(m => ({ ...m, source: 'Manual' })),

@@ -25,7 +25,7 @@ export default function PurchaseBillsPage() {
 
   async function fetchBills() {
     setLoading(true);
-    let q = supabase.from('purchase_bills').select('*').order('bill_date', { ascending: false });
+    let q = supabase.from('purchase_bills').select('*').order('bill_date', { ascending: false }).limit(10000);
     if (dateFrom) q = q.gte('bill_date', dateFrom);
     if (dateTo)   q = q.lte('bill_date', dateTo);
     const { data, error } = await q;

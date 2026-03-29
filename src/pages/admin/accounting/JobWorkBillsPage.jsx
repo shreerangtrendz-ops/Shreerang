@@ -77,7 +77,11 @@ export default function JobWorkBillsPage() {
     b.bill_number?.toLowerCase().includes(search.toLowerCase()) ||
     b.design_number?.toLowerCase().includes(search.toLowerCase())
   );
+<<<<<<< HEAD
   const fmt = n => 'â‚¹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+=======
+  const fmt = n => '\u20B9'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
   const BTN = e => ({ padding:'8px 16px', borderRadius:8, border:'none', fontSize:12, fontWeight:700, cursor:'pointer', ...e });
   const CARD = { background:'#fff', borderRadius:12, padding:'16px 20px', boxShadow:'0 2px 10px rgba(0,0,0,.07)', border:'1px solid rgba(43,168,152,.12)' };
 
@@ -85,8 +89,13 @@ export default function JobWorkBillsPage() {
     <div style={{ fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' }}>
       <div style={{ background:'linear-gradient(135deg,#0B2E2B,#143F3C)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
         <div>
+<<<<<<< HEAD
           <div style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:8 }}><span>ðŸ§¾</span> Job Work Bills</div>
           <p style={{ fontSize:11, color:'#6A9B95', margin:0 }}>Job worker billing Â· Processing charges</p>
+=======
+          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:8 }}><span>\uD83E\uDDFE</span> Job Work Bills</div>
+          <p style={{ fontSize:11, color:'#6A9B95', margin:0 }}>Job worker billing \u00B7 Processing charges</p>
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
         </div>
         <button onClick={()=>setShowForm(true)} style={BTN({ background:'#E8A800', color:'#fff' })}>+ Add Bill</button>
       </div>
@@ -102,7 +111,11 @@ export default function JobWorkBillsPage() {
           ))}
         </div>
 
+<<<<<<< HEAD
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search job worker, bill no, design noâ€¦"
+=======
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search job worker, bill no, design no\u2026"
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
           style={{ padding:'8px 12px', borderRadius:8, border:'1px solid rgba(43,168,152,.3)', fontSize:13, maxWidth:400 }} />
 
         <div style={{ ...CARD, padding:0, overflow:'hidden' }}>
@@ -113,17 +126,28 @@ export default function JobWorkBillsPage() {
               ))}
             </tr></thead>
             <tbody>
+<<<<<<< HEAD
               {loading?<tr><td colSpan={9} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>Loadingâ€¦</td></tr>
+=======
+              {loading?<tr><td colSpan={9} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>Loading\u2026</td></tr>
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
               :filtered.length===0?<tr><td colSpan={9} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>No bills yet. Add one above.</td></tr>
               :filtered.map(b=>(
                 <tr key={b.id} style={{ borderBottom:'1px solid rgba(43,168,152,.08)' }}>
                   <td style={{ padding:'9px 14px', fontWeight:600 }}>{b.bill_number}</td>
                   <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.bill_date}</td>
                   <td style={{ padding:'9px 14px', fontWeight:500 }}>{b.job_worker_name}</td>
+<<<<<<< HEAD
                   <td style={{ padding:'9px 14px', color:'#2468C8', fontWeight:600 }}>{b.design_number||'â€”'}</td>
                   <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.process_type||'â€”'}</td>
                   <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity||'â€”'}</td>
                   <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate?fmt(b.rate):'â€”'}</td>
+=======
+                  <td style={{ padding:'9px 14px', color:'#2468C8', fontWeight:600 }}>{b.design_number||'\u2014'}</td>
+                  <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.process_type||'\u2014'}</td>
+                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity||'\u2014'}</td>
+                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate?fmt(b.rate):'\u2014'}</td>
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
                   <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:'#D4920A' }}>{fmt(b.amount)}</td>
                   <td style={{ padding:'9px 14px' }}>
                     <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
@@ -144,7 +168,11 @@ export default function JobWorkBillsPage() {
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:20 }}>
           <div style={{ background:'#fff', borderRadius:14, padding:24, width:'100%', maxWidth:800, maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between', color:'#0B2E2B' }}>
+<<<<<<< HEAD
               Create Job Work Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>Ã—</button>
+=======
+              Create Job Work Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>\u00D7</button>
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
             </div>
 
             <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
@@ -168,7 +196,11 @@ export default function JobWorkBillsPage() {
                 <button onClick={() => setForm(p => ({...p, line_items:[...p.line_items,{item_name:'',quantity:'',rate:'',charges:''}]}))} style={BTN({ background:'#E2E8F0', color:'#475569', padding:'4px 10px' })}>+ Add Fabric</button>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr 40px', gap:8, marginBottom:6, padding:'0 2px' }}>
+<<<<<<< HEAD
                 {['Fabric / Design Name *','Qty (Mtrs)','Rate (â‚¹/Mtr)','Charges (â‚¹) *',''].map((h,i)=>(
+=======
+                {['Fabric / Design Name *','Qty (Mtrs)','Rate (\u20B9/Mtr)','Charges (\u20B9) *',''].map((h,i)=>(
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
                   <div key={i} style={{ fontSize:10, fontWeight:700, color:'#94A3B8', textTransform:'uppercase' }}>{h}</div>
                 ))}
               </div>
@@ -179,7 +211,11 @@ export default function JobWorkBillsPage() {
                     <input type="number" placeholder="0" value={li.quantity} onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].charges=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
                     <input type="number" placeholder="0.00" value={li.rate} onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].charges=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
                     <input type="number" placeholder="0.00" value={li.charges} onChange={e=>{const nl=[...form.line_items]; nl[idx].charges=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13, background:'#F1F5F9', fontWeight:600 }} />
+<<<<<<< HEAD
                     <button onClick={()=>{const nl=form.line_items.filter((_,i)=>i!==idx); setForm(p=>({...p,line_items:nl}))}} style={{ background:'none', border:'none', color:'#EF4444', cursor:'pointer', fontSize:18 }}>Ã—</button>
+=======
+                    <button onClick={()=>{const nl=form.line_items.filter((_,i)=>i!==idx); setForm(p=>({...p,line_items:nl}))}} style={{ background:'none', border:'none', color:'#EF4444', cursor:'pointer', fontSize:18 }}>\u00D7</button>
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
                   </div>
                 ))}
               </div>
@@ -189,7 +225,11 @@ export default function JobWorkBillsPage() {
               <div style={{ background:'#F0FDF4', padding:16, borderRadius:8, border:'1px solid #BBF7D0' }}>
                 <div style={{ fontSize:12, fontWeight:700, color:'#166534', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>3. Taxes & Billing Total</div>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+<<<<<<< HEAD
                   {[['igst_amount','IGST'],['cgst_amount','CGST'],['sgst_amount','SGST'],['round_off','Round Off'],['amount','Grand Total (â‚¹) *']].map(([k,l])=>(
+=======
+                  {[['igst_amount','IGST'],['cgst_amount','CGST'],['sgst_amount','SGST'],['round_off','Round Off'],['amount','Grand Total (\u20B9) *']].map(([k,l])=>(
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
                     <div key={k}>
                       <label style={{ fontSize:11, fontWeight:600, color:'#166534', display:'block', marginBottom:4 }}>{l}</label>
                       <input type="number" value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid #86EFAC', fontSize:13, boxSizing:'border-box', background:k==='amount'?'#DCFCE7':'#fff', fontWeight:k==='amount'?700:400 }} />
@@ -205,7 +245,11 @@ export default function JobWorkBillsPage() {
 
             <div style={{ display:'flex', gap:10, marginTop:20 }}>
               <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'12px', fontSize:14 })}>
+<<<<<<< HEAD
                 {saving?'Posting Billâ€¦':'Save Job Work Bill (Prepared for Tally Sync)'}
+=======
+                {saving?'Posting Bill\u2026':'Save Job Work Bill (Prepared for Tally Sync)'}
+>>>>>>> 261966f0bae1b36f05912d180f7e44890042182a
               </button>
               <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74', padding:'12px 24px' })}>Close</button>
             </div>

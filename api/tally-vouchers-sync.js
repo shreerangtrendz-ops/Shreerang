@@ -147,7 +147,7 @@ function buildSalesRow(v) {
   return {
     bill_number:         v.vnum,
     bill_date:           v.date,
-    party_name:          v.party,
+    customer_name:       v.party,
     customer_gstin:      v.partyGstin || null,
     total_amount:        v.totalAmount  || null,
     taxable_value:       taxableValue   || null,
@@ -184,7 +184,7 @@ function buildPurchaseRow(v) {
   return {
     bill_number:          v.vnum,
     bill_date:            v.date,
-    party_name:           v.party,
+    supplier_name:        v.party,
     supplier_gstin:       v.partyGstin  || null,
     supplier_invoice_no:  v.reference   || null,
     total_amount:         v.totalAmount || null,

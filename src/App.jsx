@@ -102,6 +102,9 @@ import AgentCommissionPage from '@/pages/admin/AgentCommissionPage';
 import MillPerformancePage from '@/pages/admin/MillPerformancePage';
 import BrokerAnalyticsPage from '@/pages/admin/BrokerAnalyticsPage';
 import DesignProfitability from '@/pages/reports/DesignProfitability';
+import DesignLifecyclePage from '@/pages/admin/DesignLifecyclePage';
+import BrokerOutstandingPage from '@/pages/admin/BrokerOutstandingPage';
+import EnhancedSalesBillsPage from '@/pages/admin/EnhancedSalesBillsPage';
 import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
 import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
 import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
@@ -255,6 +258,9 @@ const App = () => {
               <Route path="agent-commission" element={<AgentCommissionPage />} />
                     <Route path="reports/day-book" element={<DayBook />} />
                     <Route path="reports/design-profitability" element={<DesignProfitability />} />
+                    <Route path="design-lifecycle" element={<DesignLifecyclePage />} />
+                    <Route path="broker-outstanding" element={<BrokerOutstandingPage />} />
+                    <Route path="sales-bills-detail" element={<EnhancedSalesBillsPage />} />
 
                     {/* Accounting Pages */}
                     <Route path="accounting/purchase-bills" element={<PurchaseBillsPage />} />

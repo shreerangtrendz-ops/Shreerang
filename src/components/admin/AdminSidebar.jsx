@@ -28,6 +28,7 @@ const ALL_GROUPS = [
       { icon: '🎯', label: 'Make-to-Order',      to: '/admin/mto-orders',          roles: ['admin','manager','operations'], badge: 'NEW' },
       { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
       { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable',roles: ['admin','manager','accounts'] },
+      { icon: '🤝', label: 'Broker Outstanding', to: '/admin/broker-outstanding',  roles: ['admin','manager','accounts'], badge: 'NEW' },
     ]
   },
   {
@@ -49,6 +50,8 @@ const ALL_GROUPS = [
     items: [
       { icon: '🏭', label: 'Production Floor',   to: '/admin/production-floor',     roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '📋', label: 'Job Work Lots',      to: '/admin/job-work-jobs',        roles: ['admin','manager','operations'], badge: 'NEW' },
+      { icon: '🧾', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills', roles: ['admin','manager','operations','accounts'] },
+      { icon: '🔗', label: 'Design Lifecycle',   to: '/admin/design-lifecycle',     roles: ['admin','manager','operations','accounts'], badge: 'NEW' },
       { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',          roles: ['admin','manager','operations'] },
       { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',             roles: ['admin','manager','operations'] },
       { icon: '💰', label: 'MTO Cost Templates', to: '/admin/mto-cost-template',    roles: ['admin','manager','operations'], badge: 'NEW' },
@@ -62,12 +65,13 @@ const ALL_GROUPS = [
       { icon: '🔄', label: 'Tally Sync Hub',     to: '/admin/tally-sync',           roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '📥', label: 'Purchase Bills',     to: '/admin/accounting/purchase-bills',roles: ['admin','manager','accounts'] },
       { icon: '📤', label: 'Sales Bills',        to: '/admin/accounting/sales-bills',roles: ['admin','manager','accounts'] },
-      { icon: '🔧', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills',roles: ['admin','manager','accounts'] },
+      { icon: '🧾', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills',roles: ['admin','manager','accounts'] },
       { icon: '📅', label: 'Day Book',           to: '/admin/reports/day-book',     roles: ['admin','manager','accounts'] },
       { icon: '📒', label: 'Party Ledger',       to: '/admin/reports/party-ledger', roles: ['admin','manager','accounts'] },
       { icon: '🏦', label: 'Cash & Bank',        to: '/admin/cash-bank',            roles: ['admin','manager','accounts'] },
       { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable',  roles: ['admin','manager','accounts'] },
-      { icon: '💼', label: 'P&L / Balance Sheet',to: '/admin/reports/profit-loss',  roles: ['admin','manager'] },
+      { icon: '🏭', label: 'Mill Performance',   to: '/admin/mill-performance',     roles: ['admin','manager','accounts'] },
+      { icon: '💼', label: 'Broker Analytics',   to: '/admin/broker-analytics',     roles: ['admin','manager','accounts'] },
     ]
   },
   {

@@ -5,7 +5,6 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1N
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Helper functions for XML Regex Parsing (Fast, No memory overhead)
 function toISO(d) { return d.toISOString().slice(0,10); }
 function parseTallyDate(s) {
   if (!s) return null;
@@ -69,7 +68,6 @@ function getBatchAllocations(invXml) {
   const entries = []; let m;
   while ((m = re.exec(invXml)) !== null) entries.push(m[1]); return entries;
 }
-
 function parseAllVouchers(xml) {
   const re = /<VOUCHER\b[^>]*>[\s\S]*?<\/VOUCHER>/gi;
   const blocks = []; let m;
@@ -84,7 +82,6 @@ function isTrulyBadResponse(body) {
 function parseVoucher(vxml) {
   const attrM = vxml.match(/\bVCHTYPE="([^"]+)"/i);
   const vtype = (attrM ? attrM[1] : getXmlVal(vxml, 'VOUCHERTYPENAME')).trim();
-
   const vnum        = getXmlVal(vxml, 'VOUCHERNUMBER');
   const date        = parseTallyDate(getXmlVal(vxml,'EFFECTIVEDATE') || getXmlVal(vxml,'DATE'));
   const party       = getXmlVal(vxml, 'PARTYLEDGERNAME') || getXmlVal(vxml, 'BASICBUYERNAME');
@@ -100,9 +97,11 @@ function parseVoucher(vxml) {
   const ledgers = getLedgerEntries(vxml);
   let totalAmount=0, igstAmount=0, cgstAmount=0, sgstAmount=0;
   let brokerName='', commRate=0, commAmount=0;
+  let bankLedger='', billRef='', billAmount=0;
 
   for (const le of ledgers) {
-    const lname = getXmlVal(le, 'LEDGERNAME').toUpperCase();
+    const lname = getXmlVal(le, 'LEDGERNAME');
+    const lnameUpper = lname.toUpperCase();
     const lamt  = parseNum(getXmlVal(le, 'AMOUNT'));
     const isParty = getXmlVal(le, 'ISPARTYLEDGER').toUpperCase() === 'YES';
     if (isParty) {
@@ -113,10 +112,17 @@ function parseVoucher(vxml) {
         brokerName   = getUdfVal(b, 'ERPBROKERNAME') || getXmlVal(b, 'UDF:ERPBROKERNAME');
         commRate     = parseNum(getUdfVal(b, 'ERPCOMMRATE') || getXmlVal(b, 'UDF:ERPCOMMRATE'));
         commAmount   = parseNum(getUdfVal(b, 'ERPCOMMAMOUNT') || getXmlVal(b, 'UDF:ERPCOMMAMOUNT'));
+        billRef      = getXmlVal(b, 'NAME');
+        billAmount   = Math.abs(parseNum(getXmlVal(b, 'BILLCREDITAMOUNT') || getXmlVal(b, 'AMOUNT')));
       }
-    } else if (lname.includes('IGST')) igstAmount = Math.abs(lamt);
-      else if (lname.includes('CGST')) cgstAmount = Math.abs(lamt);
-      else if (lname.includes('SGST')) sgstAmount = Math.abs(lamt);
+    } else if (lnameUpper.includes('IGST')) igstAmount = Math.abs(lamt);
+      else if (lnameUpper.includes('CGST')) cgstAmount = Math.abs(lamt);
+      else if (lnameUpper.includes('SGST')) sgstAmount = Math.abs(lamt);
+      else if (lnameUpper.includes('BANK') || lnameUpper.includes('HDFC') || 
+               lnameUpper.includes('ICICI') || lnameUpper.includes('AXIS') ||
+               lnameUpper.includes('CASH') || lnameUpper.includes('CHEQUE')) {
+        bankLedger = lname;
+      }
   }
 
   if (!brokerName) {
@@ -124,10 +130,11 @@ function parseVoucher(vxml) {
     commRate   = commRate || parseNum(getUdfVal(vxml, 'ERPCOMMRATE'));
   }
 
-  return { vtype, vnum, date, party, partyGstin, stateName, placeOfSupply, reference, enteredBy, destGodown, srcGodown, narration, totalAmount, igstAmount, cgstAmount, sgstAmount, brokerName, commRate, commAmount, _vxml: vxml };
+  return { vtype, vnum, date, party, partyGstin, stateName, placeOfSupply, reference, enteredBy,
+           destGodown, srcGodown, narration, totalAmount, igstAmount, cgstAmount, sgstAmount,
+           brokerName, commRate, commAmount, bankLedger, billRef, billAmount, _vxml: vxml };
 }
 
-// Map Functions
 function buildSalesRow(v) {
   const invEntries = getInventoryEntries(v._vxml);
   let itemName='', ratePer=0, qty=0, taxableValue=0, hsnCode='', designNo='', godown='';
@@ -235,36 +242,51 @@ function buildProcessRow(v) {
   };
 }
 
+// NEW: Build receipt/payment row for outstanding tracking
+function buildReceiptPaymentRow(v) {
+  return {
+    voucher_number:      v.vnum,
+    voucher_date:        v.date,
+    voucher_type:        v.vtype,
+    party_name:          v.party         || null,
+    amount:              v.totalAmount   || null,
+    bank_ledger:         v.bankLedger    || null,
+    narration:           v.narration     || null,
+    bill_ref:            v.billRef       || null,
+    bill_amount:         v.billAmount    || null,
+    broker_name:         v.brokerName    || null,
+    entered_by:          v.enteredBy     || null,
+    tally_sync_status:   'synced',
+    tally_synced_at:     new Date().toISOString()
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  // Get raw body
   const body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
-  
-  if (isTrulyBadResponse(body)) {
-    return res.status(400).json({ error: 'Empty or cached KASHVI response' });
-  }
+  if (isTrulyBadResponse(body)) return res.status(400).json({ error: 'Empty or cached Tally response' });
 
   const vBlocks = parseAllVouchers(body);
   const parsedVouchers = vBlocks.map(parseVoucher);
-  
+
   const salesV    = parsedVouchers.filter(v => v.vtype === 'Sales' && v.date && v.vnum);
   const purchaseV = parsedVouchers.filter(v => v.vtype === 'Purchase' && v.date && v.vnum);
   const jobworkTypes = ['Issue to Mill', 'REC FROM MILL', 'Material Out', 'Material In', 'Job Work Out Order', 'Job Work In Order', 'Job Work In', 'Job Work Out'];
   const processV  = parsedVouchers.filter(v => jobworkTypes.includes(v.vtype) && v.date);
-  const otherV    = parsedVouchers.filter(v => !['Sales','Purchase', ...jobworkTypes].includes(v.vtype) && v.date && v.vnum);
+  // Receipt, Payment, Journal, Credit Note, Contra → receipt_payments table
+  const receiptPaymentTypes = ['Receipt', 'Payment', 'Credit Note', 'Debit Note', 'Journal', 'Contra'];
+  const receiptPaymentV = parsedVouchers.filter(v => receiptPaymentTypes.includes(v.vtype) && v.date && v.vnum);
+  // Remaining unknowns → tally_vouchers
+  const knownTypes = new Set(['Sales', 'Purchase', ...jobworkTypes, ...receiptPaymentTypes]);
+  const otherV    = parsedVouchers.filter(v => !knownTypes.has(v.vtype) && v.date && v.vnum);
 
-  const results = { sales: 0, purchase: 0, process: 0, others: 0, errors: [] };
+  const results = { sales: 0, purchase: 0, process: 0, receipt_payments: 0, others: 0, errors: [] };
 
   if (salesV.length > 0) {
     const rows = salesV.map(buildSalesRow);
@@ -285,6 +307,14 @@ export default async function handler(req, res) {
     const { error } = await supabase.from('process_issues').upsert(rows, { onConflict: 'voucher_number' });
     if (error) results.errors.push(`Process error: ${error.message}`);
     else results.process = rows.length;
+  }
+
+  // NEW: Receipt/Payment sync for real outstanding tracking
+  if (receiptPaymentV.length > 0) {
+    const rows = receiptPaymentV.map(buildReceiptPaymentRow);
+    const { error } = await supabase.from('receipt_payments').upsert(rows, { onConflict: 'voucher_number' });
+    if (error) results.errors.push(`Receipt/Payment error: ${error.message}`);
+    else results.receipt_payments = rows.length;
   }
 
   if (otherV.length > 0) {
@@ -309,7 +339,7 @@ export default async function handler(req, res) {
   res.status(200).json({
     status: 'success',
     success: results.errors.length === 0,
-    records_synced: results.sales + results.purchase + results.process + results.others,
+    records_synced: results.sales + results.purchase + results.process + results.receipt_payments + results.others,
     synced: results
   });
 }

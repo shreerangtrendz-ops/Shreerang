@@ -119,6 +119,8 @@ import MTOCostTemplatePage from '@/pages/admin/MTOCostTemplatePage';
 import StockManager from '@/pages/admin/inventory/StockManager';
 import LiveStockPage from '@/pages/admin/LiveStockPage';
 import JobWorkJobsPage from '@/pages/admin/JobWorkJobsPage';
+import SalespersonDashboard from '@/pages/admin/sales/SalespersonDashboard';
+import AssignContactsPage from '@/pages/admin/sales/AssignContactsPage';
 
 const App = () => {
   useEffect(() => {
@@ -252,6 +254,8 @@ const App = () => {
                     <Route path="orders" element={<SalesOrderList />} />
                     <Route path="orders/new" element={<SalesOrderForm />} />
                     <Route path="orders/:id/edit" element={<SalesOrderForm />} />
+                    <Route path="salesperson-dashboard" element={<SalespersonDashboard />} />
+                    <Route path="assign-contacts" element={<AssignContactsPage />} />
 
                     {/* Reports */}
                     <Route path="reports/party-ledger" element={<PartyLedger />} />

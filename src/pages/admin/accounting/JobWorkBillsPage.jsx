@@ -123,10 +123,10 @@ export default function JobWorkBillsPage() {
         job_amount: s.job_amount,
         status: 'synced',
         // Full Tally chain fields
-        gp_bill_no: s.gp_bill_no,
+        gp_bill_no: s.supplier_bill_no || s.purchase_voucher_no || s.gp_bill_no,
         lot_no: s.lot_no,
-        party_ch_no: s.party_ch_no,
-        issue_challan_no: s.issue_challan_no,
+        party_ch_no: (s.party_ch_no || '').replace(/<[^>]*>/g, '').trim(),
+        issue_challan_no: s.challan_no || s.issue_challan_no,
         grey_fabric_name: s.grey_fabric_name,
         finished_fabric_name: s.finished_fabric_name,
         metres_issued: s.metres_issued,

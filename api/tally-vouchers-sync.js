@@ -16,9 +16,10 @@ function parseTallyDate(s) {
   if (m) return `${m[3]}-${M[m[2]]||'01'}-${m[1].padStart(2,'0')}`;
   return null;
 }
+function stripTags(str) { return str ? str.replace(/<[^>]*>/g, '').trim() : ''; }
 function getXmlVal(xml, tag) {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-  return m ? m[1].trim() : '';
+  return m ? stripTags(m[1]) : '';
 }
 function parseQty(s) { return s ? parseFloat(s.replace(/mtrs?/gi,'').replace(/nos?/gi,'').trim()) || 0 : 0; }
 function parseRate(s) { return s ? parseFloat(s.replace(/\/mtrs?/gi,'').replace(/\/nos?/gi,'').trim()) || 0 : 0; }
@@ -28,10 +29,10 @@ function cleanDesignNo(s) { return s ? s.trim() : ''; }
 function getUdfVal(xml, udfName) {
   const re = new RegExp(`<UDF:${udfName}(?:\\.LIST)?[^>]*>[\\s\\S]*?<ALTEREDVALUE>([^<]+)<\\/ALTEREDVALUE>`, 'i');
   const m = xml.match(re);
-  if (m) return m[1].trim();
+  if (m) return stripTags(m[1]);
   const re2 = new RegExp(`<UDF:${udfName}[^>]*>([^<]+)<\\/UDF:${udfName}>`, 'i');
   const m2 = xml.match(re2);
-  return m2 ? m2[1].trim() : '';
+  return m2 ? stripTags(m2[1]) : '';
 }
 
 function getLedgerEntries(vxml) {
@@ -284,6 +285,8 @@ function buildProcessRow(v) {
   // Extract challan no and lot no from narration or UDFs
   challanNo = getUdfVal(v._vxml, 'ERPCHALLANNO') || getXmlVal(v._vxml, 'CHALNNO') || '';
   lotNo     = getUdfVal(v._vxml, 'ERPLOTNO') || '';
+  const partyChNo = getXmlVal(v._vxml, 'PARTYCHALLANNO') || getXmlVal(v._vxml, 'REFERENCE') || '';
+  const supplierBillNo = getUdfVal(v._vxml, 'ERPSUPPLIERBILLNO') || getXmlVal(v._vxml, 'SUPPLIERBILLNO') || '';
 
   return {
     voucher_number:        v.vnum,
@@ -303,6 +306,9 @@ function buildProcessRow(v) {
     batch_name:            batchName          || null,
     challan_no:            challanNo          || null,
     lot_no:                lotNo              || null,
+    party_ch_no:           partyChNo          || null,
+    supplier_bill_no:      supplierBillNo     || null,
+    purchase_voucher_no:   supplierBillNo     || null,
     narration:             v.narration        || null,
     entered_by:            v.enteredBy        || null,
     line_items:            lineItems.length > 0 ? lineItems : null,

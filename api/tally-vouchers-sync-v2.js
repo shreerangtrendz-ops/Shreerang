@@ -402,62 +402,73 @@ function buildProcessRow(v) {
   };
 }
 
-// ── Receipt/Payment row builder (v23 — FIXED amount extraction) ──────────────
-// ROOT CAUSE of amount=null: Tally TDL Receipt/Payment vouchers do NOT set ISPARTYLEDGER=YES
-// on the customer/supplier ledger. So v.totalAmount is always 0.
-// FIX: extract amount from the bank/cash ledger (which IS reliably present and has the correct amount)
-// Fallback: use the largest absolute ledger amount if no bank ledger found.
-function buildReceiptPaymentRow(v) {
+// ── Financial Vouchers (Receipts, Payments, Contras, Notes) ──────────────
+function buildFinancialVoucherRow(v) {
   const ledgers = getLedgerEntries(v._vxml);
   const BANK_KEYWORDS = ['BANK','HDFC','ICICI','AXIS','SBI','KOTAK','CASH','CHEQUE',
                          'CANARA','YES BANK','BOB','UNION','PNB','IDBI','INDUS'];
-  let bankLedger = '', bankAmt = 0, billRef = '', billAmount = 0;
+  let bankLedger = '', bankAmt = 0;
   let maxLedgerAmt = 0;
+  let partyName = v.party || null;
+  let lineItems = [];
+  let bankDetails = null;
 
   for (const le of ledgers) {
     const lname = getXmlVal(le, 'LEDGERNAME');
     const lnameU = lname.toUpperCase();
     const lamt = parseNum(getXmlVal(le, 'AMOUNT'));
+    const isDebit = lamt < 0; // In Tally XML, negative amount usually means Debit
     const absAmt = Math.abs(lamt);
     const isParty = getXmlVal(le, 'ISPARTYLEDGER').toUpperCase() === 'YES';
 
-    // Track max ledger amount as ultimate fallback
+    // Bank details extraction
+    const bAllocs = getArray(le, 'BANKALLOCATIONS.LIST');
+    if (bAllocs.length > 0) {
+      bankDetails = {
+        instrument_no: getXmlVal(bAllocs[0], 'INSTRUMENTNUMBER'),
+        instrument_date: getXmlVal(bAllocs[0], 'INSTRUMENTDATE'),
+        bank_name: getXmlVal(bAllocs[0], 'BANKNAME')
+      };
+    }
+
+    // Bill allocations extraction
+    const bills = getBillAllocations(le).map(b => ({
+      name: getXmlVal(b, 'NAME'),
+      amount: Math.abs(parseNum(getXmlVal(b, 'AMOUNT')))
+    }));
+
+    lineItems.push({
+      ledger_name: lname,
+      amount: absAmt,
+      is_debit: isDebit,
+      is_party: isParty,
+      bills: bills.length > 0 ? bills : undefined
+    });
+
     if (absAmt > maxLedgerAmt) maxLedgerAmt = absAmt;
 
-    // Detect bank/cash ledger — this carries the transaction amount
     if (BANK_KEYWORDS.some(k => lnameU.includes(k))) {
       if (!bankLedger || absAmt > bankAmt) {
         bankLedger = lname;
         bankAmt = absAmt;
       }
     }
-
-    // Bill reference — from party ledger bill allocations
-    // Check both isParty=YES AND any ledger with bill allocations (TDL may not set isParty)
-    const bills = getBillAllocations(le);
-    if (bills.length > 0 && !billRef) {
-      billRef = getXmlVal(bills[0], 'NAME');
-      billAmount = Math.abs(parseNum(getXmlVal(bills[0], 'AMOUNT')));
-    }
+    
+    if (isParty && !partyName) partyName = lname;
   }
 
-  // Amount priority: 1) v.totalAmount (set when isParty=YES, rare for receipts)
-  //                 2) bank ledger amount (most reliable for receipts/payments)
-  //                 3) largest ledger amount (last resort)
-  const finalAmount = v.totalAmount || bankAmt || maxLedgerAmt || null;
+  const finalAmount = v.totalAmount || bankAmt || maxLedgerAmt || 0;
 
   return {
     voucher_number:    v.vnum,
-    voucher_date:      v.date,
     voucher_type:      v.vtype,
-    party_name:        v.party          || null,
-    amount:            finalAmount,
-    bank_ledger:       bankLedger       || null,
-    narration:         v.narration      || null,
-    bill_ref:          billRef          || null,
-    bill_amount:       billAmount       || null,
-    broker_name:       v.brokerName     || null,
-    entered_by:        v.enteredBy      || null,
+    bill_date:         v.date,
+    party_name:        partyName,
+    total_amount:      finalAmount,
+    narration:         v.narration || null,
+    bank_details:      bankDetails,
+    line_items:        lineItems,
+    entered_by:        v.enteredBy || null,
     tally_sync_status: 'synced',
     tally_synced_at:   new Date().toISOString()
   };
@@ -512,11 +523,11 @@ export default async function handler(req, res) {
     else results.process = rows.length;
   }
 
-  // NEW: Receipt/Payment sync for real outstanding tracking
+  // NEW: Financial Vouchers (Receipts, Payments, Contras, Journals, Notes)
   if (receiptPaymentV.length > 0) {
-    const rows = receiptPaymentV.map(buildReceiptPaymentRow);
-    const { error } = await supabase.from('receipt_payments').upsert(rows, { onConflict: 'voucher_number' });
-    if (error) results.errors.push(`Receipt/Payment error: ${error.message}`);
+    const rows = receiptPaymentV.map(buildFinancialVoucherRow);
+    const { error } = await supabase.from('financial_vouchers').upsert(rows, { onConflict: 'voucher_number,voucher_type' });
+    if (error) results.errors.push(`Financial Vouchers error: ${error.message}`);
     else results.receipt_payments = rows.length;
   }
 

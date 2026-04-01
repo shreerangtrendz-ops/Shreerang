@@ -50,6 +50,29 @@ function getInventoryEntriesOut(vxml) {
 }
 function getBillAllocations(xml) { return getBlocks(xml, 'BILLALLOCATIONS\\.LIST'); }
 function getBatchAllocations(xml) { return getBlocks(xml, 'BATCHALLOCATIONS\\.LIST'); }
+function getFoldingAllocations(xml) {
+  const lists = getBlocks(xml, 'UDF:FOLDINGALLOCATIONS\\.LIST');
+  return lists.map(b => ({
+    fold_taka_sr_no: getUdfVal(b, 'FOLDTAKASRNO') || getXmlVal(b, 'FOLDTAKASRNO'),
+    fold_a_mtr: parseQty(getUdfVal(b, 'FOLDAMTR') || getXmlVal(b, 'FOLDAMTR')),
+    fold_b_mtr: parseQty(getUdfVal(b, 'FOLDBMTR') || getXmlVal(b, 'FOLDBMTR')),
+    fold_less: parseNum(getUdfVal(b, 'FOLDLESS') || getXmlVal(b, 'FOLDLESS')),
+    batch_itm_taka: parseNum(getUdfVal(b, 'BATCHITMTAKA') || getXmlVal(b, 'BATCHITMTAKA'))
+  }));
+}
+function getSalesPrintLines(xml) {
+  const blocks = getBlocks(xml, 'FERPJWINVINVDETAILS\\.LIST');
+  return blocks.map(b => ({
+    sr_no: getXmlVal(b, 'JWINVSRNO'),
+    quality: getXmlVal(b, 'JWINVQUALITY'),
+    hsn_code: getXmlVal(b, 'JWINVHSNCODE'),
+    pcs: parseNum(getXmlVal(b, 'JWINVPCS')),
+    mtr_qty: parseQty(getXmlVal(b, 'JWINVMTRQTY')),
+    rate: parseRate(getXmlVal(b, 'JWINVRATE')),
+    disc: parseNum(getXmlVal(b, 'JWINVDISC')),
+    amt: parseNum(getXmlVal(b, 'JWINVAMT'))
+  }));
+}
 
 function parseAllVouchers(xml) {
   const re = /<VOUCHER\b[^>]*>[\s\S]*?<\/VOUCHER>/gi;
@@ -65,14 +88,26 @@ function parseAllVouchers(xml) {
 // ── Parse a single inventory entry into a line item object ───────────────────
 function parseInvEntry(inv) {
   const batches = getBatchAllocations(inv);
-  const batchItems = batches.map(b => ({
-    batch_name: getXmlVal(b, 'BATCHNAME'),
-    godown: getXmlVal(b, 'GODOWNNAME'),
-    dest_godown: getXmlVal(b, 'DESTINATIONGODOWNNAME'),
-    qty: parseQty(getXmlVal(b, 'ACTUALQTY') || getXmlVal(b, 'BILLEDQTY')),
-    rate: parseRate(getXmlVal(b, 'RATE')),
-    amount: parseNum(getXmlVal(b, 'AMOUNT'))
-  }));
+  const foldingAllocations = getFoldingAllocations(inv);
+  
+  const batchItems = batches.map(b => {
+    const batchFoldings = getFoldingAllocations(b);
+    return {
+      batch_name: getXmlVal(b, 'BATCHNAME'),
+      godown: getXmlVal(b, 'GODOWNNAME'),
+      dest_godown: getXmlVal(b, 'DESTINATIONGODOWNNAME'),
+      qty: parseQty(getXmlVal(b, 'ACTUALQTY') || getXmlVal(b, 'BILLEDQTY')),
+      rate: parseRate(getXmlVal(b, 'RATE')),
+      amount: parseNum(getXmlVal(b, 'AMOUNT')),
+      folding_allocations: batchFoldings.length > 0 ? batchFoldings : undefined,
+      track_ref_no: getUdfVal(b, 'TRACKREFNO'),
+      track_ref_party: getUdfVal(b, 'TRACKREFPARTY')
+    };
+  });
+
+  const allFoldings = foldingAllocations.length > 0 ? foldingAllocations : 
+                      batchItems.flatMap(b => b.folding_allocations || []);
+
   return {
     stock_item: getXmlVal(inv, 'STOCKITEMNAME'),
     qty: parseQty(getXmlVal(inv, 'ACTUALQTY') || getXmlVal(inv, 'BILLEDQTY')),
@@ -82,7 +117,10 @@ function parseInvEntry(inv) {
     hsn: getXmlVal(inv, 'GSTHSNNAME') || getXmlVal(inv, 'HSNCODE'),
     godown: getXmlVal(inv, 'GODOWNNAME'),
     discount: parseNum(getXmlVal(inv, 'DISCOUNT')),
-    batches: batchItems
+    process_lot_no: getUdfVal(inv, 'PROCESSLOTNO'),
+    process_mill_name: getUdfVal(inv, 'PROCESSMILLNAME'),
+    batches: batchItems,
+    folding_allocations: allFoldings.length > 0 ? allFoldings : undefined
   };
 }
 
@@ -111,7 +149,8 @@ function countTakaPcs(invEntries) {
   let total = 0;
   for (const inv of invEntries) {
     const batches = getBatchAllocations(inv);
-    total += batches.length;
+    // If no batches, treat the inventory entry as single pcs if it has qty
+    total += batches.length > 0 ? batches.length : 1;
   }
   return total || null;
 }
@@ -140,6 +179,7 @@ function parseVoucher(vxml) {
   const voucherClass = getXmlVal(vxml, 'VOUCHERCLASSNAME');
   const ewayBillBlock = vxml.match(/<EWAYBILLDETAILS\.LIST[^>]*>([\s\S]*?)<\/EWAYBILLDETAILS\.LIST>/i);
   const ewayBillNo = ewayBillBlock ? getXmlVal(ewayBillBlock[1], 'BILLNUMBER') : '';
+  const totalTaka = parseNum(getUdfVal(vxml, 'VCHTAKA'));
 
   const ledgers = getLedgerEntries(vxml);
   let totalAmount=0, igstAmount=0, cgstAmount=0, sgstAmount=0, roundOff=0;
@@ -175,7 +215,7 @@ function parseVoucher(vxml) {
     else if (lnameUpper.includes('GREY') || lnameUpper.includes('PURCHASE')) { purchaseLedger = lname; }
   }
   if (!brokerName) {
-    brokerName = getUdfVal(vxml,'ERPBROKERNAME');
+    brokerName = getUdfVal(vxml,'ERPBROKERNAME') || getUdfVal(vxml,'EIVCHBROKER');
     commRate = commRate || parseNum(getUdfVal(vxml,'ERPCOMMRATE'));
     commAmount = commAmount || parseNum(getUdfVal(vxml,'ERPCOMMAMOUNT'));
     commAssValue = commAssValue || parseNum(getUdfVal(vxml,'ERPCOMMASSVALUE'));
@@ -185,7 +225,7 @@ function parseVoucher(vxml) {
   return {
     vtype, vnum, date, effectiveDate, party, partyGstin, stateName, placeOfSupply,
     reference, enteredBy, irn, irnAckNo, transporter, lrNumber,
-    destCity, destGodown, srcGodown, ewayBillNo, narration, voucherClass,
+    destCity, destGodown, srcGodown, ewayBillNo, narration, voucherClass, totalTaka,
     totalAmount, igstAmount, cgstAmount, sgstAmount, roundOff,
     brokerName, commRate, commAmount, commAssValue, commNetRate,
     creditDays, billRefNo, salesLedger, purchaseLedger, ledgerItems,
@@ -200,6 +240,8 @@ function buildSalesRow(v) {
   const allItems = invEntries.map(parseInvEntry);
   const first = allItems[0] || {};
   const best = findBestBatch(invEntries);
+  const printLines = getSalesPrintLines(v._vxml);
+  
   return {
     bill_number: v.vnum, bill_date: v.date,
     customer_name: v.party,
@@ -223,8 +265,8 @@ function buildSalesRow(v) {
     round_off: v.roundOff||null,
     effective_date: v.effectiveDate||null,
     voucher_class: v.voucherClass||null,
-    total_taka_pcs: countTakaPcs(invEntries),
-    line_items: null,
+    total_taka_pcs: v.totalTaka || countTakaPcs(invEntries),
+    line_items: { inventory: allItems, print_lines: printLines.length > 0 ? printLines : undefined },
     tally_sync_status: 'synced', tally_synced_at: new Date().toISOString()
   };
 }
@@ -256,7 +298,7 @@ function buildPurchaseRow(v) {
     round_off: v.roundOff||null,
     billed_qty: first.billed_qty||null,
     transporter_name: v.transporter||null,
-    total_taka_pcs: countTakaPcs(invEntries),
+    total_taka_pcs: v.totalTaka || countTakaPcs(invEntries),
     line_items: { inventory: allItems, ledgers: v.ledgerItems },
     tally_sync_status: 'synced', tally_synced_at: new Date().toISOString()
   };
@@ -351,7 +393,7 @@ function buildProcessRow(v) {
     production_amount: isReceipt ? Math.abs(first.amount||0) : null,
     our_godown: v.destGodown||'Main Location',
     job_godown: best.millGodown||null,
-    total_taka_pcs: countTakaPcs(rawEntries),
+    total_taka_pcs: v.totalTaka || countTakaPcs(rawEntries),
     supplier_bill_no: null,
     purchase_voucher_no: !isReceipt ? lotNo : null,
     mill_process_bill_no: isReceipt ? (v.reference || null) : null,

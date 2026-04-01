@@ -320,7 +320,9 @@ function buildProcessRow(v) {
   }
 
   return {
-    challan_no: v.vnum, issue_date: v.date,
+    voucher_number: v.vnum,
+    challan_no: isReceipt ? lotNo : v.vnum, 
+    issue_date: v.date,
     worker_name: workerName,
     party_name: v.party||null,
     process_type: isReceipt ? 'received' : 'issued',
@@ -350,9 +352,9 @@ function buildProcessRow(v) {
     our_godown: v.destGodown||'Main Location',
     job_godown: best.millGodown||null,
     total_taka_pcs: countTakaPcs(rawEntries),
-    supplier_bill_no: v.reference || null,
-    purchase_voucher_no: null,
-    mill_process_bill_no: null,
+    supplier_bill_no: null,
+    purchase_voucher_no: !isReceipt ? lotNo : null,
+    mill_process_bill_no: isReceipt ? (v.reference || null) : null,
     line_items: { inventory: allItems, consumption: isReceipt ? consumptionItems : undefined },
     tally_synced_at: new Date().toISOString()
   };

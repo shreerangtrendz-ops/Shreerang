@@ -394,8 +394,8 @@ export default function JobWorkBillsPage() {
                                 <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
                                   <span style={{color:T.muted}}>{icon||''} {l}</span>
                                   <span style={{fontWeight:600,color:link?T.blue:T.text,cursor:link?'pointer':'default',textDecoration:link?'underline':'none'}}
-                                    onClick={link?()=>navigate(link):undefined}>
-                                    {v||'—'}
+                                    onClick={link?()=>navigate(link):undefined} title={typeof v === 'string' ? v : ''}>
+                                    {v && typeof v === 'string' && v.length > 80 ? v.substring(0, 80) + '...' : (v||'—')}
                                   </span>
                                 </div>
                               ))}
@@ -444,7 +444,9 @@ export default function JobWorkBillsPage() {
                               ].map(({l,v}) => (
                                 <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
                                   <span style={{color:T.muted}}>{l}</span>
-                                  <span style={{fontWeight:600,color:T.text,maxWidth:200,textAlign:'right',wordBreak:'break-word'}}>{v||'—'}</span>
+                                  <span style={{fontWeight:600,color:T.text,maxWidth:200,textAlign:'right',wordBreak:'break-word'}} title={typeof v === 'string' ? v : ''}>
+                                    {v && typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : (v||'—')}
+                                  </span>
                                 </div>
                               ))}
 

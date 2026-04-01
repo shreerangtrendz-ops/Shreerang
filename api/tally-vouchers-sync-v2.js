@@ -462,15 +462,13 @@ function buildFinancialVoucherRow(v) {
   return {
     voucher_number:    v.vnum,
     voucher_type:      v.vtype,
-    bill_date:         v.date,
+    date:              v.date,
     party_name:        partyName,
-    total_amount:      finalAmount,
+    amount:            finalAmount,
     narration:         v.narration || null,
-    bank_details:      bankDetails,
-    line_items:        lineItems,
-    entered_by:        v.enteredBy || null,
-    tally_sync_status: 'synced',
-    tally_synced_at:   new Date().toISOString()
+    instrument_details:bankDetails,
+    ledger_entries:    lineItems,
+    tally_sync_status: 'synced'
   };
 }
 

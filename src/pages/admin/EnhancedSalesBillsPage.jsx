@@ -120,7 +120,16 @@ export default function EnhancedSalesBillsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{padding:16,display:'flex',gap:8,flexWrap:'wrap'}}>
+      <div style={{padding:16,display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{display:'flex',gap:4,background:T.surface,padding:'4px',borderRadius:8,border:`1px solid ${T.border}`}}>
+          {[2022,2023,2024,2025,2026].map(y => (
+            <button key={y} onClick={() => { setDateFrom(`${y}-04-01`); setDateTo(`${y+1}-03-31`); setPage(0); }}
+              style={{padding:'4px 10px',fontSize:12,fontWeight:600,cursor:'pointer',borderRadius:6,border:'none',
+                background:dateFrom===`${y}-04-01`?T.teal:'transparent',color:dateFrom===`${y}-04-01`?'#fff':T.textMuted}}>
+              FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
+            </button>
+          ))}
+        </div>
         <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}} placeholder="Search party, bill no, design..."
           style={{flex:1,minWidth:200,padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,outline:'none'}} />
         <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}

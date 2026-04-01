@@ -252,17 +252,19 @@ export default function JobWorkBillsPage() {
             style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none'}}/>
         </div>
 
-        {/* Quick Ranges */}
-        <div style={{display:'flex',gap:6,alignSelf:'flex-end'}}>
-          {[
-            {label:'Today',    fn:()=>{setDateFrom(today);setDateTo(today);}},
-            {label:'This Month',fn:()=>{setDateFrom(today.slice(0,7)+'-01');setDateTo(today);}},
-            {label:'This FY',  fn:()=>{setDateFrom(fyStart);setDateTo(today);}},
-          ].map(q => (
-            <button key={q.label} onClick={q.fn} style={{padding:'6px 10px',borderRadius:7,border:`1px solid ${T.border}`,background:T.bg,color:T.text,fontSize:11,fontWeight:600,cursor:'pointer'}}>
-              {q.label}
-            </button>
-          ))}
+        {/* FY Quick Buttons */}
+        <div style={{display:'flex',gap:4,alignSelf:'flex-end',background:T.bg,padding:'4px',borderRadius:8,border:`1px solid ${T.border}`}}>
+          {[2022,2023,2024,2025,2026].map(y => {
+            const fFrom = `${y}-04-01`, fTo = `${y+1}-03-31`;
+            const active = dateFrom===fFrom && dateTo===fTo;
+            return (
+              <button key={y} onClick={()=>{setDateFrom(fFrom);setDateTo(fTo);}}
+                style={{padding:'5px 11px',fontSize:12,fontWeight:700,cursor:'pointer',borderRadius:6,border:'none',transition:'all .15s',
+                  background:active?T.teal:'transparent', color:active?'#fff':T.muted}}>
+                FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
+              </button>
+            );
+          })}
         </div>
 
         <div style={{width:1,height:32,background:T.border,alignSelf:'flex-end'}}/>

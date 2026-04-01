@@ -3,12 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 
 const PAGE_SIZE = 50;
+const FY_YEARS = [2022, 2023, 2024, 2025, 2026];
 
 function getCurrentFY() {
   const now = new Date();
   const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
   return { from: `${yr}-04-01`, to: `${yr + 1}-03-31` };
 }
+
+const fmtAmt = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:`₹${Math.round(v).toLocaleString('en-IN')}`; };
+const fmtN   = (n,d=1) => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:d});
+
+const T = {
+  teal:'#2BA898', tealLight:'#EEF8F6', navy:'#0B2E2B',
+  green:'#1E9E5A', greenLight:'#E8FFF4',
+  red:'#E74C3C', orange:'#E67E22', blue:'#2468C8',
+  gold:'#E8A800', purple:'#9B59B6',
+  border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
+  text:'#0B2E2B', textMuted:'#6A9B95',
+};
 
 export default function PurchaseBillsPage() {
   const navigate = useNavigate();
@@ -19,6 +32,7 @@ export default function PurchaseBillsPage() {
   const [syncing, setSyncing]     = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage]           = useState(0);
+  const [expanded, setExpanded]   = useState(null);
 
   // Filters
   const [search, setSearch]       = useState('');
@@ -26,6 +40,9 @@ export default function PurchaseBillsPage() {
   const [dateTo, setDateTo]       = useState(fy.to);
   const [supplier, setSupplier]   = useState('');
   const [source, setSource]       = useState('');   // '' | 'Tally' | 'Manual'
+
+  const activeFY = FY_YEARS.find(y => dateFrom === `${y}-04-01` && dateTo === `${y+1}-03-31`);
+  const setFY = (y) => { setDateFrom(`${y}-04-01`); setDateTo(`${y+1}-03-31`); setPage(0); setTimeout(()=>fetchBills(0),0); };
 
   // Form
   const emptyForm = {
@@ -158,11 +175,16 @@ export default function PurchaseBillsPage() {
 
         {/* Filter bar */}
         <div style={{ ...CARD, padding:'14px 16px' }}>
-          <div style={{ fontSize:11, fontWeight:700, color:'#4A7A74', marginBottom:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>
-            🔍 Filters
-            <span style={{ marginLeft:8, fontSize:10, fontWeight:400, color:'#6A9B95' }}>
-              Default: Current FY (Apr {fy.from.slice(0,4)} – Mar {fy.to.slice(0,4)})
-            </span>
+          {/* FY Quick Buttons */}
+          <div style={{ display:'flex', gap:4, marginBottom:12, background:T.bg, padding:'4px', borderRadius:8, border:`1px solid ${T.border}`, width:'fit-content' }}>
+            {FY_YEARS.map(y => (
+              <button key={y} onClick={()=>setFY(y)}
+                style={{ padding:'4px 10px', fontSize:12, fontWeight:700, cursor:'pointer', borderRadius:6, border:'none', transition:'all .15s',
+                  background: activeFY===y ? T.teal : 'transparent',
+                  color: activeFY===y ? '#fff' : T.textMuted }}>
+                FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
+              </button>
+            ))}
           </div>
           <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
             <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'2 1 200px' }}>
@@ -204,37 +226,117 @@ export default function PurchaseBillsPage() {
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
               <tr style={{ background:'#F4FBFA' }}>
-                {['Bill No','Date','Supplier','Item','Qty','Rate','Total','Status','Source'].map(h=>(
+                {['Bill No','Date','Supplier','Fabric/Item','Qty (m)','Rate','Total','Status','Source',''].map(h=>(
                   <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:700, color:'#0B2E2B', borderBottom:'1px solid rgba(43,168,152,.15)', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>Loading…</td></tr>
+                <tr><td colSpan={10} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>Loading…</td></tr>
               ) : bills.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>
+                <tr><td colSpan={10} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>
                   No bills found. Try adjusting filters or click "Reset" to see current FY.
                 </td></tr>
-              ) : bills.map(b => (
-                <tr key={b.id} style={{ borderBottom:'1px solid rgba(43,168,152,.08)' }}>
-                  <td style={{ padding:'9px 14px', fontWeight:600, color:'#0B2E2B' }}>{b.bill_number}</td>
-                  <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.bill_date}</td>
-                  <td style={{ padding:'9px 14px', fontWeight:500 }}>{b.supplier_name}</td>
-                  <td style={{ padding:'9px 14px', color:'#4A7A74', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.item_name||'—'}</td>
-                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity_mtrs||'—'}</td>
-                  <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate_per_mtr ? fmt(b.rate_per_mtr) : '—'}</td>
-                  <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:'#1E9E5A' }}>{fmt(b.total_amount)}</td>
-                  <td style={{ padding:'9px 14px' }}>
-                    <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
-                      background: b.tally_sync_status==='synced'?'#E8FFF4':'#FFF8E8',
-                      color: b.tally_sync_status==='synced'?'#1E9E5A':'#D4920A' }}>
-                      {b.tally_sync_status==='synced'?'synced':'pending'}
-                    </span>
-                  </td>
-                  <td style={{ padding:'9px 14px', color:'#6A9B95', fontSize:11 }}>{b.tally_sync_status==='synced'?'Tally':'Manual'}</td>
-                </tr>
-              ))}
+              ) : bills.map(b => {
+                const isExp = expanded === b.id;
+                const lineItems = b.line_items?.inventory || (Array.isArray(b.line_items) ? b.line_items : []);
+                return (
+                  <>
+                    <tr key={b.id} style={{ borderBottom:`1px solid ${isExp?T.teal:'rgba(43,168,152,.08)'}`, background: isExp?T.tealLight:'inherit', cursor:'pointer' }}
+                      onClick={()=>setExpanded(isExp?null:b.id)}>
+                      <td style={{ padding:'9px 14px', fontWeight:600, color:T.blue, fontFamily:'monospace' }}>{b.bill_number}</td>
+                      <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.bill_date}</td>
+                      <td style={{ padding:'9px 14px', fontWeight:500 }}>{b.supplier_name}</td>
+                      <td style={{ padding:'9px 14px', color:'#4A7A74', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.fabric_name||b.item_name||'—'}</td>
+                      <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity_mtrs ? fmtN(b.quantity_mtrs) : '—'}</td>
+                      <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate_per_mtr ? fmtAmt(b.rate_per_mtr) : '—'}</td>
+                      <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:T.green }}>{fmtAmt(b.total_amount)}</td>
+                      <td style={{ padding:'9px 14px' }}>
+                        <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
+                          background: b.tally_sync_status==='synced'?T.greenLight:'#FFF8E8',
+                          color: b.tally_sync_status==='synced'?T.green:'#D4920A' }}>
+                          {b.tally_sync_status==='synced'?'synced':'pending'}
+                        </span>
+                      </td>
+                      <td style={{ padding:'9px 14px', color:'#6A9B95', fontSize:11 }}>{b.tally_sync_status==='synced'?'Tally':'Manual'}</td>
+                      <td style={{ padding:'9px 14px', textAlign:'center' }}>
+                        <span style={{ fontSize:12, color:T.teal, fontWeight:700 }}>{isExp?'▲':'▼'}</span>
+                      </td>
+                    </tr>
+                    {isExp && (
+                      <tr key={`${b.id}-exp`}>
+                        <td colSpan={10} style={{ padding:0, background:T.tealLight, borderBottom:`2px solid ${T.teal}` }}>
+                          <div style={{ padding:'16px 20px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+                            {/* Bill Info */}
+                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
+                              <div style={{ fontSize:11, fontWeight:700, color:T.teal, textTransform:'uppercase', marginBottom:8 }}>Bill Information</div>
+                              {[{l:'Bill Number',v:b.bill_number,mono:true},{l:'Date',v:b.bill_date},{l:'Supplier',v:b.supplier_name},
+                                {l:'Supplier GSTIN',v:b.supplier_gstin},{l:'Supplier State',v:b.supplier_state},
+                                {l:'Supplier Invoice No',v:b.supplier_invoice_no},{l:'Purchase Ledger',v:b.purchase_ledger},
+                                {l:'Design No',v:b.design_no,mono:true},{l:'Batch',v:b.batch_name,mono:true},
+                                {l:'Godown',v:b.godown},{l:'Entered By',v:b.entered_by},
+                                {l:'Total Amount',v:fmtAmt(b.total_amount),bold:true,color:T.green},
+                              ].filter(f=>f.v).map((f,i)=>(
+                                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'3px 0', borderBottom:`1px solid ${T.border}`, fontSize:12 }}>
+                                  <span style={{ color:T.textMuted }}>{f.l}</span>
+                                  <span style={{ color:f.color||T.text, fontWeight:f.bold?700:500, fontFamily:f.mono?'monospace':'inherit' }}>{f.v}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Tax & Logistics */}
+                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
+                              <div style={{ fontSize:11, fontWeight:700, color:T.orange, textTransform:'uppercase', marginBottom:8 }}>Tax & Logistics</div>
+                              {[{l:'Taxable Value',v:b.taxable_value?fmtAmt(b.taxable_value):null},
+                                {l:'IGST',v:b.igst_amount>0?fmtAmt(b.igst_amount):null,color:T.blue},
+                                {l:'CGST',v:b.cgst_amount>0?fmtAmt(b.cgst_amount):null,color:T.blue},
+                                {l:'SGST',v:b.sgst_amount>0?fmtAmt(b.sgst_amount):null,color:T.blue},
+                                {l:'Round Off',v:b.round_off!=null?`₹${b.round_off}`:null},
+                                {l:'Qty (Mtrs)',v:b.quantity_mtrs?`${fmtN(b.quantity_mtrs)} m`:null},
+                                {l:'Rate/Mtr',v:b.rate_per_mtr?fmtAmt(b.rate_per_mtr):null},
+                                {l:'HSN Code',v:b.hsn_code},{l:'Transporter',v:b.transporter_name},
+                                {l:'LR Number',v:b.lr_number},{l:'Dest City',v:b.destination_city},
+                                {l:'Broker',v:b.broker_name,color:T.purple},{l:'Comm Rate',v:b.comm_rate?`${b.comm_rate}%`:null},
+                                {l:'Narration',v:b.narration},
+                              ].filter(f=>f.v).map((f,i)=>(
+                                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'3px 0', borderBottom:`1px solid ${T.border}`, fontSize:12, gap:8 }}>
+                                  <span style={{ color:T.textMuted, flexShrink:0 }}>{f.l}</span>
+                                  <span style={{ color:f.color||T.text, fontWeight:500, textAlign:'right', wordBreak:'break-word' }}>{f.v}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Line Items */}
+                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
+                              <div style={{ fontSize:11, fontWeight:700, color:T.purple, textTransform:'uppercase', marginBottom:8 }}>Stock Line Items ({lineItems.length || 1})</div>
+                              {lineItems.length > 0 ? lineItems.map((item,i)=>(
+                                <div key={i} style={{ padding:'6px 0', borderBottom:`1px solid ${T.border}`, fontSize:11 }}>
+                                  <div style={{ fontWeight:600, color:T.text }}>{item.stock_item||item.item_name||`Item ${i+1}`}</div>
+                                  <div style={{ display:'flex', gap:12, marginTop:2, color:T.textMuted, flexWrap:'wrap' }}>
+                                    {item.qty>0 && <span>{fmtN(item.qty)} m</span>}
+                                    {item.rate>0 && <span>@ {fmtAmt(item.rate)}/m</span>}
+                                    {item.amount && <span style={{ color:T.green, fontWeight:600 }}>{fmtAmt(Math.abs(item.amount))}</span>}
+                                  </div>
+                                  {item.batches?.slice(0,3).map((bt,bi)=>(
+                                    <div key={bi} style={{ fontSize:10, color:T.teal, marginTop:2 }}>📦 {bt.batch_name} · {fmtN(bt.qty)}m</div>
+                                  ))}
+                                </div>
+                              )) : (
+                                <div style={{ fontSize:12, color:T.textMuted }}>
+                                  <div>{b.fabric_name || '—'}</div>
+                                  {b.quantity_mtrs>0 && <div style={{ marginTop:4 }}>{fmtN(b.quantity_mtrs)} m @ {b.rate_per_mtr?fmtAmt(b.rate_per_mtr):'-'}/m</div>}
+                                </div>
+                              )}
+                              {b.total_taka_pcs > 0 && (
+                                <div style={{ marginTop:8, padding:'4px 8px', background:T.bg, borderRadius:6, fontSize:11, fontWeight:600, color:T.teal }}>Total Taka/Pcs: {b.total_taka_pcs}</div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>

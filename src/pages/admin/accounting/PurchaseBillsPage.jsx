@@ -273,7 +273,9 @@ export default function PurchaseBillsPage() {
                               <div style={{ fontSize:11, fontWeight:700, color:T.teal, textTransform:'uppercase', marginBottom:8 }}>Bill Information</div>
                               {[{l:'Bill Number',v:b.bill_number,mono:true},{l:'Date',v:b.bill_date},{l:'Supplier',v:b.supplier_name},
                                 {l:'Supplier GSTIN',v:b.supplier_gstin},{l:'Supplier State',v:b.supplier_state},
-                                {l:'Supplier Invoice No',v:b.supplier_invoice_no},{l:'Purchase Ledger',v:b.purchase_ledger},
+                                {l:'Supplier Invoice No',v:b.supplier_invoice_no},{l:'Supplier Invoice Date',v:b.supplier_invoice_date},
+                                {l:'Process Mill Name',v:b.process_mill_name,color:T.purple},{l:'Process Lot No',v:b.process_lot_no,mono:true,color:T.gold},
+                                {l:'Purchase Ledger',v:b.purchase_ledger},
                                 {l:'Design No',v:b.design_no,mono:true},{l:'Batch',v:b.batch_name,mono:true},
                                 {l:'Godown',v:b.godown},{l:'Entered By',v:b.entered_by},
                                 {l:'Total Amount',v:fmtAmt(b.total_amount),bold:true,color:T.green},
@@ -315,7 +317,15 @@ export default function PurchaseBillsPage() {
                                     {item.qty>0 && <span>{fmtN(item.qty)} m</span>}
                                     {item.rate>0 && <span>@ {fmtAmt(item.rate)}/m</span>}
                                     {item.amount && <span style={{ color:T.green, fontWeight:600 }}>{fmtAmt(Math.abs(item.amount))}</span>}
+                                    {item.lot_no && <span style={{ color:T.orange, fontWeight:600, fontFamily:'monospace' }}>Lot: {item.lot_no}</span>}
+                                    {item.taka_abc && <span>Taka ABC: {item.taka_abc}</span>}
+                                    {item.taka_no && <span>Taka No: {item.taka_no}</span>}
                                   </div>
+                                  {(item.track_party || item.track_ref_no) && (
+                                    <div style={{ fontSize:10, color:T.blue, marginTop:4, padding:'4px 8px', background:T.blueLight, borderRadius:4, display:'inline-block' }}>
+                                      🔗 Linked to: <span style={{fontWeight:600}}>{item.track_party||'—'}</span> {item.track_ref_no?`(${item.track_ref_no})`:''}
+                                    </div>
+                                  )}
                                   {item.batches?.slice(0,3).map((bt,bi)=>(
                                     <div key={bi} style={{ fontSize:10, color:T.teal, marginTop:2 }}>📦 {bt.batch_name} · {fmtN(bt.qty)}m</div>
                                   ))}

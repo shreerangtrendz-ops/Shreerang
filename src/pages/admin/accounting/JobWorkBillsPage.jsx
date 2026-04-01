@@ -126,6 +126,10 @@ export default function JobWorkBillsPage() {
         quality_name: s.quality_name,
         mill_godown: s.mill_godown,
         source_godown: s.source_godown,
+        consumption_rate: s.consumption_rate,
+        consumption_amount: s.consumption_amount,
+        production_rate: s.production_rate,
+        production_amount: s.production_amount,
         narration: s.narration,
         tally_synced_at: s.tally_synced_at,
       }))
@@ -417,11 +421,15 @@ export default function JobWorkBillsPage() {
                                 {l:'Weaver Name',       v: r.weaver_name},
                                 {l:'Quality Name',      v: r.quality_name},
                                 {l:'Job Rate',          v: r.rate ? fmt(r.rate)+'/m' : '—'},
-                                {l:'Job Amount',        v: fmt(r.job_amount)},
-                              ].map(({l,v,color}) => (
+                                {l:'Job Amount',        v: fmt(r.job_amount), color:T.gold},
+                                {l:'Consump Rate',      v: r.consumption_rate ? fmt(r.consumption_rate)+'/m' : null},
+                                {l:'Consump Amount',    v: r.consumption_amount ? fmt(r.consumption_amount) : null},
+                                {l:'Productn Rate',     v: r.production_rate ? fmt(r.production_rate)+'/m' : null},
+                                {l:'Productn Amount',   v: r.production_amount ? fmt(r.production_amount) : null},
+                              ].filter(f=>f.v).map(({l,v,color}) => (
                                 <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
                                   <span style={{color:T.muted}}>{l}</span>
-                                  <span style={{fontWeight:600, color:color||T.text}}>{v||'—'}</span>
+                                  <span style={{fontWeight:600, color:color||T.text}}>{v}</span>
                                 </div>
                               ))}
 

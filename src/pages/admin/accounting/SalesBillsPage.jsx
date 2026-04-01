@@ -217,14 +217,15 @@ export default function SalesBillsPage() {
                     {[
                       ['Bill Number', b.bill_number],
                       ['Bill Date', fmtDate(b.bill_date)],
+                      ['Reference No', b.reference_no||'—'],
                       ['Voucher Class', b.voucher_class||'—'],
                       ['Sales Ledger', b.sales_ledger||'—'],
                       ['GST No.', b.gst_number||'—'],
                       ['Broker', b.broker_name||'—'],
                       ['Commission Rate', b.comm_rate?`${b.comm_rate}%`:'None'],
                       ['Comm. Amount', b.comm_amount?fmt(b.comm_amount):'—'],
-                      ['Commission on Qty', b.commission_on_qty||'—'],
                       ['Net Rate', b.net_rate?`₹${Number(b.net_rate).toFixed(3)}/m`:'—'],
+                      ['Credit Period', b.credit_period||'—'],
                       ['Transporter', b.transporter_name||'—'],
                       ['Mill Godown', b.mill_godown||'—'],
                       ['IGST', b.igst_amount?fmt(b.igst_amount):'—'],
@@ -275,6 +276,8 @@ export default function SalesBillsPage() {
                                 <td style={{padding:'8px 10px',color:T.textMuted,fontSize:11}}>{item.godown||item.godown_name||'—'}</td>
                                 <td style={{padding:'8px 10px'}}>
                                   {item.lot_no ? <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:T.orange,fontWeight:600}}>{item.lot_no}</span> : <span style={{color:T.textFaint,fontSize:11}}>—</span>}
+                                  {item.track_party && <div style={{fontSize:9,color:T.textMuted,marginTop:2}}>{item.track_party}</div>}
+                                  {item.track_ref_no && <div style={{fontSize:9,color:T.textMuted}}>{item.track_ref_no}</div>}
                                 </td>
                               </tr>
                             ))}

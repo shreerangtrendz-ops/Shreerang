@@ -222,9 +222,14 @@ function parseVoucher(vxml) {
     commNetRate = commNetRate || parseNum(getUdfVal(vxml,'ERPCOMMNETRATE'));
   }
 
+  let cleanReference = reference;
+  if (cleanReference && cleanReference.includes('<')) {
+    cleanReference = cleanReference.replace(/<[^>]+>/g, '').trim();
+  }
+
   return {
     vtype, vnum, date, effectiveDate, party, partyGstin, stateName, placeOfSupply,
-    reference, enteredBy, irn, irnAckNo, transporter, lrNumber,
+    reference: cleanReference, enteredBy, irn, irnAckNo, transporter, lrNumber,
     destCity, destGodown, srcGodown, ewayBillNo, narration, voucherClass, totalTaka,
     totalAmount, igstAmount, cgstAmount, sgstAmount, roundOff,
     brokerName, commRate, commAmount, commAssValue, commNetRate,
@@ -394,9 +399,11 @@ function buildProcessRow(v) {
     our_godown: v.destGodown||'Main Location',
     job_godown: best.millGodown||null,
     total_taka_pcs: v.totalTaka || countTakaPcs(rawEntries),
-    supplier_bill_no: null,
+    supplier_bill_no: !isReceipt ? lotNo : null,
     purchase_voucher_no: !isReceipt ? lotNo : null,
     mill_process_bill_no: isReceipt ? (v.reference || null) : null,
+    gp_bill_no: lotNo,
+    issue_challan_no: !isReceipt ? v.vnum : null,
     line_items: { inventory: allItems, consumption: isReceipt ? consumptionItems : undefined },
     tally_synced_at: new Date().toISOString()
   };
@@ -567,7 +574,14 @@ function buildJobworkExpenseRow(v) {
   };
 }
 
+function isTrulyBadResponse(body) {
+  if (!body) return true;
+  if (body.includes('Tally is currently unavailable')) return true;
+  if (!body.includes('<') && !body.includes('VOUCHER')) return true;
+  return false;
+}
 
+export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 

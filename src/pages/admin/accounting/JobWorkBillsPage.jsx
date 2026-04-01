@@ -80,6 +80,17 @@ export default function JobWorkBillsPage() {
         .order('issue_date', {ascending: false})
     ]);
 
+    const uniqueGpBills = [...new Set((synced.data||[]).map(s => s.gp_bill_no).filter(Boolean))];
+    const purchaseMap = {};
+    if (uniqueGpBills.length > 0) {
+      const chunked = [];
+      for(let i=0; i<uniqueGpBills.length; i+=100) chunked.push(uniqueGpBills.slice(i, i+100));
+      for (const chunk of chunked) {
+        const { data: pData } = await supabase.from('purchase_bills').select('bill_number, supplier_name, rate_per_mtr').in('bill_number', chunk);
+        (pData||[]).forEach(p => purchaseMap[p.bill_number] = p);
+      }
+    }
+
     const combined = [
       ...(manual.data||[]).map(m => ({
         _id: 'M-'+m.id, id: m.id, _src: 'Manual',
@@ -132,6 +143,8 @@ export default function JobWorkBillsPage() {
         production_amount: s.production_amount,
         narration: s.narration,
         tally_synced_at: s.tally_synced_at,
+        supplier_name: purchaseMap[s.gp_bill_no]?.supplier_name || s.party_name,
+        purchase_rate: purchaseMap[s.gp_bill_no]?.rate_per_mtr,
       }))
     ];
 
@@ -389,6 +402,8 @@ export default function JobWorkBillsPage() {
                               </div>
                               {[
                                 {l:'GP Purchase Bill No', v:r.gp_bill_no, link:r.gp_bill_no?`/admin/accounting/purchase-bills`:null, icon:'📥'},
+                                {l:'Grey Supplier Name',  v:r.supplier_name, color:T.purple},
+                                {l:'Purchase Price (Mtr)',v:r.purchase_rate?fmt(r.purchase_rate):null, color:T.gold},
                                 {l:'Lot No (Batch)',       v:r.lot_no},
                                 {l:'Issue Challan No',    v:r.issue_challan_no},
                                 {l:'Party Ch. No (JW Bill)', v:r.party_ch_no, icon:'🧾'},

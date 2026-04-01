@@ -71,6 +71,8 @@ const ALL_GROUPS = [
       { icon: '🏦', label: 'Cash & Bank',        to: '/admin/cash-bank',            roles: ['admin','manager','accounts'] },
       { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable',  roles: ['admin','manager','accounts'] },
       { icon: '🏭', label: 'Mill Performance',   to: '/admin/mill-performance',     roles: ['admin','manager','accounts'] },
+      { icon: '💰', label: 'Financial Vouchers', to: '/admin/accounting/financial-vouchers',roles: ['admin','manager','accounts'], badge: '100%', badgeClass: 'ok' },
+      { icon: '🏭', label: 'Jobwork & Expenses', to: '/admin/accounting/jobwork-expenses',roles: ['admin','manager','accounts'], badge: '100%', badgeClass: 'ok' },
       { icon: '💼', label: 'Broker Analytics',   to: '/admin/broker-analytics',     roles: ['admin','manager','accounts'] },
     ]
   },

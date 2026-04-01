@@ -11,8 +11,7 @@ function getCurrentFY() {
   return { from: `${yr}-04-01`, to: `${yr + 1}-03-31` };
 }
 
-const fmtAmt = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:`₹${Math.round(v).toLocaleString('en-IN')}`; };
-const fmtN = (n,d=1) => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:d});
+const fmt = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
 const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
 
 const T = {
@@ -23,20 +22,20 @@ const T = {
   gold:'#E8A800', goldLight:'#FFF8E8',
   purple:'#9B59B6', purpleLight:'#F5EFF9',
   border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
-  text:'#0B2E2B', textMuted:'#6A9B95',
+  text:'#0B2E2B', muted:'#6A9B95',
 };
 
-const TYPE_COLORS = {
-  Receipt:      { bg:'#D1FAE5', col:'#065F46', icon:'📥' },
-  Payment:      { bg:'#FEF3C7', col:'#B45309', icon:'📤' },
-  Contra:       { bg:'#DBEAFE', col:'#1D4ED8', icon:'🔄' },
-  'Credit Note': { bg:'#FCE7F3', col:'#9D174D', icon:'📋' },
-  'Debit Note':  { bg:'#FEE2E2', col:'#991B1B', icon:'📝' },
-  Journal:      { bg:'#E0E7FF', col:'#3730A3', icon:'📒' },
+const TYPE_META = {
+  Receipt:       { bg:'#D1FAE5', col:'#065F46', icon:'📥', accent:T.green },
+  Payment:       { bg:'#FEF3C7', col:'#B45309', icon:'📤', accent:T.orange },
+  Contra:        { bg:'#DBEAFE', col:'#1D4ED8', icon:'🔄', accent:T.blue },
+  'Credit Note': { bg:'#FCE7F3', col:'#9D174D', icon:'📋', accent:T.purple },
+  'Debit Note':  { bg:'#FEE2E2', col:'#991B1B', icon:'📝', accent:T.red },
+  Journal:       { bg:'#E0E7FF', col:'#3730A3', icon:'📒', accent:'#4338CA' },
 };
 
 function typeChip(vtype) {
-  const c = TYPE_COLORS[vtype] || { bg:'#F3F4F6', col:'#374151', icon:'📄' };
+  const c = TYPE_META[vtype] || { bg:'#F3F4F6', col:'#374151', icon:'📄' };
   return (
     <span style={{padding:'3px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:c.bg,color:c.col,whiteSpace:'nowrap',display:'inline-flex',alignItems:'center',gap:4}}>
       {c.icon} {vtype}
@@ -44,17 +43,28 @@ function typeChip(vtype) {
   );
 }
 
+function InfoRow({label, value, color, mono, bold}) {
+  if (!value && value !== 0) return null;
+  return (
+    <div style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:8}}>
+      <span style={{color:T.muted,flexShrink:0}}>{label}</span>
+      <span style={{color:color||T.text,fontWeight:bold?700:500,fontFamily:mono?'monospace':'inherit',textAlign:'right',wordBreak:'break-word',maxWidth:220}}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export default function FinancialVouchersPage() {
   const navigate = useNavigate();
   const fy = getCurrentFY();
 
-  const [vouchers, setVouchers] = useState([]);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState(null);
 
-  // Filters
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState(fy.from);
   const [dateTo, setDateTo] = useState(fy.to);
@@ -62,38 +72,38 @@ export default function FinancialVouchersPage() {
 
   const activeFY = FY_YEARS.find(y => dateFrom === `${y}-04-01` && dateTo === `${y+1}-03-31`);
 
-  const fetchVouchers = useCallback(async (pg = 0) => {
+  const load = useCallback(async (pg = 0) => {
     setLoading(true);
-    const from = pg * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let q = supabase.from('financial_vouchers')
+    const from = pg * PAGE_SIZE, to = from + PAGE_SIZE - 1;
+    let q = supabase.from('accounting_vouchers')
       .select('*', { count: 'exact' })
-      .order('date', { ascending: false })
+      .order('voucher_date', { ascending: false })
       .range(from, to);
-
-    if (dateFrom) q = q.gte('date', dateFrom);
-    if (dateTo) q = q.lte('date', dateTo);
+    if (dateFrom) q = q.gte('voucher_date', dateFrom);
+    if (dateTo) q = q.lte('voucher_date', dateTo);
     if (typeFilter) q = q.eq('voucher_type', typeFilter);
-    if (search) q = q.or(`party_name.ilike.%${search}%,voucher_number.ilike.%${search}%,narration.ilike.%${search}%`);
-
+    if (search) q = q.or(`party_name.ilike.%${search}%,voucher_number.ilike.%${search}%,narration.ilike.%${search}%,bank_ledger.ilike.%${search}%,instrument_no.ilike.%${search}%`);
     const { data, error, count } = await q;
-    if (!error) { setVouchers(data || []); setTotalCount(count || 0); }
+    if (!error) { setRows(data || []); setTotalCount(count || 0); }
     setPage(pg);
     setLoading(false);
   }, [dateFrom, dateTo, typeFilter, search]);
 
-  useEffect(() => { fetchVouchers(0); }, [fetchVouchers]);
+  useEffect(() => { load(0); }, [load]);
 
-  // KPIs
-  const kpiReceipts = vouchers.filter(v => v.voucher_type === 'Receipt').reduce((s,v) => s + Number(v.amount||0), 0);
-  const kpiPayments = vouchers.filter(v => v.voucher_type === 'Payment').reduce((s,v) => s + Number(v.amount||0), 0);
-  const kpiContras = vouchers.filter(v => v.voucher_type === 'Contra').reduce((s,v) => s + Number(v.amount||0), 0);
-  const kpiNotes = vouchers.filter(v => v.voucher_type === 'Credit Note' || v.voucher_type === 'Debit Note').reduce((s,v) => s + Number(v.amount||0), 0);
+  const setFY = y => { setDateFrom(`${y}-04-01`); setDateTo(`${y+1}-03-31`); };
 
+  // Page-level KPIs
+  const kpi = type => rows.filter(v => v.voucher_type === type).reduce((s,v) => s + Number(v.total_amount||0), 0);
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  const setFY = (y) => { setDateFrom(`${y}-04-01`); setDateTo(`${y+1}-03-31`); setPage(0); };
+  const exportCSV = () => {
+    const hdr = ['Voucher No','Date','Type','Party','Dr Ledger','Cr Ledger','Amount','Bank','Mode','Cheque No','IFSC','Narration'];
+    const csv = rows.map(r => [r.voucher_number,r.voucher_date,r.voucher_type,r.party_name,r.dr_ledger,r.cr_ledger,r.total_amount,r.bank_ledger,r.payment_mode,r.instrument_no,r.ifsc_code,r.narration].map(v=>`"${v||''}"`).join(','));
+    const blob = new Blob([[hdr.join(','),...csv].join('\n')], {type:'text/csv'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `AccountingVouchers_${dateFrom}_to_${dateTo}.csv`; a.click();
+  };
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif", background:T.bg, minHeight:'100vh'}}>
@@ -101,80 +111,76 @@ export default function FinancialVouchersPage() {
       {/* Header */}
       <div style={{background:`linear-gradient(135deg,${T.navy},#143F3C)`,padding:'16px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
         <div>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',gap:8}}>
-            💰 Financial Vouchers — Daybook View
-          </div>
-          <p style={{fontSize:11,color:'rgba(255,255,255,0.6)',margin:'4px 0 0'}}>
-            Receipts · Payments · Contras · Debit Notes · Credit Notes — Tally synced
+          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:20,fontWeight:700,color:'#fff',margin:0,display:'flex',alignItems:'center',gap:8}}>
+            💰 Accounting Vouchers — Tally Daybook
+          </h1>
+          <p style={{fontSize:11,color:'rgba(255,255,255,0.55)',margin:'4px 0 0'}}>
+            Receipts · Payments · Contras · Journals · Credit Notes · Debit Notes — 100% Tally fields
           </p>
         </div>
-        <button onClick={()=>navigate(-1)} style={{padding:'8px 14px',background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.2)',color:'#fff',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>
-          ← Back
-        </button>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={exportCSV} style={{padding:'8px 14px',background:T.green,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>📥 CSV</button>
+          <button onClick={()=>load(page)} style={{padding:'8px 14px',background:'rgba(255,255,255,0.12)',border:'1px solid rgba(255,255,255,0.2)',color:'#fff',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>🔄 Refresh</button>
+          <button onClick={()=>navigate(-1)} style={{padding:'8px 14px',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'#fff',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>← Back</button>
+        </div>
       </div>
 
       <div style={{padding:'20px 24px',display:'flex',flexDirection:'column',gap:16}}>
 
-        {/* KPI Cards */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+        {/* KPI Row */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10}}>
           {[
-            { label:'Receipts (Page)', value: fmtAmt(kpiReceipts), color:T.green, icon:'📥' },
-            { label:'Payments (Page)', value: fmtAmt(kpiPayments), color:T.orange, icon:'📤' },
-            { label:'Contras (Page)', value: fmtAmt(kpiContras), color:T.blue, icon:'🔄' },
-            { label:'Credit/Debit Notes', value: fmtAmt(kpiNotes), color:T.purple, icon:'📋' },
+            {label:'Receipts',     val:fmt(kpi('Receipt')),      color:T.green,  icon:'📥'},
+            {label:'Payments',     val:fmt(kpi('Payment')),      color:T.orange, icon:'📤'},
+            {label:'Contras',      val:fmt(kpi('Contra')),       color:T.blue,   icon:'🔄'},
+            {label:'Journals',     val:fmt(kpi('Journal')),      color:'#4338CA', icon:'📒'},
+            {label:'Credit Notes', val:fmt(kpi('Credit Note')),  color:T.purple, icon:'📋'},
+            {label:'Debit Notes',  val:fmt(kpi('Debit Note')),   color:T.red,    icon:'📝'},
           ].map((c,i) => (
-            <div key={i} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 16px',position:'relative',overflow:'hidden'}}>
+            <div key={i} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'12px 14px',position:'relative',overflow:'hidden',cursor:'pointer'}}
+              onClick={()=>{setTypeFilter(typeFilter===Object.keys(TYPE_META)[i]?'':Object.keys(TYPE_META)[i]);setPage(0);}}>
               <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:c.color}}/>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:6}}>{c.icon} {c.label}</div>
-              <div style={{fontSize:20,fontWeight:800,color:c.color}}>{c.value}</div>
+              <div style={{fontSize:9,color:T.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:4}}>{c.icon} {c.label}</div>
+              <div style={{fontSize:17,fontWeight:800,color:c.color}}>{c.val}</div>
             </div>
           ))}
         </div>
 
-        {/* Filters */}
+        {/* FY + Filters */}
         <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:14}}>
-          {/* FY Buttons */}
           <div style={{display:'flex',gap:4,marginBottom:12,background:T.bg,padding:'4px',borderRadius:8,border:`1px solid ${T.border}`,width:'fit-content'}}>
             {FY_YEARS.map(y => (
               <button key={y} onClick={()=>setFY(y)}
                 style={{padding:'5px 11px',fontSize:12,fontWeight:700,cursor:'pointer',borderRadius:6,border:'none',transition:'all .15s',
-                  background:activeFY===y?T.teal:'transparent',color:activeFY===y?'#fff':T.textMuted}}>
+                  background:activeFY===y?T.teal:'transparent',color:activeFY===y?'#fff':T.muted}}>
                 FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
               </button>
             ))}
           </div>
-
           <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
             <div style={{flex:'2 1 200px'}}>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Search</div>
-              <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}
-                placeholder="Party name, voucher no, narration…"
+              <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Search</div>
+              <input value={search} onChange={e=>setSearch(e.target.value)}
+                placeholder="Party, voucher no, bank, cheque no…"
                 style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
             </div>
             <div>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>From</div>
-              <input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPage(0);}}
+              <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>From</div>
+              <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
                 style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none'}}/>
             </div>
             <div>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>To</div>
-              <input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPage(0);}}
+              <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>To</div>
+              <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
                 style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none'}}/>
             </div>
             <div>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Type</div>
-              <select value={typeFilter} onChange={e=>{setTypeFilter(e.target.value);setPage(0);}}
+              <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Type</div>
+              <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}
                 style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,background:'#fff',outline:'none',minWidth:130}}>
                 <option value="">All Types</option>
-                {['Receipt','Payment','Contra','Credit Note','Debit Note','Journal'].map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
+                {Object.keys(TYPE_META).map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button onClick={()=>fetchVouchers(0)} style={{padding:'8px 16px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:12,cursor:'pointer'}}>Apply</button>
-              <button onClick={()=>{setSearch('');setTypeFilter('');setDateFrom(fy.from);setDateTo(fy.to);setPage(0);setTimeout(()=>fetchVouchers(0),0);}}
-                style={{padding:'8px 14px',background:'#f1f5f9',color:T.text,border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>Reset</button>
             </div>
           </div>
         </div>
@@ -182,128 +188,157 @@ export default function FinancialVouchersPage() {
         {/* Table */}
         <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
           <div style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <span style={{fontSize:12,color:T.textMuted,fontWeight:600}}>{totalCount.toLocaleString('en-IN')} total vouchers</span>
-            <span style={{fontSize:12,color:T.teal,fontWeight:700}}>Page {page+1} of {totalPages || 1}</span>
+            <span style={{fontSize:12,color:T.muted,fontWeight:600}}>{totalCount.toLocaleString('en-IN')} vouchers</span>
+            <span style={{fontSize:12,color:T.teal,fontWeight:700}}>Page {page+1}/{totalPages||1}</span>
           </div>
 
           {loading ? (
-            <div style={{padding:40,textAlign:'center',color:T.textMuted}}>Loading vouchers…</div>
-          ) : vouchers.length === 0 ? (
-            <div style={{padding:40,textAlign:'center',color:T.textMuted}}>
+            <div style={{padding:40,textAlign:'center',color:T.muted}}>Loading…</div>
+          ) : rows.length === 0 ? (
+            <div style={{padding:40,textAlign:'center',color:T.muted}}>
               <div style={{fontSize:36,marginBottom:8}}>💰</div>
-              <div>No financial vouchers found. Run the SQL migration first, then sync from Tally.</div>
+              <div>No accounting vouchers found. Run SQL migration, then sync from Tally.</div>
             </div>
           ) : (
             <div style={{overflowX:'auto'}}>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
                 <thead>
                   <tr style={{background:T.bg}}>
-                    {['Voucher No','Date','Type','Party Name','Amount','Narration',''].map(h => (
-                      <th key={h} style={{padding:'10px 14px',textAlign:'left',fontWeight:700,color:T.text,borderBottom:`1px solid ${T.border}`,whiteSpace:'nowrap',fontSize:11,textTransform:'uppercase',letterSpacing:.4}}>{h}</th>
+                    {['Voucher No','Date','Type','Party / Ledger','Dr → Cr','Bank / Mode','Amount','Cheque / Ref',''].map(h => (
+                      <th key={h} style={{padding:'10px 12px',textAlign:h==='Amount'?'right':'left',fontWeight:700,color:T.muted,borderBottom:`1px solid ${T.border}`,whiteSpace:'nowrap',fontSize:10.5,textTransform:'uppercase',letterSpacing:.4}}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {vouchers.map((v, i) => {
+                  {rows.map((v, i) => {
                     const isExp = expanded === v.id;
+                    const tm = TYPE_META[v.voucher_type] || {};
+                    const bills = Array.isArray(v.bill_allocations) ? v.bill_allocations : [];
                     const ledgers = Array.isArray(v.ledger_entries) ? v.ledger_entries : [];
-                    const inst = v.instrument_details || {};
-                    return (
-                      <>
-                        <tr key={v.id} onClick={()=>setExpanded(isExp?null:v.id)}
-                          style={{borderBottom:`1px solid ${isExp?T.teal:T.border}`,background:isExp?T.tealLight:i%2===0?T.surface:T.bg,cursor:'pointer',transition:'background .15s'}}>
-                          <td style={{padding:'9px 14px',fontWeight:700,color:T.blue,fontFamily:'monospace',whiteSpace:'nowrap'}}>{v.voucher_number}</td>
-                          <td style={{padding:'9px 14px',color:T.textMuted,whiteSpace:'nowrap'}}>{fmtD(v.date)}</td>
-                          <td style={{padding:'9px 14px'}}>{typeChip(v.voucher_type)}</td>
-                          <td style={{padding:'9px 14px',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.party_name||'—'}</td>
-                          <td style={{padding:'9px 14px',textAlign:'right',fontWeight:800,color:v.voucher_type==='Receipt'?T.green:v.voucher_type==='Payment'?T.orange:T.text,fontFamily:"'DM Mono',monospace"}}>{fmtAmt(v.amount)}</td>
-                          <td style={{padding:'9px 14px',color:T.textMuted,fontSize:11,maxWidth:250,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.narration||'—'}</td>
-                          <td style={{padding:'9px 14px',textAlign:'center'}}>
-                            <span style={{fontSize:12,color:T.teal,fontWeight:700}}>{isExp?'▲':'▼'}</span>
-                          </td>
-                        </tr>
 
-                        {/* Expanded Detail */}
-                        {isExp && (
-                          <tr key={`${v.id}-exp`}>
-                            <td colSpan={7} style={{padding:0,background:T.tealLight,borderBottom:`2px solid ${T.teal}`}}>
-                              <div style={{padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
+                    return (<>
+                      <tr key={v.id} onClick={()=>setExpanded(isExp?null:v.id)}
+                        style={{borderBottom:`1px solid ${isExp?T.teal:T.border}`,background:isExp?T.tealLight:i%2===0?T.surface:T.bg,cursor:'pointer',transition:'background .12s'}}>
+                        <td style={{padding:'9px 12px',fontWeight:700,color:T.blue,fontFamily:'monospace',whiteSpace:'nowrap'}}>{v.voucher_number}</td>
+                        <td style={{padding:'9px 12px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(v.voucher_date)}</td>
+                        <td style={{padding:'9px 12px'}}>{typeChip(v.voucher_type)}</td>
+                        <td style={{padding:'9px 12px',fontWeight:500,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.party_name||v.dr_ledger||'—'}</td>
+                        <td style={{padding:'9px 12px',fontSize:11,color:T.muted}}>
+                          <span style={{color:T.red,fontWeight:600}}>{v.dr_ledger?.substring(0,20)||'—'}</span>
+                          <span style={{margin:'0 4px'}}>→</span>
+                          <span style={{color:T.green,fontWeight:600}}>{v.cr_ledger?.substring(0,20)||'—'}</span>
+                        </td>
+                        <td style={{padding:'9px 12px',fontSize:11}}>
+                          <div style={{fontWeight:500}}>{v.bank_ledger?.substring(0,22)||'—'}</div>
+                          {v.payment_mode && <div style={{fontSize:10,color:T.muted}}>{v.payment_mode}{v.transfer_mode?` / ${v.transfer_mode}`:''}</div>}
+                        </td>
+                        <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:tm.accent||T.text,fontFamily:"'DM Mono',monospace"}}>{fmt(v.total_amount)}</td>
+                        <td style={{padding:'9px 12px',fontSize:11}}>
+                          {v.instrument_no ? (
+                            <span style={{padding:'2px 8px',borderRadius:4,background:'#DBEAFE',color:'#1D4ED8',fontWeight:700,fontFamily:'monospace',fontSize:10}}>
+                              #{v.instrument_no}
+                            </span>
+                          ) : v.urn ? (
+                            <span style={{fontSize:10,color:T.muted,fontFamily:'monospace'}}>{v.urn.substring(0,12)}…</span>
+                          ) : '—'}
+                        </td>
+                        <td style={{padding:'9px 12px',textAlign:'center',color:T.teal,fontWeight:700}}>{isExp?'▲':'▼'}</td>
+                      </tr>
 
-                                {/* Voucher Info */}
-                                <div style={{background:T.surface,borderRadius:8,padding:'10px 14px'}}>
-                                  <div style={{fontSize:11,fontWeight:700,color:T.teal,textTransform:'uppercase',marginBottom:8}}>Voucher Info</div>
-                                  {[
-                                    {l:'Voucher No',v:v.voucher_number,mono:true},
-                                    {l:'Type',v:v.voucher_type},
-                                    {l:'Date',v:fmtD(v.date)},
-                                    {l:'Party',v:v.party_name},
-                                    {l:'Amount',v:fmtAmt(v.amount),bold:true,color:T.green},
-                                    {l:'Narration',v:v.narration},
-                                  ].filter(f=>f.v).map((f,i) => (
-                                    <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:8}}>
-                                      <span style={{color:T.textMuted,flexShrink:0}}>{f.l}</span>
-                                      <span style={{color:f.color||T.text,fontWeight:f.bold?700:500,fontFamily:f.mono?'monospace':'inherit',textAlign:'right',wordBreak:'break-word'}}>{f.v}</span>
-                                    </div>
-                                  ))}
+                      {/* ── Expanded Tally-Replica Detail ── */}
+                      {isExp && (
+                        <tr key={`${v.id}-exp`}>
+                          <td colSpan={9} style={{padding:0,background:'#F8FFFE',borderBottom:`2px solid ${T.teal}`}}>
+                            <div style={{padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
+
+                              {/* Col 1: Voucher Info */}
+                              <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+                                <div style={{fontSize:11,fontWeight:800,color:T.teal,textTransform:'uppercase',marginBottom:10,letterSpacing:.5}}>
+                                  📄 Voucher Details
                                 </div>
+                                <InfoRow label="Voucher No" value={v.voucher_number} mono bold />
+                                <InfoRow label="Type" value={v.voucher_type} />
+                                <InfoRow label="Date" value={fmtD(v.voucher_date)} />
+                                <InfoRow label="Party Name" value={v.party_name} bold />
+                                <InfoRow label="Entered By" value={v.entered_by} />
+                                <InfoRow label="Dr Ledger" value={v.dr_ledger} color={T.red} />
+                                <InfoRow label="Dr Amount" value={fmt(v.dr_amount)} color={T.red} mono />
+                                <InfoRow label="Cr Ledger" value={v.cr_ledger} color={T.green} />
+                                <InfoRow label="Cr Amount" value={fmt(v.cr_amount)} color={T.green} mono />
+                                <InfoRow label="Total Amount" value={fmt(v.total_amount)} bold color={T.gold} mono />
+                                <InfoRow label="Narration" value={v.narration} />
+                              </div>
 
-                                {/* Ledger Entries */}
-                                <div style={{background:T.surface,borderRadius:8,padding:'10px 14px'}}>
-                                  <div style={{fontSize:11,fontWeight:700,color:T.purple,textTransform:'uppercase',marginBottom:8}}>Ledger Entries ({ledgers.length})</div>
-                                  {ledgers.length > 0 ? ledgers.map((le,i) => (
-                                    <div key={i} style={{padding:'5px 0',borderBottom:`1px solid ${T.border}`,fontSize:11}}>
-                                      <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
-                                        <span style={{fontWeight:600,color:T.text}}>{le.ledger_name}</span>
+                              {/* Col 2: Bank / Instrument Details */}
+                              <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+                                <div style={{fontSize:11,fontWeight:800,color:T.orange,textTransform:'uppercase',marginBottom:10,letterSpacing:.5}}>
+                                  🏦 Bank & Instrument
+                                </div>
+                                <InfoRow label="Bank Ledger" value={v.bank_ledger} bold />
+                                <InfoRow label="Payment Mode" value={v.payment_mode} />
+                                <InfoRow label="Transfer Mode" value={v.transfer_mode} />
+                                <InfoRow label="Cheque / Instrument No" value={v.instrument_no} mono bold color={T.blue} />
+                                <InfoRow label="Instrument Date" value={fmtD(v.instrument_date)} />
+                                <InfoRow label="Payment Favouring" value={v.payment_favouring} />
+                                <InfoRow label="Cheque Cross Comment" value={v.cheque_cross_comment} />
+                                <InfoRow label="URN" value={v.urn} mono />
+                                <InfoRow label="Advice Status" value={v.advice_status} />
+                                <InfoRow label="IFSC Code" value={v.ifsc_code} mono bold color={T.blue} />
+                                <InfoRow label="Bank Name" value={v.bank_name} />
+                                <InfoRow label="Account Number" value={v.account_number} mono />
+
+                                {!v.bank_ledger && !v.payment_mode && !v.instrument_no && (
+                                  <div style={{color:T.muted,fontSize:12,padding:'8px 0'}}>No bank/instrument details for this voucher</div>
+                                )}
+                              </div>
+
+                              {/* Col 3: Bill Settlements + Ledger Entries */}
+                              <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+                                {/* Bill Settlements */}
+                                <div style={{fontSize:11,fontWeight:800,color:T.purple,textTransform:'uppercase',marginBottom:10,letterSpacing:.5}}>
+                                  📑 Bill Settlements ({bills.length})
+                                </div>
+                                {bills.length > 0 ? (
+                                  <div style={{maxHeight:180,overflowY:'auto'}}>
+                                    {bills.map((b,bi) => (
+                                      <div key={bi} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:11.5,gap:6}}>
+                                        <div>
+                                          <span style={{fontWeight:600,color:T.text}}>{b.name}</span>
+                                          {b.bill_type && <span style={{fontSize:10,color:T.muted,marginLeft:6}}>({b.bill_type})</span>}
+                                        </div>
+                                        <span style={{fontWeight:700,color:T.gold,fontFamily:'monospace',whiteSpace:'nowrap'}}>{fmt(b.amount)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{color:T.muted,fontSize:12}}>No bill allocations</div>
+                                )}
+
+                                {/* Ledger Breakdown */}
+                                <div style={{fontSize:11,fontWeight:800,color:T.blue,textTransform:'uppercase',marginTop:16,marginBottom:10,letterSpacing:.5}}>
+                                  📊 All Ledger Entries ({ledgers.length})
+                                </div>
+                                {ledgers.length > 0 ? (
+                                  <div style={{maxHeight:200,overflowY:'auto'}}>
+                                    {ledgers.map((le,li) => (
+                                      <div key={li} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:11,gap:6}}>
+                                        <span style={{fontWeight:500,color:T.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={le.ledger_name}>{le.ledger_name}</span>
                                         <span style={{fontWeight:700,color:le.is_debit?T.red:T.green,fontFamily:'monospace',whiteSpace:'nowrap'}}>
-                                          {le.is_debit?'Dr ':'Cr '}{fmtAmt(le.amount)}
+                                          {le.is_debit?'Dr':'Cr'} {fmt(le.amount)}
                                         </span>
                                       </div>
-                                      {le.bills?.map((b,bi) => (
-                                        <div key={bi} style={{fontSize:10,color:T.textMuted,marginLeft:12,marginTop:2}}>
-                                          Bill: {b.name} → {fmtAmt(b.amount)}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )) : (
-                                    <div style={{color:T.textMuted,fontSize:12}}>No ledger detail available</div>
-                                  )}
-                                </div>
-
-                                {/* Instrument / Bank Details */}
-                                <div style={{background:T.surface,borderRadius:8,padding:'10px 14px'}}>
-                                  <div style={{fontSize:11,fontWeight:700,color:T.orange,textTransform:'uppercase',marginBottom:8}}>Bank / Instrument</div>
-                                  {inst && Object.keys(inst).length > 0 ? (
-                                    [{l:'Instrument No',v:inst.instrument_no},
-                                     {l:'Instrument Date',v:inst.instrument_date},
-                                     {l:'Bank Name',v:inst.bank_name},
-                                    ].filter(f=>f.v).map((f,i) => (
-                                      <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                                        <span style={{color:T.textMuted}}>{f.l}</span>
-                                        <span style={{fontWeight:600,color:T.text}}>{f.v}</span>
-                                      </div>
-                                    ))
-                                  ) : (
-                                    <div style={{color:T.textMuted,fontSize:12}}>No bank/cheque detail</div>
-                                  )}
-
-                                  <div style={{marginTop:16,fontSize:11,fontWeight:700,color:T.blue,textTransform:'uppercase',marginBottom:8}}>Sync Info</div>
-                                  {[
-                                    {l:'Sync Status',v:v.tally_sync_status},
-                                    {l:'Created',v:v.created_at?new Date(v.created_at).toLocaleString('en-IN'):null},
-                                  ].filter(f=>f.v).map((f,i) => (
-                                    <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                                      <span style={{color:T.textMuted}}>{f.l}</span>
-                                      <span style={{fontWeight:500,color:T.text}}>{f.v}</span>
-                                    </div>
-                                  ))}
-                                </div>
-
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{color:T.muted,fontSize:12}}>No ledger detail</div>
+                                )}
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    );
+
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>);
                   })}
                 </tbody>
               </table>
@@ -313,26 +348,32 @@ export default function FinancialVouchersPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderTop:`1px solid ${T.border}`}}>
-              <span style={{fontSize:12,color:T.textMuted}}>
+              <span style={{fontSize:12,color:T.muted}}>
                 {page*PAGE_SIZE+1}–{Math.min((page+1)*PAGE_SIZE,totalCount)} of {totalCount.toLocaleString('en-IN')}
               </span>
               <div style={{display:'flex',gap:6}}>
-                <button disabled={page===0} onClick={()=>fetchVouchers(0)}
-                  style={{padding:'6px 12px',borderRadius:8,border:'none',background:page===0?'#f1f5f9':T.greenLight,color:page===0?'#aaa':T.green,fontWeight:700,fontSize:12,cursor:page===0?'not-allowed':'pointer'}}>«</button>
-                <button disabled={page===0} onClick={()=>fetchVouchers(page-1)}
-                  style={{padding:'6px 14px',borderRadius:8,border:'none',background:page===0?'#f1f5f9':T.greenLight,color:page===0?'#aaa':T.green,fontWeight:700,fontSize:12,cursor:page===0?'not-allowed':'pointer'}}>‹ Prev</button>
-                <span style={{padding:'6px 14px',background:T.teal,color:'#fff',borderRadius:8,fontSize:12,fontWeight:700}}>
-                  {page+1} / {totalPages}
-                </span>
-                <button disabled={page>=totalPages-1} onClick={()=>fetchVouchers(page+1)}
-                  style={{padding:'6px 14px',borderRadius:8,border:'none',background:page>=totalPages-1?'#f1f5f9':T.greenLight,color:page>=totalPages-1?'#aaa':T.green,fontWeight:700,fontSize:12,cursor:page>=totalPages-1?'not-allowed':'pointer'}}>Next ›</button>
-                <button disabled={page>=totalPages-1} onClick={()=>fetchVouchers(totalPages-1)}
-                  style={{padding:'6px 14px',borderRadius:8,border:'none',background:page>=totalPages-1?'#f1f5f9':T.greenLight,color:page>=totalPages-1?'#aaa':T.green,fontWeight:700,fontSize:12,cursor:page>=totalPages-1?'not-allowed':'pointer'}}>»</button>
+                {[
+                  {lbl:'«', pg:0, dis:page===0},
+                  {lbl:'‹ Prev', pg:page-1, dis:page===0},
+                  {lbl:`${page+1}/${totalPages}`, pg:null, dis:true, active:true},
+                  {lbl:'Next ›', pg:page+1, dis:page>=totalPages-1},
+                  {lbl:'»', pg:totalPages-1, dis:page>=totalPages-1},
+                ].map((b,i) => (
+                  <button key={i} disabled={b.dis && !b.active} onClick={b.pg!==null?()=>load(b.pg):undefined}
+                    style={{padding:'6px 12px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:b.dis&&!b.active?'not-allowed':'pointer',
+                      background:b.active?T.teal:b.dis?'#f1f5f9':T.greenLight,
+                      color:b.active?'#fff':b.dis?'#aaa':T.green}}>
+                    {b.lbl}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
 
+        <div style={{fontSize:11,color:T.muted,textAlign:'center'}}>
+          Click any row for full Tally detail — Bank, Cheque, IFSC, Bill Settlements, Dr/Cr Ledgers
+        </div>
       </div>
     </div>
   );

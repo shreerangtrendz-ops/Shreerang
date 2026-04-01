@@ -402,81 +402,171 @@ function buildProcessRow(v) {
   };
 }
 
-// ── Financial Vouchers (Receipts, Payments, Contras, Notes) ──────────────
-function buildFinancialVoucherRow(v) {
+// ── Rich Accounting Voucher Builder (Receipts, Payments, Contras, Journals) ──
+function buildAccountingVoucherRow(v) {
   const ledgers = getLedgerEntries(v._vxml);
   const BANK_KEYWORDS = ['BANK','HDFC','ICICI','AXIS','SBI','KOTAK','CASH','CHEQUE',
                          'CANARA','YES BANK','BOB','UNION','PNB','IDBI','INDUS'];
   let bankLedger = '', bankAmt = 0;
-  let maxLedgerAmt = 0;
+  let drLedger = '', drAmount = 0, crLedger = '', crAmount = 0;
   let partyName = v.party || null;
-  let lineItems = [];
-  let bankDetails = null;
+  let ledgerItems = [];
+  let billAllocations = [];
+
+  // Bank / Instrument details
+  let paymentMode = null, instrumentNo = null, instrumentDate = null;
+  let paymentFavouring = null, chequeCrossComment = null, urn = null;
+  let adviceStatus = null, transferMode = null, ifscCode = null;
+  let bankName = null, accountNumber = null;
 
   for (const le of ledgers) {
     const lname = getXmlVal(le, 'LEDGERNAME');
     const lnameU = lname.toUpperCase();
     const lamt = parseNum(getXmlVal(le, 'AMOUNT'));
-    const isDebit = lamt < 0; // In Tally XML, negative amount usually means Debit
+    const isDebit = lamt < 0;
     const absAmt = Math.abs(lamt);
     const isParty = getXmlVal(le, 'ISPARTYLEDGER').toUpperCase() === 'YES';
+    const isDeemedPositive = getXmlVal(le, 'ISDEEMEDPOSITIVE').toUpperCase() === 'YES';
 
-    // Bank details extraction
+    // Identify Dr/Cr ledgers
+    if (isDeemedPositive && absAmt > drAmount) { drLedger = lname; drAmount = absAmt; }
+    if (!isDeemedPositive && absAmt > crAmount) { crLedger = lname; crAmount = absAmt; }
+
+    // Bank allocations extraction (cheque/NEFT/RTGS details)
     const bAllocs = getBlocks(le, 'BANKALLOCATIONS\\.LIST');
     if (bAllocs.length > 0) {
-      bankDetails = {
-        instrument_no: getXmlVal(bAllocs[0], 'INSTRUMENTNUMBER'),
-        instrument_date: getXmlVal(bAllocs[0], 'INSTRUMENTDATE'),
-        bank_name: getXmlVal(bAllocs[0], 'BANKNAME')
-      };
+      const ba = bAllocs[0];
+      paymentMode = getXmlVal(ba, 'TRANSACTIONTYPE') || paymentMode;
+      instrumentNo = getXmlVal(ba, 'INSTRUMENTNUMBER') || instrumentNo;
+      instrumentDate = parseTallyDate(getXmlVal(ba, 'INSTRUMENTDATE')) || instrumentDate;
+      paymentFavouring = getXmlVal(ba, 'PAYMENTFAVOURING') || paymentFavouring;
+      chequeCrossComment = getXmlVal(ba, 'CHEQUECROSSCOMMENT') || chequeCrossComment;
+      urn = getXmlVal(ba, 'UNIQUEREFERENCENUMBER') || urn;
+      adviceStatus = getXmlVal(ba, 'PYMTADVICESTATUS') || adviceStatus;
+      transferMode = getXmlVal(ba, 'TRANSFERMODE') || transferMode;
+      ifscCode = getXmlVal(ba, 'IFSCODE') || ifscCode;
+      bankName = getXmlVal(ba, 'BANKNAME') || bankName;
+      accountNumber = getXmlVal(ba, 'ACCOUNTNUMBER') || accountNumber;
     }
 
-    // Bill allocations extraction
+    // Bill allocations (invoice settlements)
     const bills = getBillAllocations(le).map(b => ({
       name: getXmlVal(b, 'NAME'),
-      amount: Math.abs(parseNum(getXmlVal(b, 'AMOUNT')))
+      bill_type: getXmlVal(b, 'BILLTYPE'),
+      amount: Math.abs(parseNum(getXmlVal(b, 'AMOUNT'))),
+      credit_period: getXmlVal(b, 'BILLCREDITPERIOD') || undefined
     }));
+    if (bills.length > 0) billAllocations.push(...bills);
 
-    lineItems.push({
-      ledger_name: lname,
-      amount: absAmt,
-      is_debit: isDebit,
-      is_party: isParty,
+    ledgerItems.push({
+      ledger_name: lname, amount: absAmt, is_debit: isDebit, is_party: isParty,
       bills: bills.length > 0 ? bills : undefined
     });
 
-    if (absAmt > maxLedgerAmt) maxLedgerAmt = absAmt;
-
     if (BANK_KEYWORDS.some(k => lnameU.includes(k))) {
-      if (!bankLedger || absAmt > bankAmt) {
-        bankLedger = lname;
-        bankAmt = absAmt;
-      }
+      if (!bankLedger || absAmt > bankAmt) { bankLedger = lname; bankAmt = absAmt; }
     }
-    
     if (isParty && !partyName) partyName = lname;
   }
 
-  const finalAmount = v.totalAmount || bankAmt || maxLedgerAmt || 0;
+  const totalAmount = v.totalAmount || Math.max(drAmount, crAmount) || bankAmt || 0;
 
   return {
-    voucher_number:    v.vnum,
-    voucher_type:      v.vtype,
-    date:              v.date,
-    party_name:        partyName,
-    amount:            finalAmount,
-    narration:         v.narration || null,
-    instrument_details:bankDetails,
-    ledger_entries:    lineItems,
-    tally_sync_status: 'synced'
+    voucher_number:      v.vnum,
+    voucher_type:        v.vtype,
+    voucher_date:        v.date,
+    party_name:          partyName,
+    entered_by:          v.enteredBy || null,
+    narration:           v.narration || null,
+    dr_ledger:           drLedger || null,
+    dr_amount:           drAmount,
+    cr_ledger:           crLedger || null,
+    cr_amount:           crAmount,
+    total_amount:        totalAmount,
+    bank_ledger:         bankLedger || null,
+    payment_mode:        paymentMode,
+    instrument_no:       instrumentNo,
+    instrument_date:     instrumentDate,
+    payment_favouring:   paymentFavouring,
+    cheque_cross_comment:chequeCrossComment,
+    urn:                 urn,
+    advice_status:       adviceStatus,
+    transfer_mode:       transferMode,
+    ifsc_code:           ifscCode,
+    bank_name:           bankName,
+    account_number:      accountNumber,
+    bill_allocations:    billAllocations.length > 0 ? billAllocations : null,
+    ledger_entries:      ledgerItems,
+    tally_sync_status:   'synced'
   };
 }
 
+// ── Jobwork / Expenses Builder ───────────────────────────────────────────────
+function buildJobworkExpenseRow(v) {
+  const ledgers = getLedgerEntries(v._vxml);
+  let partyName = v.party || null;
+  let expenseLedger = null, expenseAmount = 0;
+  let tdsAmount = 0, cgstAmt = 0, sgstAmt = 0, igstAmt = 0, roundOff = 0;
+  let partyAmount = 0, billRef = null, billType = null;
+  let ledgerItems = [];
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  for (const le of ledgers) {
+    const lname = getXmlVal(le, 'LEDGERNAME');
+    const lnameU = lname.toUpperCase();
+    const lamt = parseNum(getXmlVal(le, 'AMOUNT'));
+    const absAmt = Math.abs(lamt);
+    const isParty = getXmlVal(le, 'ISPARTYLEDGER').toUpperCase() === 'YES';
+
+    ledgerItems.push({ ledger_name: lname, amount: absAmt, is_party: isParty });
+
+    if (isParty) {
+      partyAmount = absAmt;
+      if (!partyName) partyName = lname;
+      const bills = getBillAllocations(le);
+      if (bills.length > 0) {
+        billRef = getXmlVal(bills[0], 'NAME');
+        billType = getXmlVal(bills[0], 'BILLTYPE');
+      }
+    } else if (lnameU.includes('TDS') || lnameU.includes('TAX DEDUCTED')) {
+      tdsAmount = absAmt;
+    } else if (lnameU.includes('CGST')) { cgstAmt = absAmt; }
+    else if (lnameU.includes('SGST')) { sgstAmt = absAmt; }
+    else if (lnameU.includes('IGST')) { igstAmt = absAmt; }
+    else if (lnameU.includes('ROUND')) { roundOff = lamt; }
+    else {
+      // This is the expense/charge ledger
+      if (absAmt > expenseAmount) { expenseLedger = lname; expenseAmount = absAmt; }
+    }
+  }
+
+  const totalAmount = expenseAmount + cgstAmt + sgstAmt + igstAmt + roundOff - tdsAmount;
+
+  return {
+    voucher_number:      v.vnum,
+    voucher_type:        v.vtype,
+    voucher_date:        v.date,
+    supplier_invoice_no: v.reference || null,
+    party_name:          partyName,
+    party_gstin:         v.partyGstin || null,
+    place_of_supply:     v.placeOfSupply || null,
+    entered_by:          v.enteredBy || null,
+    narration:           v.narration || null,
+    bill_ref:            billRef,
+    bill_type:           billType,
+    expense_ledger:      expenseLedger,
+    expense_amount:      expenseAmount,
+    tds_amount:          tdsAmount,
+    cgst_amount:         cgstAmt,
+    sgst_amount:         sgstAmt,
+    igst_amount:         igstAmt,
+    round_off:           roundOff,
+    party_amount:        partyAmount,
+    total_amount:        totalAmount > 0 ? totalAmount : partyAmount,
+    ledger_entries:      ledgerItems,
+    tally_sync_status:   'synced'
+  };
+}
+
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
@@ -491,14 +581,20 @@ export default async function handler(req, res) {
   const purchaseV = parsedVouchers.filter(v => v.vtype === 'Purchase' && v.date && v.vnum);
   const jobworkTypes = ['Issue to Mill', 'REC FROM MILL', 'Material Out', 'Material In', 'Job Work Out Order', 'Job Work In Order', 'Job Work In', 'Job Work Out'];
   const processV  = parsedVouchers.filter(v => jobworkTypes.includes(v.vtype) && v.date);
-  // Receipt, Payment, Journal, Credit Note, Contra → receipt_payments table
-  const receiptPaymentTypes = ['Receipt', 'Payment', 'Credit Note', 'Debit Note', 'Journal', 'Contra'];
-  const receiptPaymentV = parsedVouchers.filter(v => receiptPaymentTypes.includes(v.vtype) && v.date && v.vnum);
-  // Remaining unknowns → tally_vouchers
-  const knownTypes = new Set(['Sales', 'Purchase', ...jobworkTypes, ...receiptPaymentTypes]);
+
+  // Accounting vouchers → accounting_vouchers table
+  const accountingTypes = ['Receipt', 'Payment', 'Journal', 'Contra', 'Credit Note', 'Debit Note'];
+  const accountingV = parsedVouchers.filter(v => accountingTypes.includes(v.vtype) && v.date && v.vnum);
+
+  // Jobwork / Expenses → jobwork_expenses table
+  const jobExpTypes = ['Jobwork', 'Expenses'];
+  const jobExpV = parsedVouchers.filter(v => jobExpTypes.includes(v.vtype) && v.date && v.vnum);
+
+  // Unknown → tally_vouchers
+  const knownTypes = new Set(['Sales', 'Purchase', ...jobworkTypes, ...accountingTypes, ...jobExpTypes]);
   const otherV    = parsedVouchers.filter(v => !knownTypes.has(v.vtype) && v.date && v.vnum);
 
-  const results = { sales: 0, purchase: 0, process: 0, receipt_payments: 0, others: 0, errors: [] };
+  const results = { sales: 0, purchase: 0, process: 0, accounting: 0, jobwork_expenses: 0, others: 0, errors: [] };
 
   if (salesV.length > 0) {
     const rows = salesV.map(buildSalesRow);
@@ -521,12 +617,20 @@ export default async function handler(req, res) {
     else results.process = rows.length;
   }
 
-  // NEW: Financial Vouchers (Receipts, Payments, Contras, Journals, Notes)
-  if (receiptPaymentV.length > 0) {
-    const rows = receiptPaymentV.map(buildFinancialVoucherRow);
-    const { error } = await supabase.from('financial_vouchers').upsert(rows, { onConflict: 'voucher_number,voucher_type,date' });
-    if (error) results.errors.push(`Financial Vouchers error: ${error.message}`);
-    else results.receipt_payments = rows.length;
+  // Accounting Vouchers (Receipts, Payments, Contras, Journals, Credit/Debit Notes)
+  if (accountingV.length > 0) {
+    const rows = accountingV.map(buildAccountingVoucherRow);
+    const { error } = await supabase.from('accounting_vouchers').upsert(rows, { onConflict: 'voucher_number,voucher_type' });
+    if (error) results.errors.push(`Accounting Vouchers error: ${error.message}`);
+    else results.accounting = rows.length;
+  }
+
+  // Jobwork & Expenses
+  if (jobExpV.length > 0) {
+    const rows = jobExpV.map(buildJobworkExpenseRow);
+    const { error } = await supabase.from('jobwork_expenses').upsert(rows, { onConflict: 'voucher_number' });
+    if (error) results.errors.push(`Jobwork/Expenses error: ${error.message}`);
+    else results.jobwork_expenses = rows.length;
   }
 
   if (otherV.length > 0) {
@@ -548,10 +652,11 @@ export default async function handler(req, res) {
     else results.others = rows.length;
   }
 
+  const total = results.sales + results.purchase + results.process + results.accounting + results.jobwork_expenses + results.others;
   res.status(200).json({
     status: 'success',
     success: results.errors.length === 0,
-    records_synced: results.sales + results.purchase + results.process + results.receipt_payments + results.others,
+    records_synced: total,
     synced: results
   });
 }

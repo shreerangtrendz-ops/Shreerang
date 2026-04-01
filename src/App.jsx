@@ -110,6 +110,7 @@ import SalesBillsPage from '@/pages/admin/accounting/SalesBillsPage';
 import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
 import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 import FinancialVouchersPage from '@/pages/admin/accounting/FinancialVouchersPage';
+import JobWorkExpensesPage from '@/pages/admin/accounting/JobWorkExpensesPage';
 import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
@@ -273,6 +274,7 @@ const App = () => {
                     <Route path="accounting/job-work-bills" element={<JobWorkBillsPage />} />
                     <Route path="accounting/quotations" element={<QuotationsPage />} />
                     <Route path="accounting/financial-vouchers" element={<FinancialVouchersPage />} />
+                    <Route path="accounting/jobwork-expenses" element={<JobWorkExpensesPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

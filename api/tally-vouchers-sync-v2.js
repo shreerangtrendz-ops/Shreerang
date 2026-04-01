@@ -422,7 +422,7 @@ function buildFinancialVoucherRow(v) {
     const isParty = getXmlVal(le, 'ISPARTYLEDGER').toUpperCase() === 'YES';
 
     // Bank details extraction
-    const bAllocs = getArray(le, 'BANKALLOCATIONS.LIST');
+    const bAllocs = getBlocks(le, 'BANKALLOCATIONS\\.LIST');
     if (bAllocs.length > 0) {
       bankDetails = {
         instrument_no: getXmlVal(bAllocs[0], 'INSTRUMENTNUMBER'),
@@ -524,7 +524,7 @@ export default async function handler(req, res) {
   // NEW: Financial Vouchers (Receipts, Payments, Contras, Journals, Notes)
   if (receiptPaymentV.length > 0) {
     const rows = receiptPaymentV.map(buildFinancialVoucherRow);
-    const { error } = await supabase.from('financial_vouchers').upsert(rows, { onConflict: 'voucher_number,voucher_type' });
+    const { error } = await supabase.from('financial_vouchers').upsert(rows, { onConflict: 'voucher_number,voucher_type,date' });
     if (error) results.errors.push(`Financial Vouchers error: ${error.message}`);
     else results.receipt_payments = rows.length;
   }

@@ -111,6 +111,10 @@ import JobWorkBillsPage from '@/pages/admin/accounting/JobWorkBillsPage';
 import QuotationsPage from '@/pages/admin/accounting/QuotationsPage';
 import FinancialVouchersPage from '@/pages/admin/accounting/FinancialVouchersPage';
 import JobWorkExpensesPage from '@/pages/admin/accounting/JobWorkExpensesPage';
+import TallyAccountingHub from '@/pages/admin/accounting/TallyAccountingHub';
+import OutstandingReceivableV2 from '@/pages/reports/OutstandingReceivableV2';
+import OutstandingPayableV2 from '@/pages/reports/OutstandingPayableV2';
+import DesignCostingPage from '@/pages/admin/accounting/DesignCostingPage';
 import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
@@ -220,7 +224,9 @@ const App = () => {
                     <Route path="customer-360" element={<Customer360Page />} />
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
                     <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
+                    <Route path="outstanding-receivable-v2" element={<OutstandingReceivableV2 />} />
                     <Route path="outstanding-payable" element={<OutstandingPayable />} />
+                    <Route path="outstanding-payable-v2" element={<OutstandingPayableV2 />} />
                     <Route path="cash-bank" element={<CashBankBalance />} />
 
                     {/* CRM & Access */}
@@ -275,6 +281,8 @@ const App = () => {
                     <Route path="accounting/quotations" element={<QuotationsPage />} />
                     <Route path="accounting/financial-vouchers" element={<FinancialVouchersPage />} />
                     <Route path="accounting/jobwork-expenses" element={<JobWorkExpensesPage />} />
+                    <Route path="accounting/hub" element={<TallyAccountingHub />} />
+                    <Route path="accounting/design-costing" element={<DesignCostingPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

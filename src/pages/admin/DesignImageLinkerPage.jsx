@@ -209,7 +209,7 @@ export default function DesignImageLinkerPage() {
                 onDrop={e=>handleFileDrop(d.design_no,e)}
                 style={{
                   background: isDragTarget ? T.tealLight : T.surface,
-                  border: `2px ${isDragTarget?'dashed solid'}[0] solid ${isDragTarget?T.teal:d.has_image?T.green:T.border}`,
+                  border: `2px solid ${isDragTarget?T.teal:d.has_image?T.green:T.border}`,
                   borderStyle: isDragTarget ? 'dashed' : 'solid',
                   borderRadius:10,overflow:'hidden',cursor:'pointer',
                   transition:'all .15s',

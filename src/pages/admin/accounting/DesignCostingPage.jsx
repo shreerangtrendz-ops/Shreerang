@@ -15,8 +15,10 @@ const T = {
   border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
   text:'#0B2E2B', muted:'#6A9B95',
 };
-const fmt  = n => '₹' + Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
-const fmtR = n => '₹' + Number(n||0).toFixed(2);
+const fmt  = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:2});
+const fmtR = n => '₹' + Math.abs(Number(n||0)).toFixed(2);
+// fmtS = signed formatter, used only for profit/margin figures
+const fmtS = n => { const v=Number(n||0); return (v>=0?'+':'-')+'₹'+Math.abs(v).toFixed(2); };
 const fmtQ = n => Number(n||0).toFixed(2)+' m';
 const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
 const pct  = n => n != null ? (Number(n)>=0?'+':'')+Number(n).toFixed(1)+'%' : '—';
@@ -103,14 +105,17 @@ export default function DesignCostingPage() {
       return sortAsc ? av-bv : bv-av;
     });
 
+  // abs() costs since DB view stores them as negative (accounting convention)
+  const abs = v => Math.abs(Number(v||0));
   const agg = filtered.reduce((a,r)=>({
-    batchCost:  a.batchCost  + Number(r.total_batch_cost||0),
+    batchCost:  a.batchCost  + abs(r.total_batch_cost),
     revenue:    a.revenue    + Number(r.net_revenue||0),
     unsold:     a.unsold     + Number(r.unsold_qty_mtrs||0),
     commission: a.commission + Number(r.broker_commission||0),
     designs:    a.designs    + 1,
   }),{batchCost:0,revenue:0,unsold:0,commission:0,designs:0});
   const overallMargin = agg.batchCost>0 ? ((agg.revenue-agg.batchCost)/agg.batchCost*100).toFixed(1) : null;
+  // overallMargin is now correct: revenue is positive, batchCost is abs'd positive
 
   const mills = [...new Set(rows.map(r=>r.mill_name).filter(Boolean))].sort();
 
@@ -229,12 +234,12 @@ export default function DesignCostingPage() {
                       <td style={{padding:'8px 10px',color:T.text,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.finish_item_name||'—'}</td>
                       <td style={{padding:'8px 10px',color:T.muted,fontSize:10,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.mill_name||'—'}</td>
                       <td style={{padding:'8px 10px',textAlign:'right'}}>{fmtQ(r.finish_qty_mtrs)}</td>
-                      <td style={{padding:'8px 10px',textAlign:'right',color:T.red,fontWeight:600}}>{fmtR(r.factory_cost_per_mtr||0)}</td>
+                      <td style={{padding:'8px 10px',textAlign:'right',color:T.red,fontWeight:600}}>{fmtR(Math.abs(r.factory_cost_per_mtr||0))}</td>
                       <td style={{padding:'8px 10px',textAlign:'right',color:T.green,fontWeight:600}}>{fmtR(r.avg_selling_rate||0)}</td>
-                      <td style={{padding:'8px 10px',textAlign:'right'}}>{fmt(r.total_batch_cost||0)}</td>
+                      <td style={{padding:'8px 10px',textAlign:'right'}}>{fmt(Math.abs(r.total_batch_cost||0))}</td>
                       <td style={{padding:'8px 10px',textAlign:'right',color:T.green}}>{fmt(r.net_revenue||0)}</td>
                       <td style={{padding:'8px 10px',textAlign:'right'}}><MarginBadge value={r.gross_margin_pct} /></td>
-                      <td style={{padding:'8px 10px',textAlign:'right',color:Number(r.profit_per_mtr||0)>=0?T.green:T.red,fontWeight:600}}>{fmtR(r.profit_per_mtr||0)}</td>
+                      <td style={{padding:'8px 10px',textAlign:'right',color:Number(r.profit_per_mtr||0)>=0?T.green:T.red,fontWeight:600}}>{fmtS(r.profit_per_mtr||0)}</td>
                       <td style={{padding:'8px 10px',textAlign:'right',color:T.text}}>{fmtQ(r.sold_qty_mtrs||0)}</td>
                       <td style={{padding:'8px 10px',textAlign:'right',color:Number(r.unsold_qty_mtrs||0)>0?T.gold:T.muted}}>{fmtQ(r.unsold_qty_mtrs||0)}</td>
                       <td style={{padding:'8px 10px',textAlign:'right',color:T.red}}>{Number(r.shortage_pct||0).toFixed(1)}%</td>
@@ -249,12 +254,12 @@ export default function DesignCostingPage() {
                             {[
                               {label:'Grey Purchase',value:fmtR(r.grey_purchase_rate||0)+'/m',color:T.blue},
                               {label:'→ Grey Cost',  value:fmt(r.grey_fabric_cost||0),color:T.blue},
-                              {label:'+ Mill Job',   value:fmt(r.mill_processing_cost||0)+' @'+fmtR(r.mill_processing_rate||0)+'/m',color:T.orange},
-                              {label:'= Batch Cost', value:fmt(r.total_batch_cost||0),color:T.red, bold:true},
+                              {label:'+ Mill Job',   value:fmt(Math.abs(r.mill_processing_cost||0))+' @'+fmtR(Math.abs(r.mill_processing_rate||0))+'/m',color:T.orange},
+                              {label:'= Batch Cost', value:fmt(Math.abs(r.total_batch_cost||0)),color:T.red, bold:true},
                               {label:'÷ Finish Qty', value:fmtQ(r.finish_qty_mtrs||0),color:T.muted},
-                              {label:'= Factory/m',  value:fmtR(r.factory_cost_per_mtr||0),color:T.red, bold:true},
+                              {label:'= Factory/m',  value:fmtR(Math.abs(r.factory_cost_per_mtr||0)),color:T.red, bold:true},
                               {label:'Sold @',       value:fmtR(r.avg_selling_rate||0)+'/m',color:T.green, bold:true},
-                              {label:'= Profit/m',   value:fmtR(r.profit_per_mtr||0),color:Number(r.profit_per_mtr||0)>=0?T.green:T.red, bold:true},
+                              {label:'= Profit/m',   value:fmtS(r.profit_per_mtr||0),color:Number(r.profit_per_mtr||0)>=0?T.green:T.red, bold:true},
                             ].map((f,fi)=>(
                               <div key={fi} style={{background:T.surface,borderRadius:6,padding:'5px 10px',border:`1px solid ${T.border}`}}>
                                 <div style={{fontSize:8,color:T.muted,textTransform:'uppercase'}}>{f.label}</div>
@@ -275,11 +280,11 @@ export default function DesignCostingPage() {
                               ['Grey Rate',        fmtR(r.grey_purchase_rate||0)+'/m', T.blue, false],
                               ['Grey Fabric Cost', fmt(r.grey_fabric_cost||0),  T.text, true ],
                               ['Mill Rate',        fmtR(r.mill_processing_rate||0)+'/m', T.orange, false],
-                              ['Mill Job Cost',    fmt(r.mill_processing_cost||0), T.orange, true ],
-                              ['Total Batch Cost', fmt(r.total_batch_cost||0),  T.red, true ],
-                              ['Factory Cost/m',   fmtR(r.factory_cost_per_mtr||0), T.red, true ],
+                              ['Mill Job Cost',    fmt(Math.abs(r.mill_processing_cost||0)), T.orange, true ],
+                              ['Total Batch Cost', fmt(Math.abs(r.total_batch_cost||0)),  T.red, true ],
+                              ['Factory Cost/m',   fmtR(Math.abs(r.factory_cost_per_mtr||0)), T.red, true ],
                               ['Avg Selling Rate', fmtR(r.avg_selling_rate||0)+'/m', T.green, true ],
-                              ['Profit/m',         fmtR(r.profit_per_mtr||0),   Number(r.profit_per_mtr||0)>=0?T.green:T.red, true ],
+                              ['Profit/m',         fmtS(r.profit_per_mtr||0),   Number(r.profit_per_mtr||0)>=0?T.green:T.red, true ],
                               ['Gross Revenue',    fmt(r.gross_revenue||0),     T.green, false],
                               ['Credit Note Adj',  fmt(r.credit_note_adj||0),   T.purple, false],
                               ['Net Revenue',      fmt(r.net_revenue||0),       T.green, true ],

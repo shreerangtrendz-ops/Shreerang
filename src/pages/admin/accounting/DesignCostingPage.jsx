@@ -6,6 +6,9 @@ import { customSupabase as supabase } from '@/lib/customSupabaseClient';
    Full P&L per design: Grey → Mill → Finish → Sale → Margin
    Formula: Factory Cost/m = (Grey Fabric Cost + Job Cost) / Finish Qty
    Margin % = (Net Revenue - Batch Cost) / Batch Cost × 100
+   SIGN CONVENTION: All costs display as POSITIVE. Only Profit/m and
+   Margin % are signed (− means loss). DB view stores costs negative
+   (Tally accounting convention) — we abs() them on display.
    ══════════════════════════════════════════════════════════════════ */
 
 const T = {
@@ -15,9 +18,10 @@ const T = {
   border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
   text:'#0B2E2B', muted:'#6A9B95',
 };
+// All cost formatters use Math.abs() — DB stores costs negative (Tally convention)
 const fmt  = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:2});
 const fmtR = n => '₹' + Math.abs(Number(n||0)).toFixed(2);
-// fmtS = signed formatter, used only for profit/margin figures
+// fmtS = signed formatter, ONLY for profit/margin (can be negative = loss)
 const fmtS = n => { const v=Number(n||0); return (v>=0?'+':'-')+'₹'+Math.abs(v).toFixed(2); };
 const fmtQ = n => Number(n||0).toFixed(2)+' m';
 const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
@@ -105,7 +109,7 @@ export default function DesignCostingPage() {
       return sortAsc ? av-bv : bv-av;
     });
 
-  // abs() costs since DB view stores them as negative (accounting convention)
+  // abs() costs: DB view stores mill/batch costs as negative (Tally accounting convention)
   const abs = v => Math.abs(Number(v||0));
   const agg = filtered.reduce((a,r)=>({
     batchCost:  a.batchCost  + abs(r.total_batch_cost),
@@ -115,7 +119,6 @@ export default function DesignCostingPage() {
     designs:    a.designs    + 1,
   }),{batchCost:0,revenue:0,unsold:0,commission:0,designs:0});
   const overallMargin = agg.batchCost>0 ? ((agg.revenue-agg.batchCost)/agg.batchCost*100).toFixed(1) : null;
-  // overallMargin is now correct: revenue is positive, batchCost is abs'd positive
 
   const mills = [...new Set(rows.map(r=>r.mill_name).filter(Boolean))].sort();
 
@@ -133,7 +136,6 @@ export default function DesignCostingPage() {
         <p style={{fontSize:12,color:T.muted,margin:'4px 0 0'}}>Full P&amp;L per design · Grey → Mill → Sale · Margin visibility</p>
       </div>
 
-      {/* Formulas */}
       <FormulaPanel />
 
       {/* KPIs */}
@@ -217,7 +219,6 @@ export default function DesignCostingPage() {
             </thead>
             <tbody>
               {filtered.map((r,i)=>{
-                const margin = Number(r.gross_margin_pct||0);
                 const rowBg = expanded===i ? T.tealLight : i%2===0?'#fff':'#FAFFFE';
                 return (
                   <>

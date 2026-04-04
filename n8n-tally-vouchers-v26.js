@@ -63,6 +63,16 @@ function getXmlVal(xml, tag) {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
   return m ? m[1].trim() : '';
 }
+// cleanRef: strips embedded XML tags from a reference field value
+// Tally sometimes embeds XML inside <REFERENCE>VALUE</OTHERDATE>...) 
+// We want just the first text token before any < character
+function cleanRef(val) {
+  if (!val) return '';
+  // If it contains XML tags, extract just the first text portion before any tag
+  const stripped = val.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Also trim any trailing whitespace/newlines and take up to first space-separated token group
+  return stripped.split(/\s*<\s*/)[0].trim() || val.replace(/<[\s\S]*/,'').trim();
+}
 function parseQty(s)  { if (!s) return 0; return parseFloat(s.replace(/mtrs?/gi,'').replace(/nos?/gi,'').trim()) || 0; }
 function parseRate(s) { if (!s) return 0; return parseFloat(s.replace(/\/mtrs?/gi,'').replace(/\/nos?/gi,'').trim()) || 0; }
 function parseNum(s)  { if (!s) return 0; return parseFloat(s.replace(/,/g,'').trim()) || 0; }
@@ -157,7 +167,7 @@ function parseVoucher(vxml) {
   const attrM = vxml.match(/\bVCHTYPE="([^"]+)"/i);
   const vtype = (attrM ? attrM[1] : getXmlVal(vxml,'VOUCHERTYPENAME')).trim();
   const vnum       = getXmlVal(vxml,'VOUCHERNUMBER');
-  const reference  = getXmlVal(vxml,'REFERENCE');
+  const reference  = cleanRef(getXmlVal(vxml,'REFERENCE'));
   const date       = parseTallyDate(getXmlVal(vxml,'EFFECTIVEDATE') || getXmlVal(vxml,'DATE'));
   const party      = getXmlVal(vxml,'PARTYLEDGERNAME') || getXmlVal(vxml,'BASICBUYERNAME');
   const partyGstin = getXmlVal(vxml,'PARTYGSTIN') || getXmlVal(vxml,'CONSIGNEEGSTIN');
@@ -546,7 +556,9 @@ function buildRecFromMillRow(v) {
       job_rate:     parseNum(getUdfVal(outEntries[0],'JOBRATE')||getXmlVal(outEntries[0],'JOBRATE'))||0,
       job_amount:   parseNum(getUdfVal(outEntries[0],'JOBAMOUNT')||getXmlVal(outEntries[0],'JOBAMOUNT'))||0,
       gross_amount: parseNum(getUdfVal(outEntries[0],'GROSSAMT')||getXmlVal(outEntries[0],'GROSSAMT'))||0,
-      grey_recd_qty_mtrs: parseQty(getXmlVal(outEntries[0],'BILLEDQTY'))||g.billed_qty||0,
+      // grey_recd_qty_mtrs = finished fabric received back (IN entry qty), NOT out entry billed qty
+      // This is set after finishItem is parsed below; set placeholder here
+      grey_recd_qty_mtrs: 0,
       short_qty_mtrs: parseNum(getUdfVal(outEntries[0],'SHORTQTY')||'0'),
     };
     if (!greyItem.gross_amount && greyItem.grey_amount && greyItem.job_amount)
@@ -571,9 +583,9 @@ function buildRecFromMillRow(v) {
   const shortagePct  = parseNum(getUdfVal(v._vxml,'SHORTPERC')||getXmlVal(v._vxml,'SHORTPERC')||'0')
     ||(shortageMtrs&&greyItem.grey_issued_qty_mtrs?parseFloat(((shortageMtrs/greyItem.grey_issued_qty_mtrs)*100).toFixed(2)):0);
   return {
-    party_challan_no: v.reference || v.vnum,
+    party_challan_no: v.reference || v.vnum,   // reference = jobworker GP number (already cleanRef'd)
     tally_voucher_no: v.vnum||null, voucher_date: v.date,
-    mill_name: v.party||null,
+    mill_name: v.party || greyItem.grey_item_name?.match(/^(.+?)\s+\d/)?.[1] || null,
     lot_no: cleanDesignNo(getUdfVal(v._vxml,'LOTNO')||getXmlVal(v._vxml,'BATCHNAME')||greyItem.grey_lot_no||'')||greyItem.grey_lot_no||null,
     issue_challan_no: getUdfVal(v._vxml,'ISSUECHALLANNO')||getXmlVal(v._vxml,'ISSUECHALLANNO')||null,
     job_godown: getUdfVal(v._vxml,'JOBGODOWN')||getXmlVal(v._vxml,'JOBGODOWN')||greyItem.source_godown||null,
@@ -583,6 +595,9 @@ function buildRecFromMillRow(v) {
     shortage_mtrs: shortageMtrs, shortage_pct: shortagePct,
     narration: v.narration||null,
     ...greyItem, ...finishItem,
+    // Correct mapping: grey_recd_qty_mtrs = finished fabric RECEIVED back (IN entry qty)
+    // NOT the grey issued qty (OUT entry). finish_qty_mtrs and grey_recd_qty_mtrs both = IN qty
+    grey_recd_qty_mtrs: finishItem.finish_qty_mtrs || greyItem.grey_issued_qty_mtrs || 0,
     tally_synced_at: new Date().toISOString()
   };
 }

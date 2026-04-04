@@ -125,7 +125,9 @@ export default function JobWorkBillsPage() {
         // Full Tally chain fields
         gp_bill_no: s.supplier_bill_no || s.purchase_voucher_no || s.gp_bill_no,
         lot_no: s.lot_no,
-        party_ch_no: (s.party_ch_no || '').replace(/<[^>]*>/g, '').trim(),
+        // party_ch_no = jobworker's OWN bill/challan number (the reference field in REC FROM MILL)
+        // This is NOT the Tally voucher number - it's what the jobworker wrote on their receipt
+        party_ch_no: (s.party_ch_no || '').replace(/<[^>]*>/g, '').replace(/\s+/g,' ').trim() || null,
         issue_challan_no: s.challan_no || s.issue_challan_no,
         grey_fabric_name: s.grey_fabric_name,
         finished_fabric_name: s.finished_fabric_name,
@@ -346,11 +348,12 @@ export default function JobWorkBillsPage() {
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
               <thead>
                 <tr>
-                  <TH label="Bill No"    col="bill_number"/>
+                  <TH label="Tally Vch"  col="bill_number"/>
                   <TH label="Date"       col="issue_date"/>
                   <TH label="Mill / Worker"/>
                   <TH label="Process"    col="process_type"/>
                   <TH label="Design No"  col="design_no"/>
+                  <TH label="JW Bill No" col="party_ch_no"/>
                   <TH label="GP Bill"    col="gp_bill_no"/>
                   <TH label="Lot No"     col="lot_no"/>
                   <TH label="Qty (m)"    col="quantity"    right/>
@@ -368,11 +371,12 @@ export default function JobWorkBillsPage() {
                   return (<>
                     <tr key={r._id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.surface:T.bg, cursor:'pointer'}}
                       onClick={()=>setExpandedId(isExpanded?null:r._id)}>
-                      <td style={{padding:'9px 12px',fontWeight:700,color:T.teal,whiteSpace:'nowrap'}}>{r.bill_number}</td>
+                      <td style={{padding:'9px 12px',fontWeight:500,color:T.muted,whiteSpace:'nowrap',fontSize:11}}>{r.bill_number}</td>
                       <td style={{padding:'9px 12px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(r.issue_date)}</td>
                       <td style={{padding:'9px 12px',fontWeight:500,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.worker_name||'—'}</td>
                       <td style={{padding:'9px 12px'}}>{processChip(r.process_type)}</td>
                       <td style={{padding:'9px 12px',color:T.blue,fontWeight:600}}>{r.design_no||'—'}</td>
+                      <td style={{padding:'9px 12px',color:T.teal,fontWeight:700}}>{r.party_ch_no||'—'}</td>
                       <td style={{padding:'9px 12px',color:T.orange,fontWeight:600}}>{r.gp_bill_no||'—'}</td>
                       <td style={{padding:'9px 12px',color:T.text,fontSize:11}}>{r.lot_no||'—'}</td>
                       <td style={{padding:'9px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace"}}>{r.quantity!=null?fmtQty(r.quantity):'—'}</td>

@@ -420,6 +420,57 @@ function buildIssueToMillRow(v) {
   };
 }
 
+// ─── Build mill_challan_takas rows from Issue to Mill batch allocations ───────
+// Each batch allocation in Issue to Mill = one taka (roll) with its metres
+function buildMillChallanTakaRows(v) {
+  const invEntries = getInventoryEntries(v._vxml);
+  if (!invEntries.length) return [];
+  const entry = invEntries[0] ? parseInvEntry(invEntries[0]) : {};
+  const lotNo = (entry.batches?.[0]?.batch_name) || v.reference || v.vnum;
+  if (!lotNo) return [];
+
+  const rows = [];
+  let takaGroup = 'part1';
+  let takaCount = 0;
+
+  // Each batch allocation = one taka
+  for (const inv of invEntries) {
+    const batches = getBatchAllocations(inv);
+    for (const b of batches) {
+      const batchName = getXmlVal(b, 'BATCHNAME');
+      const qty = parseQty(getXmlVal(b, 'ACTUALQTY') || getXmlVal(b, 'BILLEDQTY'));
+      if (!qty || qty <= 0) continue;
+
+      takaCount++;
+      // Group by 12s (typical challan part structure)
+      takaGroup = takaCount <= 12 ? 'part1' : takaCount <= 24 ? 'part2' : 'part3';
+
+      rows.push({
+        lot_no:            lotNo,
+        taka_sr_no:        takaCount,
+        taka_mtrs:         qty,
+        taka_group:        takaGroup,
+        issue_voucher_number: v.vnum || null,
+        tally_synced_at:   new Date().toISOString(),
+      });
+    }
+  }
+
+  // If no batch-level data, create summary row from UDF taka count
+  if (rows.length === 0 && entry.taka_pcs > 0 && entry.qty > 0) {
+    const avgQty = parseFloat((entry.qty / entry.taka_pcs).toFixed(2));
+    for (let i = 1; i <= entry.taka_pcs; i++) {
+      rows.push({
+        lot_no: lotNo, taka_sr_no: i, taka_mtrs: avgQty,
+        taka_group: i <= 12 ? 'part1' : i <= 24 ? 'part2' : 'part3',
+        issue_voucher_number: v.vnum || null,
+        tally_synced_at: new Date().toISOString(),
+      });
+    }
+  }
+  return rows;
+}
+
 function buildProcessRow(v) {
   const isReceipt  = v.vtype === 'REC FROM MILL';
   const outEntries = getBlocks(v._vxml, 'INVENTORYENTRIESOUT\\.LIST');
@@ -880,6 +931,27 @@ const s4   =await upsert.call(this,'purchase_bills',     purchaseV.map(buildPurc
 const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.map(buildGreyPurchaseRow),      'supplier_invoice_no,voucher_date','S4b');
 const s5   =await upsert.call(this,'process_issues',     processV.map(buildProcessRow),            'challan_no',                     'S5');
 const s5b  =await upsert.call(this,'issue_to_mill',      issueToMillV.map(buildIssueToMillRow),    'lot_no,voucher_date',             'S5b');
+
+// S5e: mill_challan_takas — taka-by-taka detail per Issue to Mill challan
+const allTakaRows = issueToMillV.flatMap(v => buildMillChallanTakaRows(v));
+log.push(`S5e:start rows=${allTakaRows.length}`);
+let s5e = true;
+if (allTakaRows.length) {
+  try {
+    const CHUNK = 200;
+    for (let i=0; i<allTakaRows.length; i+=CHUNK) {
+      const chunk = allTakaRows.slice(i, i+CHUNK);
+      const r = await this.helpers.httpRequest({
+        method:'POST',
+        url:`${SUPABASE_URL}/rest/v1/mill_challan_takas?on_conflict=lot_no,taka_sr_no`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify(chunk), returnFullResponse:true
+      });
+      if (r.statusCode>=400) { log.push(`S5e:FAIL ${r.statusCode} ${(typeof r.body==='string'?r.body:JSON.stringify(r.body)).slice(0,200)}`); s5e=false; break; }
+    }
+    if (s5e) log.push(`S5e:ok rows=${allTakaRows.length}`);
+  } catch(e) { log.push(`S5e:ERR ${e.message}`); s5e=false; }
+}
 const s5c  =await upsert.call(this,'rec_from_mill',      recFromMillV.map(buildRecFromMillRow),    'party_challan_no,voucher_date',   'S5c');
 const s5d  =await upsert.call(this,'stock_journal',      stockJournalV.map(buildStockJournalRow),  'tally_voucher_no',               'S5d');
 const s_cn =await upsertCreditNotes.call(this, creditNoteV);
@@ -935,5 +1007,6 @@ return [{json:{
   synced:{sales:salesV.length,purchase:purchaseV.length,issueToMill:issueToMillV.length,
     recFromMill:recFromMillV.length,processIssues:processV.length,creditNotes:creditNoteV.length,
     debitNotes:debitNoteV.length,jobwork:jobworkV.length,stockJournal:stockJournalV.length,
-    accounting:accountingV.length,accountingLines:allAccountingLines.length,total},log
+    accounting:accountingV.length,accountingLines:allAccountingLines.length,
+    challanTakas:allTakaRows.length,total},log
 }}];

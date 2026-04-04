@@ -1,192 +1,281 @@
-import { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
-import { supabase } from '../../lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
-const T = { navy:'#0B2E2B', teal:'#2BA898', gold:'#E8A800', bg:'#F4FBFA' };
-const fmt = n => '₹'+Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
+/* Cash & Bank — reads from accounting_vouchers (Receipt/Payment/Contra)
+   Shows bank account balances, transaction detail, monthly summary */
+
+const T = {
+  navy:'#0B2E2B', teal:'#2BA898', tealLight:'#EEF8F6',
+  green:'#1E9E5A', red:'#E74C3C', orange:'#E67E22',
+  blue:'#2468C8', gold:'#E8A800', border:'#D0EDE8',
+  bg:'#F0F9F7', surface:'#FFFFFF', text:'#0B2E2B', muted:'#6A9B95',
+};
+const fmt  = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
+const fmtL = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
+const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
+
+const TYPE_META = {
+  Receipt: {col:'#065F46',bg:'#D1FAE5',icon:'💚'},
+  Payment: {col:'#92400E',bg:'#FEF3C7',icon:'💸'},
+  Contra:  {col:'#1D4ED8',bg:'#DBEAFE',icon:'🔄'},
+  Journal: {col:'#374151',bg:'#F3F4F6',icon:'📒'},
+};
+
+function todayISO() { return new Date().toISOString().slice(0,10); }
 
 export default function CashBankBalance() {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [txns, setTxns]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [tab, setTab] = useState('transactions');
+  const [bankFilter, setBankFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('2025-04-01');
+  const [dateTo, setDateTo]     = useState(todayISO());
+  const [expanded, setExpanded] = useState(null);
 
-  useEffect(() => { loadData(); }, []);
-
-  async function loadData() {
+  const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('receipt_payments')
-      .select('*')
-      .order('voucher_date', { ascending: false })
+    const {data} = await supabase.from('accounting_vouchers')
+      .select('voucher_number,voucher_type,voucher_date,party_name,total_amount,dr_amount,cr_amount,bank_ledger,payment_mode,instrument_no,instrument_date,urn,payment_favouring,transfer_mode,narration,entered_by,bill_allocations')
+      .in('voucher_type',['Receipt','Payment','Contra','Journal'])
+      .gte('voucher_date', dateFrom)
+      .lte('voucher_date', dateTo)
+      .order('voucher_date', {ascending:false})
       .limit(2000);
-    if (error) console.error('receipt_payments error:', error);
-    setTransactions(data || []);
+    setTxns(data||[]);
     setLoading(false);
-  }
+  }, [dateFrom, dateTo]);
 
-  const filtered = transactions.filter(t => {
-    if (typeFilter && t.voucher_type !== typeFilter) return false;
-    if (dateFrom && t.voucher_date < dateFrom) return false;
-    if (dateTo && t.voucher_date > dateTo) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      return (t.party_name||'').toLowerCase().includes(s) ||
-        (t.voucher_number||'').toLowerCase().includes(s) ||
-        (t.bank_ledger||'').toLowerCase().includes(s) ||
-        (t.narration||'').toLowerCase().includes(s);
-    }
+  useEffect(()=>{ load(); }, [load]);
+
+  const filtered = txns.filter(t=>{
+    if (typeFilter && t.voucher_type!==typeFilter) return false;
+    if (bankFilter && t.bank_ledger!==bankFilter) return false;
+    if (search && !t.party_name?.toLowerCase().includes(search.toLowerCase())
+      && !t.voucher_number?.toLowerCase().includes(search.toLowerCase())
+      && !t.instrument_no?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const receipts = filtered.filter(t => t.voucher_type === 'Receipt');
-  const payments = filtered.filter(t => t.voucher_type === 'Payment');
-  const totalReceipts = receipts.reduce((s,t) => s + Number(t.amount||0), 0);
-  const totalPayments = payments.reduce((s,t) => s + Number(t.amount||0), 0);
-  const netCashFlow = totalReceipts - totalPayments;
-
-  // Group by bank_ledger for account balances
+  // Bank account summary
   const bankMap = {};
-  transactions.forEach(t => {
-    const bank = t.bank_ledger || 'Unknown';
-    if (!bankMap[bank]) bankMap[bank] = { name: bank, receipts: 0, payments: 0, count: 0 };
+  txns.forEach(t=>{
+    const bank = t.bank_ledger||'Unspecified';
+    if (!bankMap[bank]) bankMap[bank]={name:bank,receipts:0,payments:0,contra:0,count:0};
     bankMap[bank].count++;
-    if (t.voucher_type === 'Receipt') bankMap[bank].receipts += Number(t.amount||0);
-    else if (t.voucher_type === 'Payment') bankMap[bank].payments += Number(t.amount||0);
+    const amt = Number(t.total_amount||t.dr_amount||0);
+    if (t.voucher_type==='Receipt')  bankMap[bank].receipts+=amt;
+    if (t.voucher_type==='Payment')  bankMap[bank].payments+=amt;
+    if (t.voucher_type==='Contra')   bankMap[bank].contra+=amt;
   });
-  const accounts = Object.values(bankMap).sort((a,b) => (b.receipts-b.payments) - (a.receipts-a.payments));
+  const bankAccounts = Object.values(bankMap).sort((a,b)=>(b.receipts-b.payments)-(a.receipts-a.payments));
+  const banks = [...new Set(txns.map(t=>t.bank_ledger).filter(Boolean))].sort();
 
-  const CARD = { background:'#fff', borderRadius:12, padding:'14px 18px', boxShadow:'0 1px 6px rgba(0,0,0,.06)', border:'1px solid rgba(43,168,152,.1)' };
+  // Monthly summary
+  const monthMap = {};
+  txns.forEach(t=>{
+    const m=(t.voucher_date||'').slice(0,7);
+    if (!m) return;
+    if (!monthMap[m]) monthMap[m]={month:m,receipts:0,payments:0,contra:0,count:0};
+    monthMap[m].count++;
+    const amt=Number(t.total_amount||t.dr_amount||0);
+    if (t.voucher_type==='Receipt') monthMap[m].receipts+=amt;
+    if (t.voucher_type==='Payment') monthMap[m].payments+=amt;
+    if (t.voucher_type==='Contra')  monthMap[m].contra+=amt;
+  });
+  const months = Object.values(monthMap).sort((a,b)=>b.month.localeCompare(a.month));
+
+  const totalR = filtered.filter(t=>t.voucher_type==='Receipt').reduce((s,t)=>s+Number(t.total_amount||0),0);
+  const totalP = filtered.filter(t=>t.voucher_type==='Payment').reduce((s,t)=>s+Number(t.total_amount||0),0);
+  const totalC = filtered.filter(t=>t.voucher_type==='Contra').reduce((s,t)=>s+Number(t.total_amount||0),0);
+
+  const exportCSV = () => {
+    const rows = ['Date,Type,Voucher,Party,Bank,Mode,Instrument,Amount,Narration',
+      ...filtered.map(t=>[t.voucher_date,t.voucher_type,t.voucher_number,`"${t.party_name||''}"`,t.bank_ledger||'',t.payment_mode||'',t.instrument_no||'',t.total_amount||0,`"${(t.narration||'').replace(/"/g,"'")}"`].join(','))
+    ].join('\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows],{type:'text/csv'}));a.download=`CashBank_${dateFrom}_${dateTo}.csv`;a.click();
+  };
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh'}}>
-      <Helmet><title>Cash & Bank — Shreerang</title></Helmet>
-      <div style={{background:'linear-gradient(135deg,#0B2E2B,#143F3C)',padding:'16px 24px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+    <div style={{minHeight:'100vh',background:T.bg,padding:'20px 24px',fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:12}}>
         <div>
-          <h1 style={{fontSize:20,fontWeight:700,color:'#fff',margin:0}}>🏦 Cash & Bank</h1>
-          <p style={{fontSize:11,color:'#6A9B95',margin:0}}>Receipts, payments and account balances from Tally</p>
+          <h1 style={{fontSize:22,fontWeight:800,color:T.navy,margin:0}}>🏦 Cash & Bank</h1>
+          <p style={{fontSize:12,color:T.muted,margin:'4px 0 0'}}>Receipt · Payment · Contra · from accounting_vouchers</p>
         </div>
-        <button onClick={loadData} style={{padding:'8px 16px',borderRadius:8,border:'none',background:T.teal,color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer'}}>🔄 Refresh</button>
+        <button onClick={exportCSV} style={{padding:'8px 16px',background:T.green,border:'none',borderRadius:8,color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>📥 Export CSV</button>
       </div>
 
-      <div style={{padding:'16px 24px',display:'flex',flexDirection:'column',gap:14}}>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
-          {[
-            {label:'Total Receipts',value:fmt(totalReceipts),icon:'🟢',color:'#1E9E5A'},
-            {label:'Total Payments',value:fmt(totalPayments),icon:'🔴',color:T.red||'#ef4444'},
-            {label:'Net Cash Flow',value:fmt(netCashFlow),icon:'💰',color:netCashFlow>=0?'#1E9E5A':'#ef4444'},
-            {label:'Transactions',value:filtered.length,icon:'📝',color:T.teal},
-          ].map((c,i)=>(
-            <div key={i} style={CARD}>
-              <div style={{fontSize:22,marginBottom:4}}>{c.icon}</div>
-              <div style={{fontSize:11,color:'#6A9B95'}}>{c.label}</div>
-              <div style={{fontSize:20,fontWeight:800,color:c.color}}>{c.value}</div>
-            </div>
-          ))}
-        </div>
-
-        {accounts.length > 0 && (
-          <div>
-            <h3 style={{fontSize:14,fontWeight:700,color:T.navy,margin:'8px 0'}}>🏦 Account Balances</h3>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
-              {accounts.filter(a=>a.name!=='Unknown').map((a,i)=>(
-                <div key={i} style={CARD}>
-                  <div style={{fontSize:10,color:'#6A9B95',textTransform:'uppercase'}}>{a.name.includes('Cash')||a.name.includes('CASH')?'CASH':'BANK'}</div>
-                  <div style={{fontSize:13,fontWeight:700,color:T.navy}}>{a.name}</div>
-                  <div style={{fontSize:16,fontWeight:800,color:a.receipts-a.payments>=0?'#1E9E5A':'#ef4444'}}>{fmt(a.receipts-a.payments)}</div>
-                  <div style={{fontSize:10,color:'#999'}}>{a.count} txns</div>
-                </div>
-              ))}
-            </div>
+      {/* KPIs */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:14}}>
+        {[
+          {l:'Total Receipts',v:fmtL(totalR),c:T.green,ic:'💚',sub:`${filtered.filter(t=>t.voucher_type==='Receipt').length} vch`},
+          {l:'Total Payments',v:fmtL(totalP),c:T.red,ic:'💸',sub:`${filtered.filter(t=>t.voucher_type==='Payment').length} vch`},
+          {l:'Contra Transfers',v:fmtL(totalC),c:T.blue,ic:'🔄',sub:`${filtered.filter(t=>t.voucher_type==='Contra').length} vch`},
+          {l:'Net Cash Flow',v:fmtL(totalR-totalP),c:(totalR-totalP)>=0?T.green:T.red,ic:(totalR-totalP)>=0?'📈':'📉',sub:'Receipts − Payments'},
+        ].map(k=>(
+          <div key={k.l} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 16px',borderTop:`3px solid ${k.c}`}}>
+            <div style={{fontSize:18}}>{k.ic}</div>
+            <div style={{fontSize:18,fontWeight:800,color:T.navy}}>{k.v}</div>
+            <div style={{fontSize:11,fontWeight:600,color:T.text}}>{k.l}</div>
+            <div style={{fontSize:10,color:T.muted}}>{k.sub}</div>
           </div>
-        )}
+        ))}
+      </div>
 
-        <div style={{display:'flex',gap:8,borderBottom:'2px solid #e0e0e0',paddingBottom:0}}>
-          {['transactions','summary'].map(t=>(
-            <button key={t} onClick={()=>setTab(t)} style={{padding:'8px 20px',border:'none',borderBottom:tab===t?'3px solid '+T.teal:'3px solid transparent',background:'none',color:tab===t?T.teal:T.navy,fontWeight:tab===t?700:400,fontSize:13,cursor:'pointer',textTransform:'capitalize'}}>{t}</button>
-          ))}
+      {/* Bank account cards */}
+      {bankAccounts.filter(a=>a.name!=='Unspecified').length > 0 && (
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,fontWeight:700,color:T.navy,marginBottom:8}}>🏦 Account Summary</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8}}>
+            {bankAccounts.filter(a=>a.name!=='Unspecified').map((a,i)=>{
+              const net=a.receipts-a.payments;
+              const isBank=!a.name.toUpperCase().includes('CASH');
+              return (
+                <button key={i} onClick={()=>setBankFilter(bankFilter===a.name?'':a.name)}
+                  style={{background:bankFilter===a.name?T.navy:T.surface,border:`1px solid ${bankFilter===a.name?T.navy:T.border}`,borderRadius:10,padding:'12px 14px',cursor:'pointer',textAlign:'left',transition:'all .15s'}}>
+                  <div style={{fontSize:9,color:bankFilter===a.name?'rgba(255,255,255,.6)':T.muted,textTransform:'uppercase',fontWeight:700}}>{isBank?'BANK':'CASH'}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:bankFilter===a.name?'#fff':T.navy,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div>
+                  <div style={{fontSize:16,fontWeight:800,color:bankFilter===a.name?'#fff':net>=0?T.green:T.red,marginTop:4}}>{fmtL(Math.abs(net))}{net<0?' (Dr)':''}</div>
+                  <div style={{fontSize:9,color:bankFilter===a.name?'rgba(255,255,255,.5)':T.muted,marginTop:2}}>{a.count} txns</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {tab === 'transactions' && (
-          <>
-            <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search party / voucher..." style={{padding:'8px 12px',borderRadius:8,border:'1px solid rgba(43,168,152,.3)',fontSize:13,flex:1,maxWidth:300}} />
-              {['','Receipt','Payment','Journal','Credit Note','Contra'].map(f=>(
-                <button key={f} onClick={()=>setTypeFilter(f)} style={{padding:'5px 12px',borderRadius:16,border:'1px solid '+(typeFilter===f?T.teal:'#d0d0d0'),background:typeFilter===f?T.teal:'#fff',color:typeFilter===f?'#fff':T.navy,fontSize:11,fontWeight:600,cursor:'pointer'}}>{f||'All'}</button>
-              ))}
-              <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ccc',fontSize:12}} />
-              <span style={{color:'#999'}}>to</span>
-              <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',borderRadius:8,border:'1px solid #ccc',fontSize:12}} />
-            </div>
-
-            <div style={{fontSize:12,color:'#6A9B95'}}>{filtered.length} transactions</div>
-
-            {loading ? <div style={{textAlign:'center',padding:40,color:'#6A9B95'}}>Loading...</div> :
-            filtered.length === 0 ? <div style={{textAlign:'center',padding:40,color:'#6A9B95'}}>No transactions found. Sync from Tally Sync page to import receipts & payments.</div> :
-            <div style={{...CARD,padding:0,overflow:'auto'}}>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                <thead><tr style={{background:'#F4FBFA'}}>
-                  {['Date','Voucher No','Type','Party','Bank/Cash','Amount','Narration'].map(h=>(
-                    <th key={h} style={{padding:'8px 12px',textAlign:h==='Amount'?'right':'left',fontWeight:700,color:T.navy,borderBottom:'1px solid rgba(43,168,152,.15)',whiteSpace:'nowrap',fontSize:11}}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>{filtered.slice(0,200).map((t,i)=>(
-                  <tr key={i} style={{borderBottom:'1px solid rgba(43,168,152,.06)'}}>
-                    <td style={{padding:'7px 12px',color:'#4A7A74'}}>{t.voucher_date}</td>
-                    <td style={{padding:'7px 12px',fontWeight:600}}>{t.voucher_number}</td>
-                    <td style={{padding:'7px 12px'}}>
-                      <span style={{padding:'2px 8px',borderRadius:10,fontSize:10,fontWeight:700,
-                        background:t.voucher_type==='Receipt'?'#E8FFF4':t.voucher_type==='Payment'?'#FEE2E2':'#F0F4FF',
-                        color:t.voucher_type==='Receipt'?'#1E9E5A':t.voucher_type==='Payment'?'#ef4444':'#2468C8'
-                      }}>{t.voucher_type}</span>
-                    </td>
-                    <td style={{padding:'7px 12px',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.party_name||'—'}</td>
-                    <td style={{padding:'7px 12px',color:'#6A9B95',fontSize:11}}>{t.bank_ledger||'—'}</td>
-                    <td style={{padding:'7px 12px',textAlign:'right',fontWeight:700,color:t.voucher_type==='Receipt'?'#1E9E5A':'#ef4444'}}>{t.amount?fmt(t.amount):'—'}</td>
-                    <td style={{padding:'7px 12px',color:'#999',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.narration||'—'}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              {filtered.length > 200 && <div style={{padding:8,textAlign:'center',fontSize:11,color:'#6A9B95'}}>Showing 200 of {filtered.length}</div>}
-            </div>}
-          </>
+      {/* Filters */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 14px',marginBottom:12,display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search party, voucher, instrument…"
+          style={{flex:'1 1 160px',minWidth:0,padding:'6px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12}} />
+        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)}
+          style={{padding:'6px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,background:T.surface}}>
+          <option value="">All Types</option>
+          {['Receipt','Payment','Contra','Journal'].map(t=><option key={t}>{t}</option>)}
+        </select>
+        {banks.length > 0 && (
+          <select value={bankFilter} onChange={e=>setBankFilter(e.target.value)}
+            style={{padding:'6px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,background:T.surface}}>
+            <option value="">All Banks</option>
+            {banks.map(b=><option key={b}>{b}</option>)}
+          </select>
         )}
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'5px 8px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12}} />
+        <span style={{color:T.muted}}>→</span>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'5px 8px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12}} />
+        <button onClick={load} style={{padding:'6px 12px',background:T.teal,border:'none',borderRadius:7,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>{loading?'…':'⟳'}</button>
+        <span style={{fontSize:11,color:T.muted,padding:'4px 0'}}>{filtered.length} records</span>
+      </div>
 
-        {tab === 'summary' && (
-          <div style={{...CARD}}>
-            <h3 style={{fontSize:14,fontWeight:700,color:T.navy,margin:'0 0 12px'}}>Monthly Summary</h3>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-              <thead><tr style={{background:'#F4FBFA'}}>
-                {['Month','Receipts','Payments','Net Flow','Txn Count'].map(h=>(
-                  <th key={h} style={{padding:'8px 12px',textAlign:h==='Month'?'left':'right',fontWeight:700,color:T.navy,borderBottom:'1px solid rgba(43,168,152,.15)'}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>{
-                Object.entries(transactions.reduce((acc,t) => {
-                  const m = (t.voucher_date||'').slice(0,7);
-                  if (!m) return acc;
-                  if (!acc[m]) acc[m] = { month:m, receipts:0, payments:0, count:0 };
-                  acc[m].count++;
-                  if (t.voucher_type==='Receipt') acc[m].receipts += Number(t.amount||0);
-                  else if (t.voucher_type==='Payment') acc[m].payments += Number(t.amount||0);
-                  return acc;
-                }, {})).sort(([a],[b]) => b.localeCompare(a)).map(([k,v])=>(
-                  <tr key={k} style={{borderBottom:'1px solid rgba(43,168,152,.06)'}}>
-                    <td style={{padding:'7px 12px',fontWeight:600}}>{v.month}</td>
-                    <td style={{padding:'7px 12px',textAlign:'right',color:'#1E9E5A'}}>{fmt(v.receipts)}</td>
-                    <td style={{padding:'7px 12px',textAlign:'right',color:'#ef4444'}}>{fmt(v.payments)}</td>
-                    <td style={{padding:'7px 12px',textAlign:'right',fontWeight:700,color:v.receipts-v.payments>=0?'#1E9E5A':'#ef4444'}}>{fmt(v.receipts-v.payments)}</td>
-                    <td style={{padding:'7px 12px',textAlign:'right',color:'#6A9B95'}}>{v.count}</td>
+      {/* Monthly Summary */}
+      {months.length > 0 && (
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 16px',marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,color:T.navy,marginBottom:8}}>📅 Monthly Summary</div>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+              <thead>
+                <tr style={{borderBottom:`2px solid ${T.border}`}}>
+                  {['Month','Receipts','Payments','Net','Contra','Txns'].map(h=>(
+                    <th key={h} style={{padding:'6px 10px',textAlign:h==='Month'?'left':'right',color:T.muted,fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',fontWeight:700}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {months.map(m=>(
+                  <tr key={m.month} style={{borderBottom:`1px solid ${T.border}`}}>
+                    <td style={{padding:'6px 10px',fontWeight:600,color:T.navy}}>{m.month}</td>
+                    <td style={{padding:'6px 10px',textAlign:'right',color:T.green}}>{fmt(m.receipts)}</td>
+                    <td style={{padding:'6px 10px',textAlign:'right',color:T.red}}>{fmt(m.payments)}</td>
+                    <td style={{padding:'6px 10px',textAlign:'right',fontWeight:700,color:(m.receipts-m.payments)>=0?T.green:T.red}}>{fmt(m.receipts-m.payments)}</td>
+                    <td style={{padding:'6px 10px',textAlign:'right',color:T.blue}}>{fmt(m.contra)}</td>
+                    <td style={{padding:'6px 10px',textAlign:'right',color:T.muted}}>{m.count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Transactions table */}
+      {loading ? (
+        <div style={{textAlign:'center',padding:60,color:T.muted}}>Loading transactions…</div>
+      ) : filtered.length===0 ? (
+        <div style={{textAlign:'center',padding:60,background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,color:T.muted}}>No transactions found.</div>
+      ) : (
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style={{background:T.navy}}>
+                {['Date','Type','Voucher','Party','Bank/Cash','Mode','Instrument','Amount','↓'].map(h=>(
+                  <th key={h} style={{padding:'9px 10px',color:'rgba(255,255,255,.8)',textAlign:h==='Amount'||h==='↓'?'right':'left',fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',whiteSpace:'nowrap'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((t,i)=>{
+                const m=TYPE_META[t.voucher_type]||{col:T.muted,bg:'#F3F4F6',icon:'📄'};
+                const isExp=expanded===i;
+                return (<>
+                  <tr key={t.voucher_number+i} onClick={()=>setExpanded(isExp?null:i)} style={{background:isExp?T.tealLight:i%2===0?'#fff':'#FAFFFE',borderBottom:`1px solid ${T.border}`,cursor:'pointer'}}>
+                    <td style={{padding:'7px 10px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(t.voucher_date)}</td>
+                    <td style={{padding:'7px 10px'}}>
+                      <span style={{background:m.bg,color:m.col,padding:'2px 7px',borderRadius:10,fontSize:10,fontWeight:700}}>{m.icon} {t.voucher_type}</span>
+                    </td>
+                    <td style={{padding:'7px 10px',fontWeight:700,color:T.blue}}>{t.voucher_number}</td>
+                    <td style={{padding:'7px 10px',maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{t.party_name||'—'}</td>
+                    <td style={{padding:'7px 10px',fontSize:10,color:T.muted,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.bank_ledger||'—'}</td>
+                    <td style={{padding:'7px 10px',fontSize:10,color:T.muted}}>{t.payment_mode||'—'}</td>
+                    <td style={{padding:'7px 10px',fontSize:10,fontWeight:600,color:T.blue}}>{t.instrument_no||'—'}</td>
+                    <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,color:t.voucher_type==='Receipt'?T.green:t.voucher_type==='Payment'?T.red:T.blue}}>{t.total_amount>0?fmt(t.total_amount):'—'}</td>
+                    <td style={{padding:'7px 10px',textAlign:'center',color:T.muted,fontSize:11}}>{isExp?'▲':'▼'}</td>
+                  </tr>
+                  {isExp&&(
+                    <tr><td colSpan={9} style={{padding:'0 10px 10px',background:'#FAFFFE'}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5,paddingTop:7}}>
+                        {[
+                          ['Payment Favouring', t.payment_favouring||'—'],
+                          ['Transfer Mode', t.transfer_mode||'—'],
+                          ['Instrument Date', fmtD(t.instrument_date)],
+                          ['URN', t.urn||'—'],
+                          ['Entered By', t.entered_by||'—'],
+                          ['Narration', t.narration||'—'],
+                          ['DR Amount', t.dr_amount>0?fmt(t.dr_amount):'—'],
+                          ['CR Amount', t.cr_amount>0?fmt(t.cr_amount):'—'],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{background:T.surface,borderRadius:4,padding:'4px 8px',border:`1px solid ${T.border}`}}>
+                            <div style={{fontSize:8,color:T.muted,textTransform:'uppercase'}}>{k}</div>
+                            <div style={{fontSize:10,color:T.text,marginTop:1,wordBreak:'break-all'}}>{v}</div>
+                          </div>
+                        ))}
+                        {t.bill_allocations && (
+                          <div style={{gridColumn:'span 4',background:T.surface,borderRadius:4,padding:'4px 8px',border:`1px solid ${T.border}`}}>
+                            <div style={{fontSize:8,color:T.muted,textTransform:'uppercase',marginBottom:3}}>Bill Allocations</div>
+                            <div style={{fontSize:10,color:T.text}}>
+                              {(() => {
+                                try {
+                                  const allocs = typeof t.bill_allocations==='string' ? JSON.parse(t.bill_allocations) : t.bill_allocations;
+                                  return (Array.isArray(allocs)?allocs:[]).map((a,ai)=>(
+                                    <span key={ai} style={{display:'inline-block',background:T.tealLight,border:`1px solid ${T.border}`,borderRadius:4,padding:'2px 6px',margin:'2px',fontSize:9}}>
+                                      {a.name} · {fmt(Math.abs(a.amount||0))}
+                                      {a.broker_name && <span style={{color:T.orange}}> · {a.broker_name}</span>}
+                                    </span>
+                                  ));
+                                } catch { return '—'; }
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td></tr>
+                  )}
+                </>);
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,170 +1,251 @@
-import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet-async';
+import { useState, useEffect, useCallback } from 'react';
 import { customSupabase as supabase } from '@/lib/customSupabaseClient';
-import { ensureArray } from '@/lib/arrayValidation';
-import { useToast } from '@/components/ui/use-toast';
 
-const fmtDate = (d) => { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }); };
-const daysDiff = (d) => { if (!d) return 0; return Math.floor((Date.now() - new Date(d).getTime()) / 86400000); };
+/* ══════════════════════════════════════════════════════════════════
+   PAYMENT REMINDERS — Powered by outstanding_receivable_v2
+   Shows all overdue bills with 1-click WhatsApp reminder
+   ══════════════════════════════════════════════════════════════════ */
 
-const PaymentRemindersPage = () => {
-    const { toast } = useToast();
-    const [orders, setOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState({});
-
-    const load = async () => {
-        setLoading(true);
-        try {
-            // Fetch unpaid / overdue orders
-            const { data, error } = await supabase
-                .from('sales_orders')
-                .select('id, order_number, customer_name, phone, final_amount, payment_status, due_date, created_at, outstanding_amount')
-                .in('payment_status', ['pending', 'overdue', 'partial'])
-                .order('due_date', { ascending: true })
-                .limit(200);
-            if (error) throw error;
-            setOrders(ensureArray(data));
-        } catch (e) {
-            console.error(e);
-            setOrders([]);
-        } finally { setLoading(false); }
-    };
-
-    useEffect(() => { load(); }, []);
-
-    const getDaysOverdue = (due) => {
-        if (!due) return 0;
-        return daysDiff(due);
-    };
-
-    const sendReminder = async (order) => {
-        setSending(s => ({ ...s, [order.id]: true }));
-        try {
-            const phone = (order.phone || '').replace(/\D/g, '');
-            const amount = order.outstanding_amount || order.final_amount;
-            const msg = `Dear ${order.customer_name}, your payment of ₹${Number(amount).toLocaleString()} against invoice ${order.order_number} is overdue. Kindly arrange payment at your earliest. — Shreerang Trendz`;
-            const waUrl = `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
-            window.open(waUrl, '_blank');
-            toast({ description: `WhatsApp opened for ${order.customer_name}` });
-        } catch (e) {
-            toast({ variant: 'destructive', description: e.message });
-        } finally {
-            setSending(s => ({ ...s, [order.id]: false }));
-        }
-    };
-
-    const sendBulkReminders = () => {
-        const overdue = orders.filter(o => o.payment_status === 'overdue' || getDaysOverdue(o.due_date) > 0);
-        overdue.slice(0, 5).forEach((o, i) => {
-            setTimeout(() => sendReminder(o), i * 1000);
-        });
-    };
-
-    const totalOutstanding = orders.reduce((s, o) => s + (parseFloat(o.outstanding_amount || o.final_amount) || 0), 0);
-    const overdueCount = orders.filter(o => getDaysOverdue(o.due_date) > 0).length;
-
-    return (
-        <div className="screen active">
-            <Helmet><title>Payment Reminders — Shreerang Admin</title></Helmet>
-            <div className="topbar">
-                <div>
-                    <div className="page-title">Payment Reminders</div>
-                    <div className="breadcrumb">Smart Features → Overdue Payments · {overdueCount} overdue</div>
-                </div>
-                <div className="topbar-right">
-                    <span className="badge bred">{overdueCount} Overdue</span>
-                    <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>₹{(totalOutstanding / 1000).toFixed(0)}K pending</span>
-                    <button className="btn btn-gold" onClick={sendBulkReminders}>📲 Bulk WA Reminders</button>
-                </div>
-            </div>
-
-            <div className="content">
-                <div className="alert a-warn">
-                    ⚠️ Bulk reminder sends WhatsApp to top 5 overdue customers. Individual "Send WA" opens WhatsApp with pre-filled message. <b>Actual API sending requires Meta WhatsApp integration.</b>
-                </div>
-
-                {/* KPIs */}
-                <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 16 }}>
-                    {[
-                        { label: 'Total Pending', value: `₹${(totalOutstanding / 1000).toFixed(1)}K`, color: 'var(--red)' },
-                        { label: 'Overdue Orders', value: overdueCount, color: 'var(--orange)' },
-                        { label: 'Pending Payment', value: orders.filter(o => o.payment_status === 'pending').length, color: 'var(--blue)' },
-                        { label: 'Partial Paid', value: orders.filter(o => o.payment_status === 'partial').length, color: 'var(--purple)' },
-                    ].map((k, i) => (
-                        <div className="kpi-card" key={i}>
-                            <div className="kpi-label">{k.label}</div>
-                            <div className="kpi-value" style={{ color: k.color, fontSize: 22 }}>{loading ? '—' : k.value}</div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="card">
-                    <div className="card-header">
-                        <div className="card-title">Outstanding Payments</div>
-                        <button className="btn btn-outline btn-sm" onClick={load}>↻ Refresh</button>
-                    </div>
-                    <div className="tbl">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Order</th>
-                                    <th>Customer</th>
-                                    <th>Amount</th>
-                                    <th>Due Date</th>
-                                    <th>Days Overdue</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading orders…</td></tr>
-                                ) : orders.length === 0 ? (
-                                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--green)' }}>🎉 All payments collected!</td></tr>
-                                ) : (
-                                    orders.map((o, i) => {
-                                        const days = getDaysOverdue(o.due_date);
-                                        return (
-                                            <tr key={o.id || i} style={{ background: days > 30 ? 'rgba(217,58,58,0.03)' : '' }}>
-                                                <td><span className="mono" style={{ color: 'var(--teal)', fontWeight: 600 }}>{o.order_number}</span></td>
-                                                <td>
-                                                    <div style={{ fontWeight: 600, fontSize: 12 }}>{o.customer_name}</div>
-                                                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{o.phone}</div>
-                                                </td>
-                                                <td className="mono" style={{ fontWeight: 700, color: 'var(--red)' }}>₹{Number(o.outstanding_amount || o.final_amount || 0).toLocaleString()}</td>
-                                                <td className="mono">{fmtDate(o.due_date)}</td>
-                                                <td>
-                                                    {days > 0 ? (
-                                                        <span style={{ color: days > 30 ? 'var(--red)' : 'var(--orange)', fontWeight: 700, fontSize: 13 }}>{days}d</span>
-                                                    ) : <span style={{ color: 'var(--green)' }}>On time</span>}
-                                                </td>
-                                                <td>
-                                                    {o.payment_status === 'overdue' ? <span className="badge bred">Overdue</span>
-                                                        : o.payment_status === 'partial' ? <span className="badge bpurp">Partial</span>
-                                                            : <span className="badge borg">Pending</span>}
-                                                </td>
-                                                <td>
-                                                    <button
-                                                        className="btn btn-sm"
-                                                        style={{ background: 'var(--green)', color: '#fff', padding: '4px 10px', borderRadius: 4, border: 'none', fontSize: 11, cursor: 'pointer' }}
-                                                        onClick={() => sendReminder(o)}
-                                                        disabled={sending[o.id]}
-                                                    >
-                                                        {sending[o.id] ? '…' : '📲 Send WA'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+const T = {
+  navy:'#0B2E2B', teal:'#2BA898', tealLight:'#EEF8F6',
+  green:'#1E9E5A', red:'#E74C3C', orange:'#E67E22',
+  gold:'#E8A800', blue:'#2468C8', border:'#D0EDE8',
+  bg:'#F0F9F7', surface:'#FFFFFF', text:'#0B2E2B', muted:'#6A9B95',
 };
+const fmt  = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
+const fmtL = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
+const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
 
-export default PaymentRemindersPage;
+const AGING = [
+  {key:'1-30 overdue',  label:'1–30 Days',  color:'#F59E0B', bg:'#FEF3C7', priority:1},
+  {key:'31-60 days',    label:'31–60 Days', color:'#F97316', bg:'#FED7AA', priority:2},
+  {key:'61-90 days',    label:'61–90 Days', color:'#EF4444', bg:'#FEE2E2', priority:3},
+  {key:'90+ days',      label:'90+ Days',   color:'#991B1B', bg:'#FEE2E2', priority:4},
+];
+
+function buildWAMessage(bill, customMsg) {
+  if (customMsg) return customMsg;
+  const overdue = Number(bill.days_overdue||0);
+  const urgency = overdue > 90 ? 'URGENT: ' : overdue > 60 ? 'Important: ' : '';
+  return `${urgency}Dear ${bill.customer_name},\n\nWe would like to bring to your attention the following outstanding payment:\n\nInvoice: ${bill.bill_number}\nDate: ${fmtD(bill.bill_date)}\nAmount Due: ${fmt(bill.outstanding_amount)}\nDays Overdue: ${overdue}\n\nKindly arrange payment at your earliest convenience.\n\nBest regards,\nShreerang Trendz Pvt. Ltd.\nSurat — +91 7874200033`;
+}
+
+export default function PaymentRemindersPage() {
+  const [rows, setRows]           = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [agingFilter, setAgingFilter] = useState('');
+  const [sortBy, setSortBy]       = useState('outstanding_amount');
+  const [selected, setSelected]   = useState(new Set());
+  const [customMsg, setCustomMsg] = useState('');
+  const [showMsgEditor, setShowMsgEditor] = useState(false);
+  const [sent, setSent]           = useState(new Set());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from('outstanding_receivable_v2')
+      .select('*')
+      .in('aging_bucket', ['1-30 overdue','31-60 days','61-90 days','90+ days'])
+      .order(sortBy, {ascending:false})
+      .limit(1000);
+    if (agingFilter) q = q.eq('aging_bucket', agingFilter);
+    const {data} = await q;
+    setRows(data||[]);
+    setLoading(false);
+  }, [sortBy, agingFilter]);
+
+  useEffect(()=>{ load(); }, [load]);
+
+  const filtered = rows.filter(r =>
+    !search || r.customer_name?.toLowerCase().includes(search.toLowerCase())
+      || r.bill_number?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Aggregates
+  const totalOutstanding = filtered.reduce((s,r)=>s+Number(r.outstanding_amount||0),0);
+  const agingTotals = AGING.reduce((a,ag)=>({
+    ...a, [ag.key]: filtered.filter(r=>r.aging_bucket===ag.key).reduce((s,r)=>s+Number(r.outstanding_amount||0),0)
+  }),{});
+
+  // Customer rollup for bulk send
+  const custMap = {};
+  filtered.forEach(r=>{
+    if (!custMap[r.customer_name]) custMap[r.customer_name]={name:r.customer_name, bills:[], total:0};
+    custMap[r.customer_name].bills.push(r);
+    custMap[r.customer_name].total += Number(r.outstanding_amount||0);
+  });
+  const customers = Object.values(custMap).sort((a,b)=>b.total-a.total);
+
+  const sendWA = (bill) => {
+    const msg = buildWAMessage(bill, customMsg);
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    setSent(prev => new Set([...prev, bill.bill_number]));
+  };
+
+  const sendBulkWA = (custBills) => {
+    const totalAmt = custBills.reduce((s,b)=>s+Number(b.outstanding_amount||0),0);
+    const billList = custBills.map(b=>`  • ${b.bill_number} (${fmtD(b.bill_date)}): ${fmt(b.outstanding_amount)}`).join('\n');
+    const msg = `Dear ${custBills[0].customer_name},\n\nThis is a reminder for the following outstanding invoices:\n\n${billList}\n\nTotal Outstanding: ${fmt(totalAmt)}\n\nKindly arrange payment at your earliest convenience.\n\nBest regards,\nShreerang Trendz Pvt. Ltd.\nSurat — +91 7874200033`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    custBills.forEach(b => setSent(prev=>new Set([...prev, b.bill_number])));
+  };
+
+  const toggleSelect = (billNo) => setSelected(prev=>{
+    const n=new Set(prev);
+    n.has(billNo)?n.delete(billNo):n.add(billNo);
+    return n;
+  });
+
+  const selectedRows = filtered.filter(r=>selected.has(r.bill_number));
+  const selectedTotal = selectedRows.reduce((s,r)=>s+Number(r.outstanding_amount||0),0);
+
+  return (
+    <div style={{minHeight:'100vh',background:T.bg,padding:'20px 24px',fontFamily:"'DM Sans',sans-serif"}}>
+      {/* Header */}
+      <div style={{marginBottom:20}}>
+        <h1 style={{fontSize:22,fontWeight:800,color:T.navy,margin:0}}>💬 Payment Reminders</h1>
+        <p style={{fontSize:12,color:T.muted,margin:'4px 0 0'}}>
+          Overdue bills from outstanding_receivable_v2 · 1-click WhatsApp reminders
+        </p>
+      </div>
+
+      {/* KPI Strip */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16}}>
+        <div style={{background:T.red,borderRadius:12,padding:'14px 18px',color:'#fff'}}>
+          <div style={{fontSize:10,fontWeight:700,opacity:.8,textTransform:'uppercase',letterSpacing:'.5px'}}>Total Overdue</div>
+          <div style={{fontSize:22,fontWeight:800,marginTop:2}}>{fmtL(totalOutstanding)}</div>
+          <div style={{fontSize:11,opacity:.8,marginTop:2}}>{filtered.length} bills</div>
+        </div>
+        {AGING.map(ag=>(
+          <button key={ag.key} onClick={()=>setAgingFilter(agingFilter===ag.key?'':ag.key)}
+            style={{background:agingFilter===ag.key?ag.color:T.surface,border:`2px solid ${ag.color}`,borderRadius:12,padding:'12px 16px',
+              color:agingFilter===ag.key?'#fff':ag.color,cursor:'pointer',textAlign:'left',transition:'all .15s'}}>
+            <div style={{fontSize:10,fontWeight:700,opacity:.8,textTransform:'uppercase',letterSpacing:'.4px'}}>{ag.label}</div>
+            <div style={{fontSize:18,fontWeight:800,marginTop:2}}>{fmtL(agingTotals[ag.key]||0)}</div>
+            <div style={{fontSize:10,opacity:.8,marginTop:2}}>{filtered.filter(r=>r.aging_bucket===ag.key).length} bills</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Custom message editor */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,marginBottom:14,overflow:'hidden'}}>
+        <button onClick={()=>setShowMsgEditor(!showMsgEditor)}
+          style={{width:'100%',padding:'10px 16px',background:T.tealLight,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'space-between',fontWeight:700,fontSize:12,color:T.navy}}>
+          <span>✏️ Customise WhatsApp Message Template</span>
+          <span>{showMsgEditor?'▲':'▼'}</span>
+        </button>
+        {showMsgEditor && (
+          <div style={{padding:14}}>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>Leave blank to use the auto-generated message per bill. Or type a custom template (applies to all sends):</div>
+            <textarea value={customMsg} onChange={e=>setCustomMsg(e.target.value)} rows={4}
+              placeholder="Dear {customer_name}, your payment of {amount} for bill {bill_number} is overdue. Please arrange payment."
+              style={{width:'100%',padding:'8px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,resize:'vertical',boxSizing:'border-box'}} />
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button onClick={()=>setCustomMsg('')} style={{padding:'5px 14px',background:T.bg,border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,cursor:'pointer',color:T.text}}>Reset to Auto</button>
+              {customMsg && <span style={{fontSize:11,color:T.green,padding:'5px 0'}}>✓ Custom message active</span>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Filters + Bulk Actions */}
+      <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap',alignItems:'center'}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="Search customer / bill number…"
+          style={{flex:'1 1 200px',minWidth:0,padding:'8px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}} />
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+          style={{padding:'8px 10px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,background:T.surface}}>
+          <option value="outstanding_amount">Sort: Amount ↓</option>
+          <option value="days_overdue">Sort: Most Overdue ↓</option>
+          <option value="bill_date">Sort: Oldest Bill ↓</option>
+        </select>
+        {selected.size > 0 && (
+          <div style={{display:'flex',gap:6,alignItems:'center',background:'#FEF3C7',padding:'6px 12px',borderRadius:8,border:'1px solid #F59E0B'}}>
+            <span style={{fontSize:11,fontWeight:700,color:'#B45309'}}>{selected.size} selected · {fmt(selectedTotal)}</span>
+            <button onClick={()=>setSelected(new Set())} style={{fontSize:10,color:T.red,background:'none',border:'none',cursor:'pointer'}}>✕ Clear</button>
+          </div>
+        )}
+        <button onClick={load} style={{padding:'8px 14px',background:T.teal,border:'none',borderRadius:8,color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer'}}>⟳ Refresh</button>
+      </div>
+
+      {/* Customer cards — each with all their bills and bulk WA button */}
+      {loading ? (
+        <div style={{textAlign:'center',padding:60,color:T.muted}}>Loading overdue bills…</div>
+      ) : customers.length === 0 ? (
+        <div style={{textAlign:'center',padding:60,background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,color:T.muted}}>
+          🎉 No overdue bills found! All payments are up to date.
+        </div>
+      ) : (
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          {customers.map((c,ci)=>{
+            const worstBucket = c.bills.reduce((w,b)=>{
+              const ag=AGING.find(a=>a.key===b.aging_bucket);
+              const wp=ag?.priority||0;
+              return wp>w.p?{color:ag?.color||T.red,p:wp}:w;
+            },{color:T.gold,p:0});
+            const allSent = c.bills.every(b=>sent.has(b.bill_number));
+            return (
+              <div key={c.name} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden',borderLeft:`4px solid ${worstBucket.color}`}}>
+                {/* Customer header */}
+                <div style={{padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap',borderBottom:`1px solid ${T.border}`}}>
+                  <div style={{display:'flex',alignItems:'center',gap:12,flex:1,minWidth:0}}>
+                    <div style={{width:36,height:36,borderRadius:'50%',background:worstBucket.color,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:800,fontSize:14,flexShrink:0}}>
+                      {c.name.charAt(0)}
+                    </div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:700,color:T.navy,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</div>
+                      <div style={{fontSize:10,color:T.muted}}>{c.bills.length} bills · Broker: {c.bills[0]?.broker_name||'—'}</div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:20,fontWeight:800,color:worstBucket.color}}>{fmt(c.total)}</div>
+                      <div style={{fontSize:9,color:T.muted}}>total outstanding</div>
+                    </div>
+                    <button onClick={()=>sendBulkWA(c.bills)}
+                      style={{background:allSent?'#22C55E':'#25D366',border:'none',borderRadius:8,padding:'8px 14px',color:'#fff',fontSize:12,cursor:'pointer',fontWeight:700,display:'flex',alignItems:'center',gap:5,whiteSpace:'nowrap'}}>
+                      {allSent ? '✓ Sent' : '💬 Send All'}
+                    </button>
+                  </div>
+                </div>
+                {/* Bills list */}
+                <div style={{padding:'0 12px 10px'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,marginTop:8}}>
+                    <tbody>
+                      {c.bills.sort((a,b)=>Number(b.outstanding_amount)-Number(a.outstanding_amount)).map(r=>{
+                        const ag=AGING.find(a=>a.key===r.aging_bucket);
+                        const isSent = sent.has(r.bill_number);
+                        return (
+                          <tr key={r.bill_number} style={{borderBottom:`1px solid ${T.border}`}}>
+                            <td style={{padding:'5px 8px',width:20}}>
+                              <input type="checkbox" checked={selected.has(r.bill_number)} onChange={()=>toggleSelect(r.bill_number)} />
+                            </td>
+                            <td style={{padding:'5px 8px',fontWeight:700,color:T.blue,whiteSpace:'nowrap'}}>{r.bill_number}</td>
+                            <td style={{padding:'5px 8px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(r.bill_date)}</td>
+                            <td style={{padding:'5px 8px',textAlign:'right',fontWeight:700,color:ag?.color||T.red}}>{fmt(r.outstanding_amount)}</td>
+                            <td style={{padding:'5px 8px',textAlign:'center'}}>
+                              <span style={{background:ag?.bg||'#FEE2E2',color:ag?.color||T.red,padding:'2px 6px',borderRadius:8,fontSize:9,fontWeight:700}}>
+                                {r.days_overdue}d
+                              </span>
+                            </td>
+                            <td style={{padding:'5px 8px',color:T.muted,fontSize:10,maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.design_no?`D No-${r.design_no}`:r.fabric_name||'—'}</td>
+                            <td style={{padding:'5px 8px'}}>
+                              <button onClick={()=>sendWA(r)}
+                                style={{background:isSent?'#22C55E':'#25D366',border:'none',borderRadius:5,padding:'3px 8px',color:'#fff',fontSize:10,cursor:'pointer',fontWeight:700,whiteSpace:'nowrap'}}>
+                                {isSent?'✓':'💬 WA'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

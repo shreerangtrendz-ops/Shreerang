@@ -52,6 +52,7 @@ const ALL_GROUPS = [
       { icon: '📋', label: 'Job Work Lots',      to: '/admin/job-work-jobs',        roles: ['admin','manager','operations'], badge: 'NEW' },
       { icon: '🧾', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills', roles: ['admin','manager','operations','accounts'] },
       { icon: '🔗', label: 'Design Lifecycle',   to: '/admin/design-lifecycle',     roles: ['admin','manager','operations','accounts'], badge: 'NEW' },
+      { icon: '🖼️', label: 'Image Linker',        to: '/admin/design-image-linker',  roles: ['admin','manager','operations'], badge: 'NEW' },
       { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',          roles: ['admin','manager','operations'] },
       { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',             roles: ['admin','manager','operations'] },
       { icon: '💰', label: 'MTO Cost Templates', to: '/admin/mto-cost-template',    roles: ['admin','manager','operations'], badge: 'NEW' },

@@ -43,7 +43,7 @@ import BulkImportPage from '@/pages/admin/fabric/BulkImportPage';
 import JobCardsList from '@/pages/admin/challans/JobCardsList';
 import JobWorkersPage from '@/pages/admin/vendors/JobWorkersPage';
 import ProductionTracker from '@/pages/admin/manufacturing/ProductionTracker';
-import PaymentRemindersPage from '@/pages/admin/marketing/PaymentRemindersPage';
+import PaymentRemindersPage from '@/pages/admin/PaymentRemindersPage';
 import ImageUploadPage from '@/pages/admin/images/ImageUploadPage';
 import DesignUploadPage from '@/pages/admin/design/DesignUploadPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Admin: Cost Engine Ã¢â€â‚¬Ã¢â€â‚¬
@@ -103,6 +103,7 @@ import MillPerformancePage from '@/pages/admin/MillPerformancePage';
 import BrokerAnalyticsPage from '@/pages/admin/BrokerAnalyticsPage';
 import DesignProfitability from '@/pages/reports/DesignProfitability';
 import DesignLifecyclePage from '@/pages/admin/DesignLifecyclePage';
+import DesignImageLinkerPage from '@/pages/admin/DesignImageLinkerPage';
 import BrokerOutstandingPage from '@/pages/admin/BrokerOutstandingPage';
 import EnhancedSalesBillsPage from '@/pages/admin/EnhancedSalesBillsPage';
 import PurchaseBillsPage from '@/pages/admin/accounting/PurchaseBillsPage';
@@ -271,6 +272,7 @@ const App = () => {
                     <Route path="reports/day-book" element={<DayBook />} />
                     <Route path="reports/design-profitability" element={<DesignProfitability />} />
                     <Route path="design-lifecycle" element={<DesignLifecyclePage />} />
+                    <Route path="design-image-linker" element={<DesignImageLinkerPage />} />
                     <Route path="broker-outstanding" element={<BrokerOutstandingPage />} />
                     <Route path="sales-bills-detail" element={<EnhancedSalesBillsPage />} />
 

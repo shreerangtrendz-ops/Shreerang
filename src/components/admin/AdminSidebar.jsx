@@ -27,6 +27,7 @@ const ALL_GROUPS = [
       { icon: '📋', label: 'Sales Orders',       to: '/admin/orders',              roles: ['admin','manager','operations','sales','sales_executive'] },
       { icon: '🎯', label: 'Make-to-Order',      to: '/admin/mto-orders',          roles: ['admin','manager','operations'], badge: 'NEW' },
       { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
+      { icon: '📍', label: 'Smart Outstanding',  to: '/admin/smart-outstanding',   roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'new' },
       { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable-v2',roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
       { icon: '🤝', label: 'Broker Outstanding', to: '/admin/broker-outstanding',  roles: ['admin','manager','accounts'], badge: 'NEW' },
     ]

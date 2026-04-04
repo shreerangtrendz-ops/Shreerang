@@ -967,7 +967,7 @@ if (allTakaRows.length) {
     if (s5e) log.push(`S5e:ok rows=${allTakaRows.length}`);
   } catch(e) { log.push(`S5e:ERR ${e.message}`); s5e=false; }
 }
-const s5c  =await upsert.call(this,'rec_from_mill',      recFromMillV.map(buildRecFromMillRow),    'party_challan_no,voucher_date',   'S5c');
+const s5c  =await upsert.call(this,'rec_from_mill',      recFromMillV.map(buildRecFromMillRow),    'tally_voucher_no',               'S5c');
 const s5d  =await upsert.call(this,'stock_journal',      stockJournalV.map(buildStockJournalRow),  'tally_voucher_no',               'S5d');
 const s_cn =await upsertCreditNotes.call(this, creditNoteV);
 const s_dn =await upsert.call(this,'debit_note',         debitNoteV.map(buildDebitNoteRow),        'tally_voucher_no',               'S_DN');

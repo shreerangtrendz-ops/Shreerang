@@ -61,21 +61,41 @@ function parseTallyDate(s) {
 
 function getXmlVal(xml, tag) {
   const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-  return m ? m[1].trim() : '';
+  if (!m) return '';
+  // Strip any nested XML tags — keep only direct text content
+  return m[1].replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').replace(/<[^>]+>/g, '').trim();
 }
 // cleanRef: strips embedded XML tags from a reference field value
 // Tally sometimes embeds XML inside <REFERENCE>VALUE</OTHERDATE>...) 
 // We want just the first text token before any < character
 function cleanRef(val) {
   if (!val) return '';
-  // If it contains XML tags, extract just the first text portion before any tag
+  // Strip all XML tags first
   const stripped = val.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  // Also trim any trailing whitespace/newlines and take up to first space-separated token group
-  return stripped.split(/\s*<\s*/)[0].trim() || val.replace(/<[\s\S]*/,'').trim();
+  if (!stripped) return '';
+  // Find the first token that looks like a real reference (contains / or letters+digits)
+  // Skip pure dates (8 digits), UUIDs, and plain keywords
+  const tokens = stripped.split(/\s+/);
+  for (const t of tokens) {
+    if (!t) continue;
+    if (/^\d{8}$/.test(t)) continue;          // skip Tally date tokens like 20220415
+    if (/^[0-9a-f-]{36}$/i.test(t)) continue; // skip UUIDs
+    if (t.length < 2) continue;
+    return t;
+  }
+  return stripped.split(/\s+/)[0] || '';
 }
 function parseQty(s)  { if (!s) return 0; return parseFloat(s.replace(/mtrs?/gi,'').replace(/nos?/gi,'').trim()) || 0; }
 function parseRate(s) { if (!s) return 0; return parseFloat(s.replace(/\/mtrs?/gi,'').replace(/\/nos?/gi,'').trim()) || 0; }
-function parseNum(s)  { if (!s) return 0; return parseFloat(s.replace(/,/g,'').trim()) || 0; }
+function parseNum(s)  { if (!s) return 0; const n=parseFloat(s.replace(/,/g,'').trim()); return isFinite(n)?n:0; }
+function sanitizeRow(row) {
+  // Deep sanitize: replace NaN/Infinity/undefined with null at all levels
+  return JSON.parse(JSON.stringify(row, (_k, v) => {
+    if (typeof v === 'number') return isFinite(v) ? v : null;
+    if (v === undefined) return null;
+    return v;
+  }));
+}
 
 function getUdfVal(xml, udfName) {
   const re = new RegExp(`<UDF:${udfName}(?:\\.LIST)?[^>]*>[\\s\\S]*?<ALTEREDVALUE>([^<]+)<\\/ALTEREDVALUE>`, 'i');
@@ -291,13 +311,11 @@ function buildSalesRow(v) {
     irn_ack_no:       v.irnAckDate     || null,
     entered_by:       v.enteredBy      || null,
     tally_voucher_no: v.vnum           || null,
-    reference_no:     v.reference      || null,
+    voucher_class:    v.voucherClass   || null,
     narration:        v.narration      || null,
     sales_ledger:     v.salesLedger    || null,
     round_off:        v.roundOff       || null,
-    voucher_class:    v.voucherClass   || null,
     total_taka_pcs:   countTakaPcs(invEntries),
-    line_items:       null,
     tally_sync_status: 'synced',
     tally_synced_at:  new Date().toISOString()
   };
@@ -317,7 +335,6 @@ function buildPurchaseRow(v) {
     party_name:         v.party,
     supplier_gstin:     v.partyGstin  || null,
     supplier_state:     v.stateName   || null,
-    supplier_invoice_date: v.refDate  || null,
     total_amount:       v.totalAmount || null,
     taxable_value:      Math.abs(first.amount) || null,
     fabric_name:        first.stock_item || null,
@@ -327,12 +344,6 @@ function buildPurchaseRow(v) {
     design_no:          cleanDesignNo(best.designNo) || null,
     batch_name:         fb.batch_name    || null,
     godown:             best.godown      || null,
-    lot_no:             fb.batch_name    || null,
-    process_lot_no:     fb.process_lot_no|| null,
-    process_mill_name:  fb.process_mill  || null,
-    track_party:        fb.track_party   || null,
-    track_date:         fb.track_date    || null,
-    track_ref_no:       fb.track_ref_no  || null,
     discount_pct:       first.discount   || null,
     igst_amount:        v.igstAmount     || null,
     cgst_amount:        v.cgstAmount     || null,
@@ -346,11 +357,6 @@ function buildPurchaseRow(v) {
     tally_voucher_no:   v.vnum           || null,
     narration:          v.narration      || null,
     purchase_ledger:    v.purchaseLedger || null,
-    round_off:          v.roundOff       || null,
-    billed_qty:         first.billed_qty || null,
-    transporter_name:   v.transporter    || null,
-    total_taka_pcs:     countTakaPcs(invEntries),
-    line_items:         { inventory: allItems, ledgers: v.ledgerItems },
     tally_sync_status:  'synced',
     tally_synced_at:    new Date().toISOString()
   };
@@ -537,7 +543,6 @@ function buildProcessRow(v) {
     production_amount: isReceipt?Math.abs(first.amount||0):null,
     our_godown: v.destGodown||'Main Location', job_godown: best.millGodown||null,
     total_taka_pcs: countTakaPcs(rawEntries),
-    line_items: {inventory:allItems, consumption:isReceipt?consumptionItems:undefined},
     tally_synced_at: new Date().toISOString()
   };
 }
@@ -616,7 +621,7 @@ function buildCreditNoteRow(v) {
     discount_amount: v.discountAmount||0, round_off: v.roundOff||0, party_amount: v.totalAmount||0,
     tally_synced_at: new Date().toISOString()
   };
-  const items = allItems.map(item => ({
+  const items = allItems.map((item) => ({
     tally_voucher_no: v.vnum,
     item_name: item.stock_item||null, hsn_code: item.hsn||null,
     design_no: cleanDesignNo((item.batches?.[0]?.batch_name))||null,
@@ -920,15 +925,23 @@ log.push(`S2:f sales=${salesV.length} pur=${purchaseV.length} itm=${issueToMillV
 async function upsert(table, rows, conflict, step) {
   log.push(`${step}:start rows=${rows.length}`);
   if (!rows.length) { log.push(`${step}:skipped`); return true; }
+  if (rows.length > 0) log.push(`${step}:sample ${JSON.stringify(rows[0]).slice(0,300)}`);
   try {
     const r=await this.helpers.httpRequest({
-      method:'POST',url:`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflict}`,
+      method:'POST', url:`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflict}`,
       headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
-      body:JSON.stringify(rows),returnFullResponse:true
+      body:JSON.stringify(rows), returnFullResponse:true
     });
-    if(r.statusCode>=400){log.push(`${step}:FAIL ${r.statusCode} ${(typeof r.body==='string'?r.body:JSON.stringify(r.body)).slice(0,300)}`);return false;}
+    if(r.statusCode>=400){
+      const b = typeof r.body==='string' ? r.body : JSON.stringify(r.body);
+      log.push(`${step}:FAIL ${r.statusCode} body=${b.slice(0,500)}`);
+      return false;
+    }
     log.push(`${step}:ok status=${r.statusCode}`); return true;
-  } catch(e){log.push(`${step}:ERR ${e.message}`);return false;}
+  } catch(e){
+    log.push(`${step}:ERR ${e.message}`);
+    return false;
+  }
 }
 
 async function upsertCreditNotes(vouchers) {
@@ -937,14 +950,122 @@ async function upsertCreditNotes(vouchers) {
   const parsed=vouchers.map(buildCreditNoteRow);
   const ok1=await upsert.call(this,'credit_note',parsed.map(p=>p.header),'tally_voucher_no','S_CN_hdr');
   const items=parsed.flatMap(p=>p.items);
-  if(items.length) await upsert.call(this,'credit_note_items',items,'tally_voucher_no,item_name,godown_name','S_CN_items');
+  if(items.length) // S_CN_items: DELETE existing rows for these vouchers, then INSERT fresh
+  log.push('S_CN_items:start rows='+items.length);
+  if (items.length) {
+    if (items.length > 0) log.push('S_CN_items:sample '+JSON.stringify(items[0]).slice(0,300));
+    try {
+      // Delete existing items for all voucher nos in this batch
+      const vnums = [...new Set(items.map(i=>i.tally_voucher_no))];
+      const delUrl = `${SUPABASE_URL}/rest/v1/credit_note_items?tally_voucher_no=in.(${vnums.join(',')})`;
+      await this.helpers.httpRequest({
+        method:'DELETE', url:delUrl,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json'},
+        returnFullResponse:true
+      });
+      // Insert fresh rows
+      const r = await this.helpers.httpRequest({
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/credit_note_items`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,
+          'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify(items), returnFullResponse:true
+      });
+      if (r.statusCode>=400) {
+        const b=typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push('S_CN_items:FAIL '+r.statusCode+' body='+b.slice(0,600));
+      } else { log.push('S_CN_items:ok status='+r.statusCode); }
+    } catch(e) { log.push('S_CN_items:ERR '+e.message); }
+  }
   return ok1;
 }
 
-const s3   =await upsert.call(this,'sales_bills',        salesV.map(buildSalesRow),               'bill_number',                    'S3');
-const s4   =await upsert.call(this,'purchase_bills',     purchaseV.map(buildPurchaseRow),          'bill_number',                    'S4');
+// S3: sales_bills — chunked + full error body logging
+const salesRows = salesV.map(buildSalesRow).map(sanitizeRow).filter(r => r.bill_number);
+log.push(`S3:start rows=${salesRows.length}`);
+let s3 = true;
+if (!salesRows.length) { log.push('S3:skipped'); }
+else {
+  if (salesRows.length > 0) log.push(`S3:sample ${JSON.stringify(salesRows[0]).slice(0,300)}`);
+  // Log all column names sent to help diagnose schema mismatch
+  log.push(`S3:cols ${Object.keys(salesRows[0]||{}).join(',')}`);
+  const S3_CHUNK = 50;
+  for (let _i=0; _i<salesRows.length && s3; _i+=S3_CHUNK) {
+    const chunk = salesRows.slice(_i, _i+S3_CHUNK);
+    let bodyStr;
+    try { bodyStr = JSON.stringify(chunk); } catch(je) { log.push(`S3:JSON_ERR ${je.message}`); s3=false; break; }
+    try {
+      const r = await this.helpers.httpRequest({
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/sales_bills?on_conflict=bill_number`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:bodyStr, returnFullResponse:true
+      });
+      if (r.statusCode>=400) {
+        const b = typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push(`S3:FAIL chunk${_i} ${r.statusCode} ${b.slice(0,500)}`); s3=false;
+      }
+    } catch(e) { log.push(`S3:ERR chunk${_i} ${e.message} body_len=${bodyStr.length}`); s3=false; }
+  }
+  if (s3) log.push(`S3:ok status=201`);
+}
+
+// S4: purchase_bills — chunked + full error body logging
+const purchaseRows = purchaseV.map(buildPurchaseRow).map(sanitizeRow).filter(r => r.bill_number);
+log.push(`S4:start rows=${purchaseRows.length}`);
+let s4 = true;
+if (!purchaseRows.length) { log.push('S4:skipped'); }
+else {
+  if (purchaseRows.length > 0) log.push(`S4:sample ${JSON.stringify(purchaseRows[0]).slice(0,300)}`);
+  log.push(`S4:cols ${Object.keys(purchaseRows[0]||{}).join(',')}`);
+  const S4_CHUNK = 50;
+  for (let _i=0; _i<purchaseRows.length && s4; _i+=S4_CHUNK) {
+    const chunk = purchaseRows.slice(_i, _i+S4_CHUNK);
+    let bodyStr4;
+    try { bodyStr4 = JSON.stringify(chunk); } catch(je) { log.push(`S4:JSON_ERR ${je.message}`); s4=false; break; }
+    try {
+      const r = await this.helpers.httpRequest({
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/purchase_bills?on_conflict=bill_number`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:bodyStr4, returnFullResponse:true
+      });
+      if (r.statusCode>=400) {
+        const b = typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push(`S4:FAIL chunk${_i} ${r.statusCode} ${b.slice(0,500)}`); s4=false;
+      }
+    } catch(e) { log.push(`S4:ERR chunk${_i} ${e.message} body_len=${bodyStr4.length}`); s4=false; }
+  }
+  if (s4) log.push(`S4:ok status=201`);
+}
 const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.map(buildGreyPurchaseRow),      'tally_voucher_no',               'S4b');
-const s5   =await upsert.call(this,'process_issues',     processV.map(buildProcessRow),            'challan_no',                     'S5');
+// S5: process_issues — dedupe by challan_no then chunk
+const processAllRows = processV.map(buildProcessRow).map(sanitizeRow);
+const processSeen = new Map();
+for (const r of processAllRows) {
+  if (r.challan_no && !processSeen.has(r.challan_no)) processSeen.set(r.challan_no, r);
+}
+const processRows = Array.from(processSeen.values());
+log.push(`S5:deduped ${processAllRows.length}→${processRows.length}`);
+log.push(`S5:start rows=${processRows.length}`);
+let s5 = true;
+if (!processRows.length) { log.push('S5:skipped'); }
+else {
+  if (processRows.length > 0) log.push(`S5:sample ${JSON.stringify(processRows[0]).slice(0,200)}`);
+  const S5_CHUNK = 50;
+  for (let _i=0; _i<processRows.length && s5; _i+=S5_CHUNK) {
+    const chunk = processRows.slice(_i, _i+S5_CHUNK);
+    try {
+      const r = await this.helpers.httpRequest({
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/process_issues?on_conflict=challan_no`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify(chunk), returnFullResponse:true
+      });
+      if (r.statusCode>=400) {
+        const b = typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push(`S5:FAIL chunk${_i} ${r.statusCode} ${b.slice(0,400)}`); s5=false;
+      }
+    } catch(e) { log.push(`S5:ERR chunk${_i} ${e.message}`); s5=false; }
+  }
+  if (s5) log.push(`S5:ok status=201`);
+}
 const s5b  =await upsert.call(this,'issue_to_mill',      issueToMillV.map(buildIssueToMillRow),    'lot_no,voucher_date',             'S5b');
 
 // S5e: mill_challan_takas — taka-by-taka detail per Issue to Mill challan
@@ -971,18 +1092,47 @@ const s5c  =await upsert.call(this,'rec_from_mill',      recFromMillV.map(buildR
 const s5d  =await upsert.call(this,'stock_journal',      stockJournalV.map(buildStockJournalRow),  'tally_voucher_no',               'S5d');
 const s_cn =await upsertCreditNotes.call(this, creditNoteV);
 const s_dn =await upsert.call(this,'debit_note',         debitNoteV.map(buildDebitNoteRow),        'tally_voucher_no',               'S_DN');
-const s_jw =await upsert.call(this,'jobwork_expenses',   jobworkV.map(buildJobworkExpensesRow),    'voucher_number',               'S_JW');
+// S_JW: jobwork_expenses — dedupe then chunk to avoid 500 on large batches
+const jwAllRows = jobworkV.map(buildJobworkExpensesRow).map(sanitizeRow);
+const jwSeen = new Map();
+for (const r of jwAllRows) {
+  // Dedup strictly by voucher_number — same vnum across dates causes 500 on unique constraint
+  if (!jwSeen.has(r.voucher_number)) jwSeen.set(r.voucher_number, r);
+}
+const jwRows = Array.from(jwSeen.values());
+log.push(`S_JW:deduped ${jwAllRows.length}→${jwRows.length}`);
+log.push(`S_JW:start rows=${jwRows.length}`);
+let s_jw = true;
+if (!jwRows.length) { log.push('S_JW:skipped'); }
+else {
+  if (jwRows.length > 0) log.push(`S_JW:sample ${JSON.stringify(jwRows[0]).slice(0,200)}`);
+  const JW_CHUNK = 50;
+  for (let _i=0; _i<jwRows.length && s_jw; _i+=JW_CHUNK) {
+    const chunk = jwRows.slice(_i, _i+JW_CHUNK);
+    try {
+      const r = await this.helpers.httpRequest({
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/jobwork_expenses?on_conflict=voucher_number`,
+        headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify(chunk), returnFullResponse:true
+      });
+      if (r.statusCode>=400) {
+        const b = typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push(`S_JW:FAIL chunk${_i} ${r.statusCode} ${b.slice(0,400)}`); s_jw=false;
+      }
+    } catch(e) { log.push(`S_JW:ERR chunk${_i} ${e.message}`); s_jw=false; }
+  }
+  if (s_jw) log.push(`S_JW:ok status=201`);
+}
 const s_av =await upsert.call(this,'accounting_vouchers',accountingV.map(buildAccountingVoucherRow),'voucher_number,voucher_type',  'S_AV');
 
 // S_AV_LINES: receipt_payment_lines — per-bill rows for Receipt, Payment, Journal, Contra
-const allAccountingLines = accountingV.flatMap(v => buildReceiptPaymentLines(v));
+const allAccountingLines = accountingV.flatMap(v => buildReceiptPaymentLines(v)).map(sanitizeRow);
 log.push(`S_AV_LINES:start rows=${allAccountingLines.length}`);
 let s_av_lines = true;
 if (allAccountingLines.length) {
   try {
-    // Batch in chunks of 200 to avoid payload limits
-    const CHUNK = 200;
-    for (let i=0; i<allAccountingLines.length; i+=CHUNK) {
+    const CHUNK = 25;
+    for (let i=0; i<allAccountingLines.length && s_av_lines; i+=CHUNK) {
       const chunk = allAccountingLines.slice(i, i+CHUNK);
       const r = await this.helpers.httpRequest({
         method:'POST',
@@ -991,14 +1141,29 @@ if (allAccountingLines.length) {
         body:JSON.stringify(chunk), returnFullResponse:true
       });
       if (r.statusCode>=400) {
-        log.push(`S_AV_LINES:FAIL ${r.statusCode} ${(typeof r.body==='string'?r.body:JSON.stringify(r.body)).slice(0,200)}`);
-        s_av_lines = false; break;
+        const b = typeof r.body==='string'?r.body:JSON.stringify(r.body);
+        log.push(`S_AV_LINES:FAIL chunk${i} ${r.statusCode} body=${b.slice(0,800)}`);
+        for (let ri=0; ri<chunk.length; ri++) {
+          try {
+            const rr = await this.helpers.httpRequest({
+              method:'POST',
+              url:`${SUPABASE_URL}/rest/v1/receipt_payment_lines?on_conflict=voucher_number,voucher_type,bill_ref`,
+              headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+              body:JSON.stringify([chunk[ri]]), returnFullResponse:true
+            });
+            if (rr.statusCode>=400) {
+              const rb=typeof rr.body==='string'?rr.body:JSON.stringify(rr.body);
+              log.push(`S_AV_LINES:row${i+ri} FAIL ${rr.statusCode} body=${rb.slice(0,400)} row=${JSON.stringify(chunk[ri]).slice(0,300)}`);
+              break;
+            } else { log.push(`S_AV_LINES:row${i+ri} ok`); }
+          } catch(re2) { log.push(`S_AV_LINES:row${i+ri} ERR ${re2.message}`); break; }
+        }
+        s_av_lines = false;
       }
     }
     if (s_av_lines) log.push(`S_AV_LINES:ok rows=${allAccountingLines.length}`);
   } catch(e) { log.push(`S_AV_LINES:ERR ${e.message}`); s_av_lines=false; }
 }
-
 log.push('S6:start');
 try {
   await this.helpers.httpRequest({method:'POST',url:`${SUPABASE_URL}/rest/v1/tally_sync_state?on_conflict=sync_type`,
@@ -1019,6 +1184,20 @@ try {
 return [{json:{
   status:s3&&s4&&s4b&&s5&&s5b&&s5c&&s5d&&s_cn&&s_dn&&s_jw&&s_av&&s_av_lines?'success':'partial',
   batch:`${toISO(batchStart)}→${toISO(batchEnd)}`,daysBehind,
+  stepStatus:{
+    S3_sales:s3?'ok':'FAIL',
+    S4_purchase:s4?'ok':'FAIL',
+    S4b_grey:s4b?'ok':'FAIL',
+    S5_process:s5?'ok':'FAIL',
+    S5b_issueMill:s5b?'ok':'FAIL',
+    S5c_recMill:s5c?'ok':'FAIL',
+    S5d_stockJournal:s5d?'ok':'FAIL',
+    S_CN_creditNote:s_cn?'ok':'FAIL',
+    S_DN_debitNote:s_dn?'ok':'FAIL',
+    S_JW_jobwork:s_jw?'ok':'FAIL',
+    S_AV_accounting:s_av?'ok':'FAIL',
+    S_AV_LINES:s_av_lines?'ok':'FAIL',
+  },
   synced:{sales:salesV.length,purchase:purchaseV.length,issueToMill:issueToMillV.length,
     recFromMill:recFromMillV.length,processIssues:processV.length,creditNotes:creditNoteV.length,
     debitNotes:debitNoteV.length,jobwork:jobworkV.length,stockJournal:stockJournalV.length,

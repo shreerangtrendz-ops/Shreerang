@@ -102,10 +102,11 @@ export default function AdminDashboard() {
   const [topCustomers, setTopCustomers] = useState([]);
   const [topSuppliers, setTopSuppliers] = useState([]);
   const [millShrinkage, setMillShrinkage] = useState([]);
-  const [agingData, setAgingData]       = useState({d0:0,d30:0,d60:0,d90:0,total:0});
+  const [agingData, setAgingData]       = useState({d0:0,d30:0,d60:0,d90:0,total:0,count:0,not_due:0});
   const [recentSales, setRecentSales]   = useState([]);
   const [syncStatus, setSyncStatus]     = useState(null);
   const [activeTab, setActiveTab]       = useState('overview');
+  const [topDesigns, setTopDesigns]     = useState([]);
 
   const fyStart = new Date().getMonth()>=3
     ? `${new Date().getFullYear()}-04-01`
@@ -118,7 +119,8 @@ export default function AdminDashboard() {
     try {
       const [
         salesFY, purchaseFY, salesMonth, purchaseMonth,
-        processAll, syncLog, recentBills, topCust, topSupp, millPerf
+        processAll, syncLog, recentBills, topCust, topSupp, millPerf,
+        outstandingV2, costingTop
       ] = await Promise.all([
         // FY totals
         supabase.from('sales_bills').select('total_amount,bill_date,customer_name,comm_rate,comm_amount,broker_name').gte('bill_date',fyStart).lte('bill_date',today),
@@ -138,6 +140,10 @@ export default function AdminDashboard() {
         supabase.from('purchase_bills').select('supplier_name,total_amount').gte('bill_date',fyStart).not('supplier_name','is',null),
         // Mill shrinkage
         supabase.from('process_issues').select('worker_name,metres_issued,shortage_mtrs,shortage_pct').not('worker_name','is',null).gte('issue_date',fyStart).limit(2000),
+        // Real outstanding from v2 view
+        supabase.from('outstanding_receivable_v2').select('outstanding_amount,aging_bucket,customer_name,days_overdue,bill_date').limit(2000),
+        // Top margin designs from costing view
+        supabase.from('design_costing_v1').select('design_no,finish_item_name,gross_margin_pct,profit_per_mtr,factory_cost_per_mtr,avg_selling_rate,unsold_qty_mtrs,mill_name').order('gross_margin_pct',{ascending:false}).limit(10),
       ]);
 
       // Compute KPIs
@@ -186,28 +192,37 @@ export default function AdminDashboard() {
       });
       const mills = Object.entries(millMap).map(([name,d])=>({name,avg:(d.total/d.count).toFixed(1),count:d.count})).sort((a,b)=>b.avg-a.avg).slice(0,8);
 
-      // Aging — use credit_days from sales_bills
-      const now = new Date();
-      const aging={d0:0,d30:0,d60:0,d90:0,total:0};
-      (salesFY.data||[]).forEach(b=>{
-        const age = Math.floor((now-new Date(b.bill_date||now))/86400000);
-        const credit = 30; // default
-        const overdue = age - credit;
-        if (overdue>0) {
-          const amt=Number(b.total_amount||0)*0.3; // rough outstanding estimate
-          aging.total+=amt;
-          if (overdue<=30) aging.d0+=amt;
-          else if (overdue<=60) aging.d30+=amt;
-          else if (overdue<=90) aging.d60+=amt;
-          else aging.d90+=amt;
-        }
+      // REAL outstanding from outstanding_receivable_v2 view
+      const ovData = outstandingV2.data||[];
+      const aging={d0:0,d30:0,d60:0,d90:0,total:0,count:0,not_due:0};
+      ovData.forEach(r=>{
+        const amt=Number(r.outstanding_amount||0);
+        aging.total+=amt; aging.count++;
+        const bucket=r.aging_bucket||'';
+        if (bucket==='not due')        aging.not_due+=amt;
+        else if (bucket==='1-30 overdue') aging.d0+=amt;
+        else if (bucket==='31-60 days')   aging.d30+=amt;
+        else if (bucket==='61-90 days')   aging.d60+=amt;
+        else if (bucket==='90+ days')     aging.d90+=amt;
       });
+
+      // Top designs by margin from design_costing_v1
+      const topDesignsData = (costingTop.data||[]).slice(0,5).map(d=>({
+        design_no: d.design_no,
+        name: d.finish_item_name||`D No-${d.design_no}`,
+        margin: Number(d.gross_margin_pct||0),
+        profit_per_mtr: Number(d.profit_per_mtr||0),
+        factory_cost: Number(d.factory_cost_per_mtr||0),
+        sell_rate: Number(d.avg_selling_rate||0),
+        unsold: Number(d.unsold_qty_mtrs||0),
+        mill: d.mill_name,
+      }));
 
       setKpi({
         salesFY: salesTotal, purchaseFY: purchTotal,
         salesCount: (salesFY.data||[]).length, purchaseCount: (purchaseFY.data||[]).length,
         salesThisMonth: salesMoAmt, purchaseThisMonth: purchMoAmt,
-        processCount: pData.length, outstandingAmt: aging.total, outstandingCount: 0,
+        processCount: pData.length, outstandingAmt: aging.total, outstandingCount: aging.count,
         avgShrinkage: avgShrink, avgCommRate: avgComm, totalBrokerComm: commTotal,
         fabricAtMills, activeChallans: issued.length,
       });
@@ -218,6 +233,7 @@ export default function AdminDashboard() {
       setAgingData(aging);
       setRecentSales(recentBills.data||[]);
       setSyncStatus(syncLog.data?.[0]||null);
+      setTopDesigns(topDesignsData);
 
     } catch(e) { console.error('Dashboard load error', e); }
     finally { setLoading(false); }
@@ -289,6 +305,10 @@ export default function AdminDashboard() {
             style={{padding:'8px 16px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>
             💹 Sales Bills
           </button>
+          <button onClick={()=>navigate('/admin/accounting/hub')}
+            style={{padding:'8px 16px',background:'#fff',color:T.teal,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>
+            ⚡ Acctg Hub
+          </button>
           <button onClick={()=>navigate('/admin/tally-sync')}
             style={{padding:'8px 16px',background:'#fff',color:T.teal,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>
             ↻ Tally Sync
@@ -315,7 +335,7 @@ export default function AdminDashboard() {
           <KPICard label="Total Sales (FY)" value={fmtL(kpi.salesFY)} sub={`${kpi.salesCount} bills`} icon="💹" color={T.teal} onClick={()=>navigate('/admin/accounting/sales-bills')}/>
           <KPICard label="Total Purchase (FY)" value={fmtL(kpi.purchaseFY)} sub={`${kpi.purchaseCount} bills`} icon="🛒" color={T.blue} onClick={()=>navigate('/admin/accounting/purchase-bills')}/>
           <KPICard label="This Month Sales" value={fmtL(kpi.salesThisMonth)} sub="current month" icon="📅" color={T.green}/>
-          <KPICard label="Est. Outstanding" value={fmtL(kpi.outstandingAmt)} sub="overdue bills" icon="⚠️" color={T.red} onClick={()=>navigate('/admin/outstanding-receivable')}/>
+          <KPICard label="Outstanding Receivable" value={fmtL(kpi.outstandingAmt)} sub={`${kpi.outstandingCount} bills overdue`} icon="⚠️" color={T.red} onClick={()=>navigate('/admin/outstanding-receivable-v2')}/>
         </div>
 
         {/* KPI Row 2 */}
@@ -350,7 +370,8 @@ export default function AdminDashboard() {
           <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,color:T.text,marginBottom:4}}>Receivables Aging</div>
             <div style={{fontSize:11,color:T.textMuted,marginBottom:14}}>Estimated overdue buckets</div>
-            <AgingRow label="1–30 days" amount={agingData.d0} total={agingData.total||1} color={T.gold}/>
+            <AgingRow label="Not Due" amount={agingData.not_due} total={agingData.total||1} color={T.green}/>
+            <AgingRow label="1–30 days overdue" amount={agingData.d0} total={agingData.total||1} color={T.gold}/>
             <AgingRow label="31–60 days" amount={agingData.d30} total={agingData.total||1} color={T.orange}/>
             <AgingRow label="61–90 days" amount={agingData.d60} total={agingData.total||1} color="#E53E3E"/>
             <AgingRow label="90+ days" amount={agingData.d90} total={agingData.total||1} color={T.red}/>
@@ -508,34 +529,65 @@ export default function AdminDashboard() {
       {/* ══════════════════ TAB: RECEIVABLES ══════════════════ */}
       {activeTab==='receivables' && <>
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
-          <KPICard label="Est. Total Outstanding" value={fmtL(agingData.total)} sub="overdue bills" icon="💰" color={T.red}/>
+          <KPICard label="Total Outstanding" value={fmtL(agingData.total)} sub={`${agingData.count} bills`} icon="💰" color={T.red} onClick={()=>navigate('/admin/outstanding-receivable-v2')}/>
           <KPICard label="1-30 Days Overdue" value={fmtL(agingData.d0)} sub="recent overdue" icon="⏱" color={T.gold}/>
           <KPICard label="31-60 Days Overdue" value={fmtL(agingData.d30)} sub="follow up needed" icon="⚠️" color={T.orange}/>
           <KPICard label="60+ Days Overdue" value={fmtL(agingData.d60+agingData.d90)} sub="urgent action" icon="🚨" color={T.red}/>
         </div>
 
         <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:T.text,marginBottom:4}}>Receivables Aging Analysis</div>
-          <div style={{fontSize:12,color:T.textMuted,marginBottom:18}}>Estimated based on bill dates — for exact amounts sync Receipt vouchers</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:10,marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,color:T.text}}>Receivables Aging (Real)</div>
+            <button onClick={()=>navigate('/admin/outstanding-receivable-v2')} style={{fontSize:11,color:T.teal,background:'none',border:`1px solid ${T.border}`,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontWeight:600}}>View Full Report →</button>
+          </div>
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:18}}>From outstanding_receivable_v2 · {agingData.count} bills · Total {fmtL(agingData.total)}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr',gap:10,marginBottom:16}}>
             {[
-              {label:'0–30 days',amount:agingData.d0,color:T.gold,icon:'🟡'},
-              {label:'31–60 days',amount:agingData.d30,color:T.orange,icon:'🟠'},
-              {label:'61–90 days',amount:agingData.d60,color:'#E53E3E',icon:'🔴'},
-              {label:'90+ days',amount:agingData.d90,color:T.red,icon:'⛔'},
+              {label:'Not Due',   amount:agingData.not_due, color:T.green,  icon:'🟢'},
+              {label:'1–30 days', amount:agingData.d0,      color:T.gold,   icon:'🟡'},
+              {label:'31–60 days',amount:agingData.d30,     color:T.orange, icon:'🟠'},
+              {label:'61–90 days',amount:agingData.d60,     color:'#E53E3E',icon:'🔴'},
+              {label:'90+ days',  amount:agingData.d90,     color:T.red,    icon:'⛔'},
             ].map((b,i)=>(
-              <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:'14px 16px',textAlign:'center'}}>
-                <div style={{fontSize:20,marginBottom:4}}>{b.icon}</div>
-                <div style={{fontSize:10.5,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,marginBottom:6}}>{b.label}</div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:b.color,fontWeight:700}}>{fmtL(b.amount)}</div>
+              <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 14px',textAlign:'center',cursor:'pointer'}} onClick={()=>navigate('/admin/outstanding-receivable-v2')}>
+                <div style={{fontSize:18,marginBottom:4}}>{b.icon}</div>
+                <div style={{fontSize:10,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,marginBottom:6}}>{b.label}</div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,color:b.color,fontWeight:700}}>{fmtL(b.amount)}</div>
               </div>
             ))}
           </div>
-          <div style={{padding:'12px 16px',background:'#FFF8E8',borderRadius:8,fontSize:12,color:'#92400E',border:'1px solid #F6D860'}}>
-            <strong>Note:</strong> Outstanding amounts are estimated from unpaid bill amounts. For precise outstanding tracking, sync Receipt and Payment vouchers from Tally.
-            <span style={{marginLeft:8,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/tally-sync')}>Go to Tally Sync →</span>
-          </div>
         </div>
+
+        {/* Top Designs by Margin */}
+        {topDesigns.length > 0 && (
+          <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20,marginBottom:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,color:T.text}}>Top Designs by Margin</div>
+                <div style={{fontSize:11,color:T.textMuted}}>From design_costing_v1 · Grey → Mill → Sale P&L</div>
+              </div>
+              <button onClick={()=>navigate('/admin/accounting/design-costing')} style={{fontSize:11,color:T.teal,background:'none',border:`1px solid ${T.border}`,borderRadius:6,padding:'4px 10px',cursor:'pointer',fontWeight:600}}>View All →</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10}}>
+              {topDesigns.map((d,i)=>{
+                const mColor = d.margin>=25?T.green:d.margin>=10?T.gold:d.margin>=0?T.orange:T.red;
+                return (
+                  <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 14px',borderTop:`3px solid ${mColor}`}}>
+                    <div style={{fontSize:10,fontWeight:800,color:T.teal,marginBottom:4}}>D No-{d.design_no}</div>
+                    <div style={{fontSize:10,color:T.text,marginBottom:8,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.name}</div>
+                    <div style={{fontSize:18,fontWeight:800,color:mColor}}>{d.margin>0?'+':''}{d.margin.toFixed(1)}%</div>
+                    <div style={{fontSize:9,color:T.textMuted,marginTop:2}}>Margin</div>
+                    <div style={{marginTop:8,borderTop:`1px solid ${T.border}`,paddingTop:6,display:'flex',justifyContent:'space-between'}}>
+                      <div><div style={{fontSize:8,color:T.textMuted}}>Cost/m</div><div style={{fontSize:10,fontWeight:600,color:T.red}}>₹{d.factory_cost.toFixed(0)}</div></div>
+                      <div><div style={{fontSize:8,color:T.textMuted}}>Sell/m</div><div style={{fontSize:10,fontWeight:600,color:T.green}}>₹{d.sell_rate.toFixed(0)}</div></div>
+                      <div><div style={{fontSize:8,color:T.textMuted}}>Unsold</div><div style={{fontSize:10,fontWeight:600,color:T.gold}}>{d.unsold.toFixed(0)}m</div></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Recent overdue bills */}
         <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>

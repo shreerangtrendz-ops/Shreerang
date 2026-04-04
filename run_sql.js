@@ -1,34 +1,43 @@
-import fs from 'fs';
-import pkg from 'pg';
-const { Client } = pkg;
+#!/usr/bin/env node
+/**
+ * run_sql.js — Run a single Supabase migration file
+ * Usage: node run_sql.js <path-to-sql-file>
+ * Example: node run_sql.js supabase/migrations/20260401_tally_100pct_data.sql
+ */
+const fs = require('fs');
+const { Client } = require('pg');
 
-// Run a specific migration file: node run_sql.js <filename>
-// e.g. node run_sql.js 20260401_tally_100pct_data.sql
-const target = process.argv[2] || '20260401_tally_100pct_data.sql';
-const sqlPath = `supabase/migrations/${target}`;
+const sqlFile = process.argv[2];
 
-if (!fs.existsSync(sqlPath)) {
-  console.error(`\u274c File not found: ${sqlPath}`);
+if (!sqlFile) {
+  console.error('Usage: node run_sql.js <path-to-sql-file>');
+  console.error('Example: node run_sql.js supabase/migrations/20260401_tally_100pct_data.sql');
   process.exit(1);
 }
 
-const sql = fs.readFileSync(sqlPath, 'utf8');
+if (!fs.existsSync(sqlFile)) {
+  console.error(`File not found: ${sqlFile}`);
+  process.exit(1);
+}
 
-const client = new Client({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres.zdekydcscwhuusliwqaz:Shreerang2026@aws-0-ap-south-1.pooler.supabase.com:6543/postgres',
-  ssl: { rejectUnauthorized: false }
-});
+const sql = fs.readFileSync(sqlFile, 'utf8');
+const connectionString = process.env.DATABASE_URL ||
+  'postgres://postgres.zdekydcscwhuusliwqaz:Shreerang2026@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
+
+const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
 
 client.connect()
   .then(() => {
-    console.log('\u2705 Connected to Supabase!');
-    console.log(`\u25b6 Executing ${target}...`);
+    console.log('✅ Connected to Supabase!');
+    console.log(`▶ Executing ${sqlFile}...`);
     return client.query(sql);
   })
   .then(() => {
-    console.log(`\u2705 ${target} executed successfully`);
+    console.log(`✅ ${sqlFile} executed successfully`);
+    return client.end();
   })
   .catch(err => {
-    console.error('\u274c Error executing migration:', err.message);
-  })
-  .finally(() => client.end());
+    console.error('❌ Error:', err.message);
+    client.end();
+    process.exit(1);
+  });

@@ -18,12 +18,12 @@ const T = {
   border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
   text:'#0B2E2B', muted:'#6A9B95',
 };
-// All cost formatters use Math.abs() — DB stores costs negative (Tally convention)
-const fmt  = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:2});
+// Cost formatters — always show positive (ABS) since DB now stores costs positive
+const fmt  = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
 const fmtR = n => '₹' + Math.abs(Number(n||0)).toFixed(2);
-// fmtS = signed formatter, ONLY for profit/margin (can be negative = loss)
-const fmtS = n => { const v=Number(n||0); return (v>=0?'+':'-')+'₹'+Math.abs(v).toFixed(2); };
-const fmtQ = n => Number(n||0).toFixed(2)+' m';
+// fmtS = signed formatter, ONLY for profit/margin (+ = profit, - = loss)
+const fmtS = n => { const v=Number(n||0); return (v>=0?'+':'')+'₹'+v.toFixed(2); };
+const fmtQ = n => Number(n||0).toFixed(1)+' m';
 const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
 const pct  = n => n != null ? (Number(n)>=0?'+':'')+Number(n).toFixed(1)+'%' : '—';
 

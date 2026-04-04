@@ -943,7 +943,7 @@ async function upsertCreditNotes(vouchers) {
 
 const s3   =await upsert.call(this,'sales_bills',        salesV.map(buildSalesRow),               'bill_number',                    'S3');
 const s4   =await upsert.call(this,'purchase_bills',     purchaseV.map(buildPurchaseRow),          'bill_number',                    'S4');
-const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.map(buildGreyPurchaseRow),      'supplier_invoice_no,voucher_date','S4b');
+const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.map(buildGreyPurchaseRow),      'tally_voucher_no',               'S4b');
 const s5   =await upsert.call(this,'process_issues',     processV.map(buildProcessRow),            'challan_no',                     'S5');
 const s5b  =await upsert.call(this,'issue_to_mill',      issueToMillV.map(buildIssueToMillRow),    'lot_no,voucher_date',             'S5b');
 

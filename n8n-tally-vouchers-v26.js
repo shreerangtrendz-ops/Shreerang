@@ -88,6 +88,12 @@ function cleanRef(val) {
 function parseQty(s)  { if (!s) return 0; return parseFloat(s.replace(/mtrs?/gi,'').replace(/nos?/gi,'').trim()) || 0; }
 function parseRate(s) { if (!s) return 0; return parseFloat(s.replace(/\/mtrs?/gi,'').replace(/\/nos?/gi,'').trim()) || 0; }
 function parseNum(s)  { if (!s) return 0; const n=parseFloat(s.replace(/,/g,'').trim()); return isFinite(n)?n:0; }
+// decodeHtml: Tally XML encodes " as &quot;, & as &amp; etc — decode before storing
+function decodeHtml(s) {
+  if (!s) return s;
+  return s.replace(/&quot;/g,'"').replace(/&#34;/g,'"').replace(/&apos;/g,"'")
+           .replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+}
 function sanitizeRow(row) {
   // Deep sanitize: replace NaN/Infinity/undefined with null at all levels
   return JSON.parse(JSON.stringify(row, (_k, v) => {
@@ -151,7 +157,7 @@ function parseInvEntry(inv) {
     process_mill:   getUdfVal(b,'PROCESSMILLNAME'),
   }));
   return {
-    stock_item: getXmlVal(inv,'STOCKITEMNAME'),
+    stock_item: decodeHtml(getXmlVal(inv,'STOCKITEMNAME')),
     qty:        parseQty(getXmlVal(inv,'ACTUALQTY') || getXmlVal(inv,'BILLEDQTY')),
     billed_qty: parseQty(getXmlVal(inv,'BILLEDQTY')),
     rate:       parseRate(getXmlVal(inv,'RATE')),

@@ -129,6 +129,7 @@ import LiveStockPage from '@/pages/admin/LiveStockPage';
 import JobWorkJobsPage from '@/pages/admin/JobWorkJobsPage';
 import SalespersonDashboard from '@/pages/admin/sales/SalespersonDashboard';
 import AssignContactsPage from '@/pages/admin/sales/AssignContactsPage';
+import ProcessIssuesPage from '@/pages/admin/accounting/ProcessIssuesPage';
 
 const App = () => {
   useEffect(() => {
@@ -287,6 +288,7 @@ const App = () => {
                     <Route path="accounting/jobwork-expenses" element={<JobWorkExpensesPage />} />
                     <Route path="accounting/hub" element={<TallyAccountingHub />} />
                     <Route path="accounting/design-costing" element={<DesignCostingPage />} />
+                     <Route path="accounting/process-issues" element={<ProcessIssuesPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />
@@ -324,5 +326,4 @@ const App = () => {
 };
 
 export default App;
-
 

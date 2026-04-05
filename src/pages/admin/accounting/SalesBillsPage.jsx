@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 
 const T = {
@@ -12,16 +12,18 @@ const T = {
   text:'#0B2E2B', textMuted:'#6A9B95', textFaint:'#A8C9C3',
 };
 
-const fmt  = n => '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
-const fmtL = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
+const fmt    = n => '₹' + Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const fmtL   = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
 const fmtMtr = n => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
 const PAGE = 50;
 
+const FY_YEARS = [2022,2023,2024,2025,2026];
+
 function getCurrentFY() {
   const now = new Date();
   const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1;
-  return { from:`${yr}-04-01`, to:`${yr+1}-03-31` };
+  return { from:`${yr}-04-01`, to:`${yr+1}-03-31`, yr };
 }
 
 function Badge({label, color=T.teal, bg}) {
@@ -40,22 +42,27 @@ function SummaryCard({label, value, sub, color=T.teal}) {
 
 export default function SalesBillsPage() {
   const fy = getCurrentFY();
-  const [bills, setBills]         = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [bills, setBills]           = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage]           = useState(0);
-  const [expanded, setExpanded]   = useState(null);
-  const [expandedTab, setExpandedTab] = useState('items'); // 'items' | 'folding' | 'link'
+  const [page, setPage]             = useState(0);
+  const [expanded, setExpanded]     = useState(null);
+  const [activeFY, setActiveFY]     = useState(fy.yr);
 
-  // Filters
-  const [search, setSearch]       = useState('');
-  const [dateFrom, setDateFrom]   = useState(fy.from);
-  const [dateTo, setDateTo]       = useState(fy.to);
+  const [search, setSearch]             = useState('');
+  const [dateFrom, setDateFrom]         = useState(fy.from);
+  const [dateTo, setDateTo]             = useState(fy.to);
   const [brokerFilter, setBrokerFilter] = useState('');
   const [partyFilter, setPartyFilter]   = useState('');
 
-  // Summary
-  const [summary, setSummary] = useState({total:0, count:0, totalMtrs:0, totalTaka:0, totalComm:0, billsWithBroker:0});
+  const [summary, setSummary] = useState({total:0,count:0,totalMtrs:0,totalTaka:0,totalComm:0,billsWithBroker:0});
+
+  const setFY = yr => {
+    setActiveFY(yr);
+    setDateFrom(`${yr}-04-01`);
+    setDateTo(`${yr+1}-03-31`);
+    setPage(0);
+  };
 
   const fetchBills = useCallback(async (pg=0) => {
     setLoading(true);
@@ -66,10 +73,9 @@ export default function SalesBillsPage() {
       .range(from,to);
     if (dateFrom) q = q.gte('bill_date',dateFrom);
     if (dateTo)   q = q.lte('bill_date',dateTo);
-    if (partyFilter) q = q.ilike('customer_name',`%${partyFilter}%`);
+    if (partyFilter)  q = q.ilike('customer_name',`%${partyFilter}%`);
     if (brokerFilter) q = q.ilike('broker_name',`%${brokerFilter}%`);
-    if (search) q = q.or(`customer_name.ilike.%${search}%,bill_number.ilike.%${search}%,broker_name.ilike.%${search}%`);
-
+    if (search) q = q.or(`customer_name.ilike.%${search}%,bill_number.ilike.%${search}%,broker_name.ilike.%${search}%,design_no.ilike.%${search}%`);
     const {data,error,count} = await q;
     if (!error) { setBills(data||[]); setTotalCount(count||0); }
     setPage(pg);
@@ -77,17 +83,20 @@ export default function SalesBillsPage() {
   }, [dateFrom, dateTo, partyFilter, brokerFilter, search]);
 
   const fetchSummary = useCallback(async () => {
-    let q = supabase.from('sales_bills').select('total_amount,actual_qty,billed_qty,taka_pcs,comm_amount,broker_name');
+    let q = supabase.from('sales_bills')
+      .select('total_amount,quantity_mtrs,total_taka_pcs,comm_amount,broker_name');
     if (dateFrom) q = q.gte('bill_date',dateFrom);
     if (dateTo)   q = q.lte('bill_date',dateTo);
     const {data} = await q;
     if (data) {
-      const total = data.reduce((s,b)=>s+Number(b.total_amount||0),0);
-      const totalMtrs = data.reduce((s,b)=>s+Number(b.billed_qty||b.actual_qty||0),0);
-      const totalTaka = data.reduce((s,b)=>s+Number(b.taka_pcs||0),0);
-      const totalComm = data.reduce((s,b)=>s+Number(b.comm_amount||0),0);
-      const billsWithBroker = data.filter(b=>b.broker_name).length;
-      setSummary({total, count:data.length, totalMtrs, totalTaka, totalComm, billsWithBroker});
+      setSummary({
+        total:           data.reduce((s,b)=>s+Number(b.total_amount||0),0),
+        count:           data.length,
+        totalMtrs:       data.reduce((s,b)=>s+Number(b.quantity_mtrs||0),0),
+        totalTaka:       data.reduce((s,b)=>s+Number(b.total_taka_pcs||0),0),
+        totalComm:       data.reduce((s,b)=>s+Number(b.comm_amount||0),0),
+        billsWithBroker: data.filter(b=>b.broker_name).length,
+      });
     }
   }, [dateFrom, dateTo]);
 
@@ -96,7 +105,8 @@ export default function SalesBillsPage() {
   function applyFilters() { fetchBills(0); fetchSummary(); }
   function resetFilters() {
     setSearch(''); setPartyFilter(''); setBrokerFilter('');
-    setDateFrom(fy.from); setDateTo(fy.to);
+    const f = getCurrentFY();
+    setActiveFY(f.yr); setDateFrom(f.from); setDateTo(f.to);
     setTimeout(()=>{ fetchBills(0); fetchSummary(); },0);
   }
 
@@ -104,6 +114,7 @@ export default function SalesBillsPage() {
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
+
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div>
@@ -113,21 +124,31 @@ export default function SalesBillsPage() {
         <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
       </div>
 
+      {/* FY Tabs */}
+      <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
+        {FY_YEARS.map(yr => (
+          <button key={yr} onClick={()=>setFY(yr)}
+            style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,transition:'all .15s',
+              background:activeFY===yr?T.teal:'transparent',color:activeFY===yr?'#fff':T.textMuted}}>
+            FY {yr.toString().slice(2)}-{(yr+1).toString().slice(2)}
+          </button>
+        ))}
+      </div>
+
       {/* Summary Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
-        <SummaryCard label="Total Sales" value={fmtL(summary.total)} sub={`${summary.count} bills`} color={T.teal}/>
-        <SummaryCard label="Total Metres" value={fmtMtr(summary.totalMtrs)} sub="billed quantity" color={T.blue}/>
-        <SummaryCard label="Total Taka" value={Number(summary.totalTaka).toLocaleString('en-IN',{maximumFractionDigits:0})} sub="pcs dispatched" color={T.navy}/>
-        <SummaryCard label="Broker Commission" value={fmtL(summary.totalComm)} sub={`${summary.billsWithBroker} brokered bills`} color={T.gold}/>
-        <SummaryCard label="Avg Per Bill" value={summary.count?fmtL(summary.total/summary.count):'—'} sub="per bill avg" color={T.green}/>
+        <SummaryCard label="Total Sales"       value={fmtL(summary.total)}       sub={`${summary.count} bills`}               color={T.teal}/>
+        <SummaryCard label="Total Metres"      value={fmtMtr(summary.totalMtrs)} sub="billed quantity"                        color={T.blue}/>
+        <SummaryCard label="Total Taka"        value={Number(summary.totalTaka).toLocaleString('en-IN',{maximumFractionDigits:0})} sub="pcs dispatched" color={T.navy}/>
+        <SummaryCard label="Broker Commission" value={fmtL(summary.totalComm)}   sub={`${summary.billsWithBroker} brokered bills`} color={T.gold}/>
+        <SummaryCard label="Avg Per Bill"      value={summary.count?fmtL(summary.total/summary.count):'—'} sub="per bill avg" color={T.green}/>
       </div>
 
       {/* Filters */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
         <div style={{flex:'1 1 180px'}}>
           <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Search</div>
-          <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Bill no, customer, broker…"
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Bill no, customer, broker, design…"
             style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none',boxSizing:'border-box'}}/>
         </div>
         <div style={{flex:'1 1 140px'}}>
@@ -156,9 +177,8 @@ export default function SalesBillsPage() {
 
       {/* Table */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
-        {/* Table header */}
-        <div style={{display:'grid',gridTemplateColumns:'130px 90px 1fr 90px 110px 90px 90px 100px 60px',gap:0,background:T.bg,borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
-          {['Bill No','Date','Customer','Taka','Metres','Rate','Broker%','Amount',''].map((h,i)=>(
+        <div style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 80px 110px 90px 90px 110px 50px',gap:0,background:T.bg,borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
+          {['Bill No','Date','Customer','Taka','Metres','Rate/m','Broker%','Amount',''].map((h,i)=>(
             <div key={i} style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,textAlign:i>=5&&i<=7?'right':'left'}}>{h}</div>
           ))}
         </div>
@@ -166,218 +186,115 @@ export default function SalesBillsPage() {
         {loading ? (
           <div style={{padding:60,textAlign:'center',color:T.textMuted}}>Loading…</div>
         ) : bills.length===0 ? (
-          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>No bills found</div>
+          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>No bills found for selected period</div>
         ) : bills.map((b,i)=>{
           const isExp = expanded === b.id;
-          const lineItems = Array.isArray(b.line_items) ? b.line_items : (typeof b.line_items==='string'?JSON.parse(b.line_items||'[]'):[]);
-          const hasShortage = Number(b.shortage_pct||0) > 0;
           return (
             <div key={b.id} style={{borderBottom:`1px solid ${T.border}`}}>
-              {/* Main row */}
               <div
-                onClick={()=>{ setExpanded(isExp?null:b.id); setExpandedTab('items'); }}
-                style={{display:'grid',gridTemplateColumns:'130px 90px 1fr 90px 110px 90px 90px 100px 60px',gap:0,padding:'11px 16px',
-                  background:isExp?T.tealLight:'#fff',cursor:'pointer',alignItems:'center',
-                  transition:'background .12s'}}
+                onClick={()=>setExpanded(isExp?null:b.id)}
+                style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 80px 110px 90px 90px 110px 50px',gap:0,padding:'11px 16px',
+                  background:isExp?T.tealLight:'#fff',cursor:'pointer',alignItems:'center',transition:'background .12s'}}
                 onMouseEnter={e=>{if(!isExp)e.currentTarget.style.background=T.bg}}
                 onMouseLeave={e=>{if(!isExp)e.currentTarget.style.background='#fff'}}
               >
-                <div style={{fontWeight:700,color:T.teal,fontSize:12.5,fontFamily:"'DM Mono',monospace"}}>{b.bill_number||'—'}</div>
+                <div style={{fontWeight:700,color:T.teal,fontSize:12,fontFamily:"'DM Mono',monospace"}}>{b.bill_number||'—'}</div>
                 <div style={{fontSize:12,color:T.textMuted}}>{fmtDate(b.bill_date)}</div>
                 <div>
                   <div style={{fontSize:12.5,fontWeight:600,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:280}}>{b.customer_name||'—'}</div>
-                  <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>{b.broker_name?`via ${b.broker_name}`:'No broker'} {b.sales_ledger?`· ${b.sales_ledger}`:''}</div>
+                  <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>
+                    {b.broker_name?`via ${b.broker_name}`:'No broker'}
+                    {b.design_no ? ` · Design: ${b.design_no}` : ''}
+                    {b.sales_ledger ? ` · ${b.sales_ledger}` : ''}
+                  </div>
                 </div>
-                <div style={{fontSize:12.5,textAlign:'right',color:T.text,fontWeight:500}}>{b.taka_pcs||'—'}</div>
-                <div style={{fontSize:12.5,textAlign:'right',color:T.text,fontWeight:500,fontFamily:"'DM Mono',monospace"}}>{b.billed_qty?fmtMtr(b.billed_qty):b.actual_qty?fmtMtr(b.actual_qty):'—'}</div>
-                <div style={{fontSize:12,textAlign:'right',color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>{b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:b.line_items&&lineItems[0]?.rate?`₹${Number(lineItems[0].rate).toFixed(2)}`:b.net_rate?`₹${Number(b.net_rate).toFixed(3)}`:'—'}</div>
+                <div style={{fontSize:12.5,textAlign:'right',color:T.text,fontWeight:500}}>{b.total_taka_pcs||'—'}</div>
+                <div style={{fontSize:12.5,textAlign:'right',fontFamily:"'DM Mono',monospace"}}>{b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'}</div>
+                <div style={{fontSize:12,textAlign:'right',color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>{b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'}</div>
                 <div style={{textAlign:'right'}}>
                   {b.comm_rate ? <Badge label={`${Number(b.comm_rate).toFixed(1)}%`} color={T.gold}/> : <span style={{fontSize:11,color:T.textFaint}}>—</span>}
                 </div>
                 <div style={{fontSize:13,textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>{fmt(b.total_amount)}</div>
-                <div style={{textAlign:'right',fontSize:16,color:isExp?T.teal:T.textFaint,transition:'.15s'}}>{isExp?'▲':'▼'}</div>
+                <div style={{textAlign:'right',fontSize:16,color:isExp?T.teal:T.textFaint}}>{isExp?'▲':'▼'}</div>
               </div>
 
-              {/* Expanded row */}
               {isExp && (
-                <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'0 16px 20px'}}>
-                  {/* Tab bar */}
-                  <div style={{display:'flex',gap:2,padding:'12px 0 14px',borderBottom:`1px solid ${T.border}`,marginBottom:16}}>
-                    {[['items','Line Items & Allocations'],['folding','Taka-wise Folding'],['link','Chain Linkage']].map(([k,l])=>(
-                      <button key={k} onClick={e=>{e.stopPropagation();setExpandedTab(k)}}
-                        style={{padding:'5px 14px',borderRadius:6,border:'none',fontSize:11,fontWeight:600,cursor:'pointer',
-                          background:expandedTab===k?T.teal:'transparent',color:expandedTab===k?'#fff':T.textMuted}}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Bill header info */}
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:16,padding:'12px 14px',background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
+                <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'16px 18px 20px'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16,padding:'12px 14px',background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
                     {[
-                      ['Bill Number', b.bill_number],
-                      ['Bill Date', fmtDate(b.bill_date)],
-                      ['Reference No', b.reference_no||'—'],
-                      ['Voucher Class', b.voucher_class||'—'],
-                      ['Sales Ledger', b.sales_ledger||'—'],
-                      ['GST No.', b.gst_number||'—'],
-                      ['Broker', b.broker_name||'—'],
-                      ['Commission Rate', b.comm_rate?`${b.comm_rate}%`:'None'],
-                      ['Comm. Amount', b.comm_amount?fmt(b.comm_amount):'—'],
-                      ['Net Rate', b.net_rate?`₹${Number(b.net_rate).toFixed(3)}/m`:'—'],
-                      ['Credit Period', b.credit_period||'—'],
-                      ['Transporter', b.transporter_name||'—'],
-                      ['Mill Godown', b.mill_godown||'—'],
-                      ['IGST', b.igst_amount?fmt(b.igst_amount):'—'],
-                      ['CGST', b.cgst_amount?fmt(b.cgst_amount):'—'],
-                      ['SGST', b.sgst_amount?fmt(b.sgst_amount):'—'],
-                      ['Round Off', b.round_off!=null?`₹${b.round_off}`:'—'],
-                      ['Assessable Value', b.assessable_value?fmt(b.assessable_value):'—'],
-                      ['Total Amount', fmt(b.total_amount)],
-                      ['e-Way / GST Bill', b.provide_gst_eway||'No'],
-                      ['Commission on Inv.', b.commission_on_invoice_value||'No'],
+                      ['Bill Number',      b.bill_number],
+                      ['Bill Date',        fmtDate(b.bill_date)],
+                      ['Customer',         b.customer_name],
+                      ['Customer GSTIN',   b.customer_gstin||'—'],
+                      ['Customer State',   b.customer_state||'—'],
+                      ['Fabric',           b.fabric_name||'—'],
+                      ['Design No',        b.design_no||'—'],
+                      ['Batch Name',       b.batch_name||'—'],
+                      ['Godown',           b.godown||'—'],
+                      ['Sales Ledger',     b.sales_ledger||'—'],
+                      ['Voucher Class',    b.voucher_class||'—'],
+                      ['Place of Supply',  b.place_of_supply||'—'],
+                      ['Broker',           b.broker_name||'None'],
+                      ['Comm Rate',        b.comm_rate?`${b.comm_rate}%`:'None'],
+                      ['Comm Amount',      b.comm_amount?fmt(b.comm_amount):'—'],
+                      ['Comm Assessed',    b.comm_assessed_value?fmt(b.comm_assessed_value):'—'],
+                      ['Qty (Mtrs)',        b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'],
+                      ['Taka / Pcs',       b.total_taka_pcs||'—'],
+                      ['Rate/Mtr',         b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'],
+                      ['Taxable Value',    b.taxable_value?fmt(b.taxable_value):'—'],
+                      ['IGST',             b.igst_amount?fmt(b.igst_amount):'—'],
+                      ['CGST',             b.cgst_amount?fmt(b.cgst_amount):'—'],
+                      ['SGST',             b.sgst_amount?fmt(b.sgst_amount):'—'],
+                      ['Round Off',        b.round_off!=null?`₹${b.round_off}`:'—'],
+                      ['Total Amount',     fmt(b.total_amount)],
+                      ['Credit Days',      b.credit_days||'—'],
+                      ['Bill Ref No',      b.bill_ref_number||'—'],
+                      ['Transporter',      b.transporter_name||'—'],
+                      ['LR Number',        b.lr_number||'—'],
+                      ['Destination City', b.destination_city||'—'],
+                      ['e-Way Bill No',    b.eway_bill_no||'—'],
+                      ['IRN',              b.irn||'—'],
+                      ['Entered By',       b.entered_by||'—'],
+                      ['Narration',        b.narration||'—'],
                     ].map(([k,v])=>(
                       <div key={k}>
-                        <div style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:3}}>{k}</div>
-                        <div style={{fontSize:12.5,color:T.text,fontWeight:500}}>{v||'—'}</div>
+                        <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                        <div style={{fontSize:12,color:T.text,fontWeight:500,wordBreak:'break-word'}}>{v||'—'}</div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Tab: Line Items */}
-                  {expandedTab==='items' && (
-                    <div>
-                      <div style={{fontSize:11,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:10}}>Line Items — Stock Item Allocations</div>
-                      {lineItems.length > 0 ? (
-                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                          <thead>
-                            <tr style={{background:T.bg}}>
-                              {['Item Name','Style/Color/Brand','HSN/SAC','Taka/Pcs','Folding','Actual Qty','Billed Qty','Rate/mtr','Disc%','Amount','Design No.','Godown','Lot No.'].map(h=>(
-                                <th key={h} style={{padding:'7px 10px',textAlign:'left',fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`,whiteSpace:'nowrap'}}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {lineItems.map((item,idx)=>(
-                              <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,background:idx%2===0?'#fff':T.bg}}>
-                                <td style={{padding:'8px 10px',fontWeight:600,color:T.text,maxWidth:180}}>{item.item_name||item.name||'—'}</td>
-                                <td style={{padding:'8px 10px',color:T.textMuted,fontSize:11}}>{item.style_color_brand||item.style||'—'}</td>
-                                <td style={{padding:'8px 10px',color:T.textMuted,fontFamily:"'DM Mono',monospace",fontSize:11}}>{item.hsn_sac||item.hsn||'—'}</td>
-                                <td style={{padding:'8px 10px',color:T.text}}>{item.taka_pcs||item.pcs||'—'}</td>
-                                <td style={{padding:'8px 10px',color:T.text}}>{item.folding||item.folding_pct?`${item.folding||item.folding_pct}%`:'—'}</td>
-                                <td style={{padding:'8px 10px',fontFamily:"'DM Mono',monospace",color:T.text}}>{item.actual_qty?fmtMtr(item.actual_qty):item.quantity?fmtMtr(item.quantity):'—'}</td>
-                                <td style={{padding:'8px 10px',fontFamily:"'DM Mono',monospace",fontWeight:600,color:T.teal}}>{item.billed_qty?fmtMtr(item.billed_qty):item.actual_qty?fmtMtr(item.actual_qty):'—'}</td>
-                                <td style={{padding:'8px 10px',fontFamily:"'DM Mono',monospace",color:T.text}}>{item.rate?`₹${Number(item.rate).toFixed(2)}`:item.rate_per_mtr?`₹${Number(item.rate_per_mtr).toFixed(2)}`:'—'}</td>
-                                <td style={{padding:'8px 10px',color:T.textMuted}}>{item.disc_pct!=null?`${item.disc_pct}%`:item.discount!=null?`${item.discount}%`:'—'}</td>
-                                <td style={{padding:'8px 10px',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>{item.amount?fmt(item.amount):item.rate&&item.billed_qty?fmt(Number(item.rate)*Number(item.billed_qty)):'—'}</td>
-                                <td style={{padding:'8px 10px'}}>
-                                  {item.design_no ? <Badge label={item.design_no} color={T.teal}/> : item.design_number ? <Badge label={item.design_number} color={T.teal}/> : <span style={{color:T.textFaint,fontSize:11}}>—</span>}
-                                </td>
-                                <td style={{padding:'8px 10px',color:T.textMuted,fontSize:11}}>{item.godown||item.godown_name||'—'}</td>
-                                <td style={{padding:'8px 10px'}}>
-                                  {item.lot_no ? <span style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:T.orange,fontWeight:600}}>{item.lot_no}</span> : <span style={{color:T.textFaint,fontSize:11}}>—</span>}
-                                  {item.track_party && <div style={{fontSize:9,color:T.textMuted,marginTop:2}}>{item.track_party}</div>}
-                                  {item.track_ref_no && <div style={{fontSize:9,color:T.textMuted}}>{item.track_ref_no}</div>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : (
-                        <div style={{padding:'20px',textAlign:'center',color:T.textMuted,fontSize:12,background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
-                          Line items not available — data may be in JSONB field or pending sync
-                        </div>
-                      )}
-
-                      {/* Totals row */}
-                      <div style={{marginTop:10,display:'flex',gap:20,padding:'10px 14px',background:T.tealLight,borderRadius:8,fontSize:12.5}}>
-                        <span><b style={{color:T.text}}>Total Taka:</b> <span style={{color:T.teal,fontWeight:700}}>{b.taka_pcs||'—'}</span></span>
-                        <span><b style={{color:T.text}}>Actual:</b> <span style={{color:T.text,fontFamily:"'DM Mono',monospace"}}>{fmtMtr(b.actual_qty)}</span></span>
-                        <span><b style={{color:T.text}}>Billed:</b> <span style={{color:T.teal,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{fmtMtr(b.billed_qty||b.actual_qty)}</span></span>
-                        <span><b style={{color:T.text}}>Assessable:</b> <span style={{fontFamily:"'DM Mono',monospace"}}>{b.assessable_value?fmt(b.assessable_value):'—'}</span></span>
-                        <span><b style={{color:T.text}}>Net Total:</b> <span style={{color:T.green,fontFamily:"'DM Mono',monospace",fontWeight:700}}>{fmt(b.total_amount)}</span></span>
+                  {(b.design_no || b.batch_name) && (
+                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'12px 14px',marginBottom:12}}>
+                      <div style={{fontSize:11,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>Design Chain Linkage</div>
+                      <div style={{display:'flex',gap:8,flexWrap:'wrap',fontSize:12}}>
+                        {b.design_no && (
+                          <div style={{padding:'6px 12px',background:T.tealLight,borderRadius:6,border:`1px solid ${T.teal}44`}}>
+                            <span style={{color:T.textMuted}}>Design No: </span>
+                            <span style={{fontWeight:700,color:T.teal,fontFamily:'monospace'}}>{b.design_no}</span>
+                            <span style={{fontSize:10,color:T.textMuted}}> → Links to REC FROM MILL production</span>
+                          </div>
+                        )}
+                        {b.batch_name && b.batch_name !== b.design_no && (
+                          <div style={{padding:'6px 12px',background:T.goldLight,borderRadius:6,border:`1px solid ${T.gold}44`}}>
+                            <span style={{color:T.textMuted}}>Batch: </span>
+                            <span style={{fontWeight:700,color:T.gold,fontFamily:'monospace'}}>{b.batch_name}</span>
+                          </div>
+                        )}
+                        {b.bill_ref_number && (
+                          <div style={{padding:'6px 12px',background:'#F3F0FF',borderRadius:6,border:'1px solid #7C3AED44'}}>
+                            <span style={{color:T.textMuted}}>Against Ref: </span>
+                            <span style={{fontWeight:700,color:'#7C3AED',fontFamily:'monospace'}}>{b.bill_ref_number}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {/* Tab: Folding Details */}
-                  {expandedTab==='folding' && (
-                    <div>
-                      <div style={{fontSize:11,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:10}}>Taka-wise Folding / L Details</div>
-                      {(() => {
-                        const foldingData = Array.isArray(b.folding_details) ? b.folding_details :
-                          (typeof b.folding_details==='string' ? (() => { try { return JSON.parse(b.folding_details); } catch { return []; } })() : []);
-                        return foldingData.length > 0 ? (
-                          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-                            <thead>
-                              <tr style={{background:T.bg}}>
-                                {['T-No.','Gross Mtr','Fldg %','Pcs/Taka','Net Mtr','Shade/Color'].map(h=>(
-                                  <th key={h} style={{padding:'7px 10px',textAlign:'left',fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',borderBottom:`1px solid ${T.border}`}}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {foldingData.map((row,idx)=>(
-                                <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,background:idx%2===0?'#fff':T.bg}}>
-                                  <td style={{padding:'8px 10px',fontWeight:700,color:T.teal}}>{row.t_no||idx+1}</td>
-                                  <td style={{padding:'8px 10px',fontFamily:"'DM Mono',monospace"}}>{row.gross_mtr?fmtMtr(row.gross_mtr):'—'}</td>
-                                  <td style={{padding:'8px 10px'}}>{row.folding_pct?`${row.folding_pct}%`:'—'}</td>
-                                  <td style={{padding:'8px 10px'}}>{row.pcs_per_taka||'—'}</td>
-                                  <td style={{padding:'8px 10px',fontFamily:"'DM Mono',monospace",fontWeight:600,color:T.teal}}>{row.net_mtr?fmtMtr(row.net_mtr):'—'}</td>
-                                  <td style={{padding:'8px 10px',color:T.textMuted}}>{row.shade_color||'—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : (
-                          <div style={{padding:'24px',textAlign:'center',color:T.textMuted,fontSize:12,background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
-                            Folding details not yet available in this record. Will appear once Tally sub-screen data is synced.
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  {/* Tab: Chain Linkage */}
-                  {expandedTab==='link' && (
-                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'16px 18px'}}>
-                      <div style={{fontSize:11,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:14}}>Design Lifecycle Chain</div>
-                      {lineItems.length > 0 ? (
-                        <div>
-                          {lineItems.map((item,idx)=>{
-                            const dn = item.design_no || item.design_number;
-                            const lot = item.lot_no;
-                            return (
-                              <div key={idx} style={{marginBottom:12,padding:'12px 14px',background:T.bg,borderRadius:8,borderLeft:`3px solid ${T.teal}`}}>
-                                <div style={{fontSize:12.5,fontWeight:600,color:T.text,marginBottom:8}}>{item.item_name||item.name||`Item ${idx+1}`}</div>
-                                <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                                  {dn && <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',background:T.tealLight,borderRadius:6,fontSize:11}}>
-                                    <span style={{color:T.textMuted}}>Design:</span>
-                                    <span style={{fontWeight:700,color:T.teal,fontFamily:"'DM Mono',monospace"}}>{dn}</span>
-                                    <span style={{fontSize:10,color:T.textMuted}}>→ Check REC from Mill production</span>
-                                  </div>}
-                                  {lot && <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',background:T.goldLight,borderRadius:6,fontSize:11}}>
-                                    <span style={{color:T.textMuted}}>Lot:</span>
-                                    <span style={{fontWeight:700,color:T.gold,fontFamily:"'DM Mono',monospace"}}>{lot}</span>
-                                    <span style={{fontSize:10,color:T.textMuted}}>→ Trace to Purchase &amp; Issue</span>
-                                  </div>}
-                                  {item.godown && <div style={{padding:'4px 10px',background:T.blueLight,borderRadius:6,fontSize:11}}>
-                                    <span style={{color:T.textMuted}}>Godown: </span><span style={{fontWeight:600,color:T.blue}}>{item.godown}</span>
-                                  </div>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div style={{color:T.textMuted,fontSize:12}}>Load line items to see design linkage</div>
-                      )}
-                      {b.broker_name && (
-                        <div style={{marginTop:12,padding:'10px 12px',background:T.goldLight,borderRadius:8,border:`1px solid ${T.gold}22`,fontSize:12}}>
-                          <span style={{fontWeight:700,color:T.gold}}>Broker: </span>
-                          <span style={{color:T.text}}>{b.broker_name} · {b.comm_rate}% · {b.comm_amount?fmt(b.comm_amount):'comm. not calculated'}</span>
-                        </div>
-                      )}
+                  {b.broker_name && (
+                    <div style={{padding:'10px 12px',background:T.goldLight,borderRadius:8,border:`1px solid ${T.gold}22`,fontSize:12}}>
+                      <span style={{fontWeight:700,color:T.gold}}>Broker: </span>
+                      <span style={{color:T.text}}>{b.broker_name} · {b.comm_rate}% · {b.comm_amount?fmt(b.comm_amount):'comm. not calculated'}</span>
                     </div>
                   )}
                 </div>
@@ -386,7 +303,6 @@ export default function SalesBillsPage() {
           );
         })}
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderTop:`1px solid ${T.border}`,background:T.bg}}>
             <span style={{fontSize:12,color:T.textMuted}}>{totalCount.toLocaleString()} total · Page {page+1} of {totalPages}</span>

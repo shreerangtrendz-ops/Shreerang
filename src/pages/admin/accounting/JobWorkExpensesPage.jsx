@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { customSupabase as supabase } from '@/lib/customSupabaseClient';
+import { supabase } from '../../../lib/supabase';
 
 const PAGE_SIZE = 50;
 const FY_YEARS = [2022, 2023, 2024, 2025, 2026];
@@ -30,6 +30,18 @@ function typeChip(vtype) {
       {isJob?'🏭':'🚛'} {vtype}
     </span>
   );
+}
+
+
+function ReconBadge({status}) {
+  const map = {
+    matched:     {label:'Matched',     color:'#1E9E5A', bg:'#E8FFF4'},
+    mismatch:    {label:'Mismatch',    color:'#D93025', bg:'#FFF5F5'},
+    missing_rec: {label:'Missing REC', color:'#E67E22', bg:'#FFF3E8'},
+    pending:     {label:'Pending',     color:'#6A9B95', bg:'#EEF8F6'},
+  };
+  const s = map[status] || map['pending'];
+  return <span style={{padding:'2px 8px',borderRadius:4,fontSize:9,fontWeight:700,background:s.bg,color:s.color,letterSpacing:.3}}>{s.label}</span>;
 }
 
 function InfoRow({label, value, color, mono, bold}) {
@@ -189,7 +201,7 @@ export default function JobWorkExpensesPage() {
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
                 <thead>
                   <tr style={{background:T.bg}}>
-                    {['Voucher No','Date','Type','Party / Mill','Supplier Inv','Expense Ledger','Amount','TDS','GST','Total','Bill Ref',''].map(h => (
+                    {['Voucher No','Date','Type','Party / Mill','Supplier Inv','Expense Ledger','Amount','TDS','GST','Total','GP No','Recon',''].map(h => (
                       <th key={h} style={{padding:'10px 12px',textAlign:['Amount','TDS','GST','Total'].includes(h)?'right':'left',fontWeight:700,color:T.muted,borderBottom:`1px solid ${T.border}`,whiteSpace:'nowrap',fontSize:10.5,textTransform:'uppercase',letterSpacing:.4}}>{h}</th>
                     ))}
                   </tr>
@@ -215,12 +227,14 @@ export default function JobWorkExpensesPage() {
                         </td>
                         <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:T.gold,fontFamily:'monospace'}}>{fmt(v.total_amount)}</td>
                         <td style={{padding:'9px 12px',fontSize:11,color:T.blue,fontWeight:600}}>{v.bill_ref||'—'}</td>
+                        <td style={{padding:'9px 12px',fontSize:11,color:'#6A9B95',fontFamily:'monospace'}}>{v.gp_number||v.supplier_invoice_no||'—'}</td>
+                        <td style={{padding:'9px 12px'}}><ReconBadge status={v.recon_status}/></td>
                         <td style={{padding:'9px 12px',textAlign:'center',color:T.teal,fontWeight:700}}>{isExp?'▲':'▼'}</td>
                       </tr>
 
                       {isExp && (
                         <tr key={`${v.id}-exp`}>
-                          <td colSpan={12} style={{padding:0,background:'#F8FFFE',borderBottom:`2px solid ${T.teal}`}}>
+                          <td colSpan={14} style={{padding:0,background:'#F8FFFE',borderBottom:`2px solid ${T.teal}`}}>
                             <div style={{padding:'16px 20px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
 
                               {/* Col 1: Voucher Info */}
@@ -252,6 +266,9 @@ export default function JobWorkExpensesPage() {
                                 <InfoRow label="Party Amount" value={fmt(v.party_amount)} mono />
                                 <InfoRow label="Total Amount" value={fmt(v.total_amount)} bold color={T.gold} mono />
                                 <InfoRow label="Bill Ref" value={v.bill_ref} bold color={T.blue} />
+                                <InfoRow label="GP Number" value={v.gp_number} mono color={T.teal} />
+                                <InfoRow label="Recon Status" value={v.recon_status} bold color={v.recon_status==='matched'?'#1E9E5A':v.recon_status==='mismatch'?'#D93025':'#E67E22'} />
+                                {v.recon_note&&<div style={{marginTop:4,padding:'5px 8px',background:'#FFF3E8',borderRadius:4,fontSize:11,color:'#E67E22'}}>{v.recon_note}</div>}
                                 <InfoRow label="Bill Type" value={v.bill_type} />
                               </div>
 

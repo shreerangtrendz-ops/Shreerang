@@ -1,1 +1,55 @@
-node_modules
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment & Secrets
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# API Keys & Config
+secrets.json
+config.local.js
+config.local.json
+supabase/.env
+supabase/config.local.toml
+
+# SQL Backups & Database dumps (private business data)
+data_backup*.sql
+*_backup*.sql
+backup_*.sql
+*.dump
+*.bak
+
+# Build outputs
+dist/
+build/
+.vercel/
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Temp files
+*.tmp
+*.temp
+build_output.txt

@@ -78,6 +78,7 @@ const ALL_GROUPS = [
       { icon: '🏭', label: 'Mill Performance',   to: '/admin/mill-performance',     roles: ['admin','manager','accounts'] },
       { icon: '💰', label: 'Financial Vouchers', to: '/admin/accounting/financial-vouchers',roles: ['admin','manager','accounts'] },
       { icon: '🏭', label: 'Jobwork & Expenses', to: '/admin/accounting/jobwork-expenses',roles: ['admin','manager','accounts'] },
+      { icon: '🔬', label: 'Process Issues',    to: '/admin/accounting/process-issues',  roles: ['admin','manager','accounts','operations'], badge: 'NEW', badgeClass: 'ok' },
       { icon: '💼', label: 'Broker Analytics',   to: '/admin/broker-analytics',     roles: ['admin','manager','accounts'] },
     ]
   },

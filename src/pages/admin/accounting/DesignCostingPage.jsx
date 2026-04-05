@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { customSupabase as supabase } from '@/lib/customSupabaseClient';
+import { supabase } from '../../../lib/supabase';
 
 /* ══════════════════════════════════════════════════════════════════
    DESIGN COSTING PAGE
@@ -29,6 +29,7 @@ const pct  = n => n != null ? (Number(n)>=0?'+':'')+Number(n).toFixed(1)+'%' : '
 
 function MarginBadge({ value }) {
   const v = Number(value||0);
+  if (v > 500) return <span style={{background:'#F3F4F6',color:'#9CA3AF',border:'1px solid #E5E7EB',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:800}}>? (partial)</span>;
   const color = v >= 25 ? T.green : v >= 10 ? T.gold : v >= 0 ? T.orange : T.red;
   const bg    = v >= 25 ? '#ECFDF5' : v >= 10 ? '#FFF8E8' : v >= 0 ? '#FFF7ED' : '#FEF2F2';
   return (
@@ -98,6 +99,7 @@ export default function DesignCostingPage() {
         && !(r.finish_item_name||'').toLowerCase().includes(search.toLowerCase())
         && !(r.mill_name||'').toLowerCase().includes(search.toLowerCase())) return false;
       if (millFilter && r.mill_name !== millFilter) return false;
+      if (marginFilter === 'reliable' && !(Number(r.grey_purchase_rate||0) > 0 && Number(r.gross_margin_pct||0) < 500)) return false;
       if (marginFilter === 'positive' && Number(r.gross_margin_pct||0) <= 0) return false;
       if (marginFilter === 'negative' && Number(r.gross_margin_pct||0) >= 0) return false;
       if (marginFilter === 'high' && Number(r.gross_margin_pct||0) < 25) return false;
@@ -169,7 +171,8 @@ export default function DesignCostingPage() {
         </select>
         <select value={marginFilter} onChange={e=>setMarginFilter(e.target.value)}
           style={{padding:'8px 10px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,background:T.surface}}>
-          <option value="">All Margins</option>
+          <option value="">All Designs</option>
+          <option value="reliable">Reliable Cost Only</option>
           <option value="high">High (≥25%)</option>
           <option value="positive">Positive</option>
           <option value="low">Low (0-15%)</option>
@@ -230,6 +233,7 @@ export default function DesignCostingPage() {
                             ? <img src={r.primary_image_url} style={{width:32,height:32,objectFit:'cover',borderRadius:4,flexShrink:0}} />
                             : <div style={{width:32,height:32,background:T.tealLight,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>🎨</div>}
                           <span style={{fontWeight:700,color:T.navy}}>D No-{r.design_no}</span>
+                        {Number(r.grey_purchase_rate||0)===0&&<span style={{fontSize:9,padding:'1px 5px',background:'#FFF3E8',color:'#E67E22',borderRadius:3,fontWeight:700}}>partial cost</span>}
                         </div>
                       </td>
                       <td style={{padding:'8px 10px',color:T.text,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.finish_item_name||'—'}</td>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { customSupabase as supabase } from '@/lib/customSupabaseClient';
+import { supabase } from '../../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
 const T = {
@@ -66,21 +66,21 @@ export default function JobWorkBillsPage() {
   const [workerFilter, setWorkerFilter]   = useState('all');
   const [statusFilter, setStatusFilter]   = useState('all');
   const [workers, setWorkers] = useState([]);
-  const [sortCol, setSortCol] = useState('issue_date');
+  const [sortCol, setSortCol] = useState('voucher_date');
   const [sortDir, setSortDir] = useState('desc');
 
   const load = useCallback(async () => {
     setLoading(true);
     const [manual, synced] = await Promise.all([
-      supabase.from('job_work_bills').select('*')
-        .gte('bill_date', dateFrom).lte('bill_date', dateTo)
-        .order('bill_date', {ascending: false}),
-      supabase.from('process_issues').select('*')
-        .gte('issue_date', dateFrom).lte('issue_date', dateTo)
-        .order('issue_date', {ascending: false})
+      supabase.from('jobwork_expenses').select('*')
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
+        .order('voucher_date', {ascending: false}),
+      supabase.from('issue_to_mill').select('*')
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
+        .order('voucher_date', {ascending: false})
     ]);
 
-    const uniqueGpBills = [...new Set((synced.data||[]).map(s => s.gp_bill_no).filter(Boolean))];
+    const uniqueGpBills = [...new Set((synced.data||[]).map(s => s.lot_no).filter(Boolean))];
     const purchaseMap = {};
     if (uniqueGpBills.length > 0) {
       const chunked = [];
@@ -94,10 +94,10 @@ export default function JobWorkBillsPage() {
     const combined = [
       ...(manual.data||[]).map(m => ({
         _id: 'M-'+m.id, id: m.id, _src: 'Manual',
-        bill_number: m.bill_number,
-        issue_date: m.bill_date,
-        worker_name: m.job_worker_name,
-        design_no: m.design_number,
+        bill_number: m.voucher_number,
+        issue_date: m.voucher_date,
+        worker_name: m.party_name,
+        design_no: m.gp_number||m.supplier_invoice_no,
         process_type: m.process_type || 'Manual',
         quantity: null, rate: null,
         job_amount: m.amount,
@@ -114,16 +114,16 @@ export default function JobWorkBillsPage() {
       ...(synced.data||[]).map(s => ({
         _id: 'T-'+s.id, id: s.id, _src: 'Tally',
         bill_number: s.voucher_number || s.challan_no || `JW-${s.id?.slice(0,6)}`,
-        issue_date: s.issue_date,
+        issue_date: s.voucher_date,
         worker_name: s.worker_name || s.mill_name,
         design_no: s.design_no,
         process_type: s.process_type,
-        quantity: s.process_type === 'received' ? s.metres_received : s.metres_issued,
+        quantity: false ? s.qty_mtrs : s.qty_mtrs,
         rate: s.job_rate,
         job_amount: s.job_amount,
         status: 'synced',
         // Full Tally chain fields
-        gp_bill_no: s.supplier_bill_no || s.purchase_voucher_no || s.gp_bill_no,
+        gp_bill_no: s.supplier_bill_no || s.purchase_voucher_no || s.lot_no,
         lot_no: s.lot_no,
         // party_ch_no = jobworker's OWN bill/challan number (the reference field in REC FROM MILL)
         // This is NOT the Tally voucher number - it's what the jobworker wrote on their receipt
@@ -131,8 +131,8 @@ export default function JobWorkBillsPage() {
         issue_challan_no: s.challan_no || s.issue_challan_no,
         grey_fabric_name: s.grey_fabric_name,
         finished_fabric_name: s.finished_fabric_name,
-        metres_issued: s.metres_issued,
-        metres_received: s.metres_received,
+        metres_issued: s.qty_mtrs,
+        metres_received: s.qty_mtrs,
         shortage_mtrs: s.shortage_mtrs,
         shortage_pct: s.shortage_pct,
         weaver_name: s.weaver_name,
@@ -145,8 +145,8 @@ export default function JobWorkBillsPage() {
         production_amount: s.production_amount,
         narration: s.narration,
         tally_synced_at: s.tally_synced_at,
-        supplier_name: purchaseMap[s.gp_bill_no]?.supplier_name || s.party_name,
-        purchase_rate: purchaseMap[s.gp_bill_no]?.rate_per_mtr,
+        supplier_name: purchaseMap[s.lot_no]?.supplier_name || s.party_name,
+        purchase_rate: purchaseMap[s.lot_no]?.rate_per_mtr,
       }))
     ];
 

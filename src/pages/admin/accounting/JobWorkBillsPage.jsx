@@ -2,6 +2,31 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
+// ══════════════════════════════════════════════════════════
+// JOB WORK BILLS PAGE  — v3  (fixed field mappings)
+//
+// DATA SOURCES:
+//   Tab "Issue to Mill"   → issue_to_mill table
+//     key cols: lot_no, tally_voucher_no, voucher_date, mill_name,
+//               qty_mtrs, rate, amount, item_name, process_type
+//
+//   Tab "Jobwork Bills"   → jobwork_expenses WHERE voucher_type = 'Jobwork'
+//     key cols: voucher_number, voucher_date, party_name, supplier_invoice_no,
+//               gp_number, expense_amount, total_amount
+//
+//   Tab "Other Expenses"  → jobwork_expenses WHERE voucher_type = 'Expenses'
+//     key cols: same as above
+//
+// BUG FIXES vs v2:
+//   - job_amount: m.amount  →  expense_amount  (no 'amount' col in jobwork_expenses)
+//   - process_type: m.process_type  →  voucher_type  (Jobwork/Expenses, not issued/received)
+//   - issue_to_mill: metres_issued/received  →  qty_mtrs  (correct column name)
+//   - issue_to_mill: worker_name  →  mill_name  (correct column name)
+//   - issue_to_mill: challan_no  →  tally_voucher_no  (correct column name)
+//   - Jobwork and Expenses separated into tabs
+//   - Sync status banner when FY has no data
+// ══════════════════════════════════════════════════════════
+
 const T = {
   teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6',
   gold:'#E8A800', goldLight:'#FFF8E8',
@@ -13,273 +38,380 @@ const T = {
   text:'#0B2E2B', muted:'#6A9B95',
 };
 
-const fmt = n => '₹' + Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:0});
-const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}) : '—';
-const fmtQty = n => Number(n||0).toLocaleString('en-IN', {maximumFractionDigits:2});
+const fmt    = n => '₹' + Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const fmtD   = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const fmtQty = n => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+const fmtL   = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
 
-const PROCESS_COLORS = {
-  issued:   {bg:'#FEF3C7', col:'#B45309'},
-  received: {bg:'#D1FAE5', col:'#065F46'},
-  'Issue to Mill':    {bg:'#FEF3C7', col:'#B45309'},
-  'REC FROM MILL':    {bg:'#D1FAE5', col:'#065F46'},
-  'Material Out':     {bg:'#FEE2E2', col:'#991B1B'},
-  'Material In':      {bg:'#DBEAFE', col:'#1D4ED8'},
-};
-function processChip(pt) {
-  const pc = PROCESS_COLORS[pt] || {bg:'#F3F4F6', col:'#374151'};
+const FY_YEARS = [2022,2023,2024,2025,2026];
+
+function typeChip(t) {
+  const map = {
+    'issued':    {bg:'#FEF3C7',col:'#B45309'},
+    'received':  {bg:'#D1FAE5',col:'#065F46'},
+    'Jobwork':   {bg:'#DBEAFE',col:'#1D4ED8'},
+    'Expenses':  {bg:'#FEF3C7',col:'#92400E'},
+  };
+  const c = map[t] || {bg:'#F3F4F6',col:'#374151'};
+  return <span style={{padding:'2px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:c.bg,color:c.col,whiteSpace:'nowrap'}}>{t||'—'}</span>;
+}
+
+function TabBtn({label, active, count, color, onClick}) {
   return (
-    <span style={{padding:'2px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:pc.bg,color:pc.col,whiteSpace:'nowrap'}}>
-      {pt||'—'}
-    </span>
+    <button onClick={onClick} style={{
+      padding:'8px 16px', borderRadius:'8px 8px 0 0', border:'none', cursor:'pointer',
+      fontWeight:700, fontSize:12, transition:'all .15s',
+      background: active ? T.surface : T.bg,
+      color: active ? color : T.muted,
+      borderBottom: active ? `3px solid ${color}` : `3px solid transparent`,
+      display:'flex', alignItems:'center', gap:6,
+    }}>
+      {label}
+      {count > 0 && (
+        <span style={{background:color,color:'#fff',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:800}}>
+          {count.toLocaleString('en-IN')}
+        </span>
+      )}
+    </button>
   );
 }
 
-function statusChip(status) {
-  const s = (status||'').toLowerCase();
-  const map = {
-    synced:  {bg:'#DBEAFE',col:'#1D4ED8'},
-    paid:    {bg:'#D1FAE5',col:'#065F46'},
-    pending: {bg:'#FEF3C7',col:'#B45309'},
-    manual:  {bg:'#F3F4F6',col:'#374151'},
-  };
-  const c = map[s] || {bg:'#F3F4F6',col:'#374151'};
+function SyncBanner({maxDate}) {
+  if (!maxDate) return null;
+  const d = new Date(maxDate);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  if (diffDays < 30) return null;
   return (
-    <span style={{padding:'2px 9px',borderRadius:20,fontSize:10,fontWeight:700,background:c.bg,color:c.col}}>
-      {status||'pending'}
-    </span>
+    <div style={{background:'#FFF8E8',border:`1px solid ${T.gold}`,borderRadius:8,padding:'10px 14px',marginBottom:12,fontSize:12,color:'#92400E',display:'flex',alignItems:'center',gap:8}}>
+      ⏳ <strong>Tally sync is {diffDays} days behind.</strong> Latest data: {fmtD(maxDate)}. Newer records will appear once sync catches up. Switch to FY 22-24 to see more data.
+    </div>
   );
 }
 
 export default function JobWorkBillsPage() {
   const navigate = useNavigate();
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState(null);
+  const [activeTab, setActiveTab] = useState('issues'); // 'issues' | 'jobwork' | 'expenses'
+
+  // Date filters
+  const [activeFY, setActiveFY] = useState(2024); // default FY 24-25 where data exists
+  const [dateFrom, setDateFrom] = useState('2024-04-01');
+  const [dateTo,   setDateTo]   = useState('2025-03-31');
+
+  // Data
+  const [issues,   setIssues]   = useState([]);
+  const [jobwork,  setJobwork]  = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [maxIssueDate, setMaxIssueDate] = useState(null);
 
   // Filters
-  const today = new Date().toISOString().slice(0,10);
-  const fyStart = new Date().getMonth()>=3 ? `${new Date().getFullYear()}-04-01` : `${new Date().getFullYear()-1}-04-01`;
-  const [dateFrom, setDateFrom] = useState(fyStart);
-  const [dateTo,   setDateTo]   = useState(today);
-  const [search,   setSearch]   = useState('');
-  const [processFilter, setProcessFilter] = useState('all');
-  const [workerFilter, setWorkerFilter]   = useState('all');
-  const [statusFilter, setStatusFilter]   = useState('all');
-  const [workers, setWorkers] = useState([]);
-  const [sortCol, setSortCol] = useState('voucher_date');
-  const [sortDir, setSortDir] = useState('desc');
+  const [search,        setSearch]        = useState('');
+  const [workerFilter,  setWorkerFilter]  = useState('all');
+  const [expandedId,    setExpandedId]    = useState(null);
+
+  const setFY = yr => {
+    setActiveFY(yr);
+    setDateFrom(`${yr}-04-01`);
+    setDateTo(`${yr+1}-03-31`);
+    setExpandedId(null);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [manual, synced] = await Promise.all([
-      supabase.from('jobwork_expenses').select('*')
+    setExpandedId(null);
+
+    const [issRes, jwRes, expRes, maxRes] = await Promise.all([
+      // Issue to Mill
+      supabase.from('issue_to_mill')
+        .select('id,lot_no,tally_voucher_no,voucher_date,mill_name,item_name,qty_mtrs,rate,amount,process_type,narration,tally_synced_at,is_sampling,destination_godown')
         .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending: false}),
-      supabase.from('issue_to_mill').select('*')
+        .order('voucher_date', {ascending:false}),
+
+      // Jobwork bills
+      supabase.from('jobwork_expenses')
+        .select('*')
+        .eq('voucher_type','Jobwork')
         .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending: false})
+        .order('voucher_date', {ascending:false}),
+
+      // Other expenses
+      supabase.from('jobwork_expenses')
+        .select('*')
+        .eq('voucher_type','Expenses')
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
+        .order('voucher_date', {ascending:false}),
+
+      // Max date in issue_to_mill to show sync lag
+      supabase.from('issue_to_mill').select('voucher_date').order('voucher_date',{ascending:false}).limit(1),
     ]);
 
-    const uniqueGpBills = [...new Set((synced.data||[]).map(s => s.lot_no).filter(Boolean))];
-    const purchaseMap = {};
-    if (uniqueGpBills.length > 0) {
-      const chunked = [];
-      for(let i=0; i<uniqueGpBills.length; i+=100) chunked.push(uniqueGpBills.slice(i, i+100));
-      for (const chunk of chunked) {
-        const { data: pData } = await supabase.from('purchase_bills').select('bill_number, supplier_name, rate_per_mtr').in('bill_number', chunk);
-        (pData||[]).forEach(p => purchaseMap[p.bill_number] = p);
-      }
-    }
-
-    const combined = [
-      ...(manual.data||[]).map(m => ({
-        _id: 'M-'+m.id, id: m.id, _src: 'Manual',
-        bill_number: m.voucher_number,
-        issue_date: m.voucher_date,
-        worker_name: m.party_name,
-        design_no: m.gp_number||m.supplier_invoice_no,
-        process_type: m.process_type || 'Manual',
-        quantity: null, rate: null,
-        job_amount: m.amount,
-        status: m.status || 'pending',
-        // Manual extra fields
-        gst_number: m.gst_number,
-        igst_amount: m.igst_amount,
-        cgst_amount: m.cgst_amount,
-        sgst_amount: m.sgst_amount,
-        notes: m.notes,
-        line_items: m.line_items,
-        tally_sync_status: m.tally_sync_status,
-      })),
-      ...(synced.data||[]).map(s => ({
-        _id: 'T-'+s.id, id: s.id, _src: 'Tally',
-        bill_number: s.voucher_number || s.challan_no || `JW-${s.id?.slice(0,6)}`,
-        issue_date: s.voucher_date,
-        worker_name: s.worker_name || s.mill_name,
-        design_no: s.design_no,
-        process_type: s.process_type,
-        quantity: false ? s.qty_mtrs : s.qty_mtrs,
-        rate: s.job_rate,
-        job_amount: s.job_amount,
-        status: 'synced',
-        // Full Tally chain fields
-        gp_bill_no: s.supplier_bill_no || s.purchase_voucher_no || s.lot_no,
-        lot_no: s.lot_no,
-        // party_ch_no = jobworker's OWN bill/challan number (the reference field in REC FROM MILL)
-        // This is NOT the Tally voucher number - it's what the jobworker wrote on their receipt
-        party_ch_no: (s.party_ch_no || '').replace(/<[^>]*>/g, '').replace(/\s+/g,' ').trim() || null,
-        issue_challan_no: s.challan_no || s.issue_challan_no,
-        grey_fabric_name: s.grey_fabric_name,
-        finished_fabric_name: s.finished_fabric_name,
-        metres_issued: s.qty_mtrs,
-        metres_received: s.qty_mtrs,
-        shortage_mtrs: s.shortage_mtrs,
-        shortage_pct: s.shortage_pct,
-        weaver_name: s.weaver_name,
-        quality_name: s.quality_name,
-        mill_godown: s.mill_godown,
-        source_godown: s.source_godown,
-        consumption_rate: s.consumption_rate,
-        consumption_amount: s.consumption_amount,
-        production_rate: s.production_rate,
-        production_amount: s.production_amount,
-        narration: s.narration,
-        tally_synced_at: s.tally_synced_at,
-        supplier_name: purchaseMap[s.lot_no]?.supplier_name || s.party_name,
-        purchase_rate: purchaseMap[s.lot_no]?.rate_per_mtr,
-      }))
-    ];
-
-    // Unique workers list
-    const w = [...new Set(combined.map(r => r.worker_name).filter(Boolean))].sort();
-    setWorkers(w);
-    setRows(combined);
+    setIssues(issRes.data || []);
+    setJobwork(jwRes.data || []);
+    setExpenses(expRes.data || []);
+    if (maxRes.data?.[0]) setMaxIssueDate(maxRes.data[0].voucher_date);
     setLoading(false);
   }, [dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Client-side filtering
-  const filtered = rows.filter(r => {
-    if (processFilter !== 'all' && r.process_type !== processFilter) return false;
-    if (workerFilter  !== 'all' && r.worker_name  !== workerFilter)  return false;
-    if (statusFilter  !== 'all' && r.status       !== statusFilter)  return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (r.worker_name||'').toLowerCase().includes(q)
-          || (r.bill_number||'').toLowerCase().includes(q)
-          || (r.design_no||'').toLowerCase().includes(q)
-          || (r.gp_bill_no||'').toLowerCase().includes(q)
-          || (r.party_ch_no||'').toLowerCase().includes(q)
-          || (r.lot_no||'').toLowerCase().includes(q);
-    }
-    return true;
-  }).sort((a, b) => {
-    let va = a[sortCol], vb = b[sortCol];
-    if (sortCol === 'job_amount' || sortCol === 'quantity') { va = Number(va||0); vb = Number(vb||0); }
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ? 1 : -1;
-    return 0;
+  // --- Filtered data per tab ---
+  const filterRows = (rows, nameField) => rows.filter(r => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (r[nameField]||'').toLowerCase().includes(q)
+        || (r.lot_no||r.voucher_number||'').toLowerCase().includes(q)
+        || (r.gp_number||r.supplier_invoice_no||'').toLowerCase().includes(q);
   });
 
-  const totalAmount  = filtered.reduce((s,r) => s+Number(r.job_amount||0), 0);
-  const totalIssued  = filtered.filter(r => (r.process_type||'').toLowerCase().includes('issu') || r.process_type==='issued').reduce((s,r) => s+Number(r.metres_issued||r.quantity||0), 0);
-  const totalRecvd   = filtered.filter(r => (r.process_type||'').toLowerCase().includes('rec')  || r.process_type==='received').reduce((s,r) => s+Number(r.metres_received||r.quantity||0), 0);
-  const shortage     = totalIssued > 0 ? ((totalIssued - totalRecvd) / totalIssued * 100).toFixed(1) : '—';
+  const filteredIssues   = filterRows(issues.filter(r => workerFilter==='all' || r.mill_name===workerFilter), 'mill_name');
+  const filteredJobwork  = filterRows(jobwork.filter(r => workerFilter==='all' || r.party_name===workerFilter), 'party_name');
+  const filteredExpenses = filterRows(expenses.filter(r => workerFilter==='all' || r.party_name===workerFilter), 'party_name');
 
-  const processTypes = [...new Set(rows.map(r => r.process_type).filter(Boolean))];
+  // KPI totals
+  const totalIssueQty  = filteredIssues.reduce((s,r)=>s+Number(r.qty_mtrs||0),0);
+  const totalIssueAmt  = filteredIssues.reduce((s,r)=>s+Number(r.amount||0),0);
+  const totalJWAmt     = filteredJobwork.reduce((s,r)=>s+Number(r.expense_amount||0),0);
+  const totalExpAmt    = filteredExpenses.reduce((s,r)=>s+Number(r.expense_amount||0),0);
 
-  function toggleSort(col) {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('desc'); }
-  }
+  // Workers list (all tabs combined)
+  const allWorkers = [...new Set([
+    ...issues.map(r=>r.mill_name),
+    ...jobwork.map(r=>r.party_name),
+    ...expenses.map(r=>r.party_name),
+  ].filter(Boolean))].sort();
 
-  function exportCSV() {
-    const headers = ['Bill No','Date','Worker/Mill','Design No','Process','Qty','Rate','Amount','Status','GP Bill','Lot No','Party Ch No','Issued Mtrs','Rcvd Mtrs','Shortage%','Source'];
-    const csvRows = filtered.map(r => [
-      r.bill_number, r.issue_date, r.worker_name, r.design_no||'',
-      r.process_type||'', r.quantity||'', r.rate||'', r.job_amount||'',
-      r.status, r.gp_bill_no||'', r.lot_no||'', r.party_ch_no||'',
-      r.metres_issued||'', r.metres_received||'', r.shortage_pct||'', r._src
-    ].map(v => `"${v}"`).join(','));
-    const blob = new Blob([[headers.join(','),...csvRows].join('\n')], {type:'text/csv'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `JobWorkBills_${dateFrom}_to_${dateTo}.csv`; a.click();
-  }
-
-  const TH = ({label, col, right}) => (
-    <th onClick={() => col && toggleSort(col)} style={{
-      padding:'10px 12px', textAlign: right?'right':'left', fontSize:10.5, fontWeight:700,
-      color: T.muted, textTransform:'uppercase', letterSpacing:.4,
-      borderBottom:`1px solid ${T.border}`, background:T.bg, whiteSpace:'nowrap',
-      cursor: col ? 'pointer' : 'default',
-      userSelect:'none',
-    }}>
-      {label} {col && sortCol===col ? (sortDir==='asc'?'↑':'↓') : ''}
+  const TH = ({label, right}) => (
+    <th style={{padding:'9px 12px',textAlign:right?'right':'left',fontSize:10.5,fontWeight:700,
+      color:T.muted,textTransform:'uppercase',letterSpacing:.4,
+      borderBottom:`1px solid ${T.border}`,background:T.bg,whiteSpace:'nowrap'}}>
+      {label}
     </th>
   );
 
+  // ─── RENDER: Issue to Mill tab ───────────────────────────────
+  const renderIssues = () => (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:'0 12px 12px 12px',overflow:'hidden'}}>
+      <div style={{padding:'8px 14px',borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',alignItems:'center',background:T.bg}}>
+        <span style={{fontSize:12,color:T.muted,fontWeight:600}}>{filteredIssues.length} entries</span>
+        <div style={{display:'flex',gap:16,fontSize:12}}>
+          <span>Total Qty: <strong style={{color:T.teal}}>{fmtQty(totalIssueQty)} m</strong></span>
+          <span>Total Amount: <strong style={{color:T.gold}}>{fmtL(totalIssueAmt)}</strong></span>
+        </div>
+      </div>
+      {filteredIssues.length === 0 ? (
+        <div style={{padding:40,textAlign:'center',color:T.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>📦</div>
+          No Issue to Mill entries for this period. Sync reached up to {fmtD(maxIssueDate)}.
+        </div>
+      ) : (
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+            <thead><tr>
+              <TH label="Tally Voucher"/>
+              <TH label="Date"/>
+              <TH label="Mill Name"/>
+              <TH label="Item / Fabric"/>
+              <TH label="Lot No"/>
+              <TH label="Process"/>
+              <TH label="Qty (m)" right/>
+              <TH label="Rate" right/>
+              <TH label="Amount" right/>
+              <TH label=""/>
+            </tr></thead>
+            <tbody>
+              {filteredIssues.map((r,i) => {
+                const isExp = expandedId === 'ITM-'+r.id;
+                return (<>
+                  <tr key={r.id}
+                    onClick={()=>setExpandedId(isExp ? null : 'ITM-'+r.id)}
+                    style={{borderBottom:`1px solid ${T.border}`,background:isExp?T.tealLight:i%2===0?T.surface:T.bg,cursor:'pointer'}}>
+                    <td style={{padding:'9px 12px',fontFamily:'monospace',fontSize:11,color:T.muted,whiteSpace:'nowrap'}}>{r.tally_voucher_no||r.lot_no||'—'}</td>
+                    <td style={{padding:'9px 12px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(r.voucher_date)}</td>
+                    <td style={{padding:'9px 12px',fontWeight:600,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.mill_name||'—'}</td>
+                    <td style={{padding:'9px 12px',fontSize:11,color:T.muted,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.item_name||'—'}</td>
+                    <td style={{padding:'9px 12px',fontFamily:'monospace',fontSize:11,color:T.teal,fontWeight:600}}>{r.lot_no||'—'}</td>
+                    <td style={{padding:'9px 12px'}}>{typeChip(r.process_type||'issued')}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontFamily:'monospace',fontWeight:600}}>{fmtQty(r.qty_mtrs)} m</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontFamily:'monospace',color:T.muted}}>{r.rate?fmt(r.rate):'-'}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:T.gold,fontFamily:'monospace'}}>{fmt(r.amount)}</td>
+                    <td style={{padding:'9px 12px',textAlign:'center',color:T.teal}}>{isExp?'▲':'▼'}</td>
+                  </tr>
+                  {isExp && (
+                    <tr key={'exp-'+r.id}><td colSpan={10} style={{padding:'14px 18px',background:'#F8FFFE',borderBottom:`2px solid ${T.teal}`}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+                        {[
+                          ['Lot No',          r.lot_no],
+                          ['Tally Voucher',   r.tally_voucher_no],
+                          ['Date',            fmtD(r.voucher_date)],
+                          ['Mill Name',       r.mill_name],
+                          ['Item / Fabric',   r.item_name],
+                          ['Qty (Mtrs)',       fmtQty(r.qty_mtrs)+' m'],
+                          ['Rate / Mtr',      r.rate?fmt(r.rate)+'/m':'—'],
+                          ['Amount',          fmt(r.amount)],
+                          ['Process Type',    r.process_type||'issued'],
+                          ['Destination',     r.destination_godown||'—'],
+                          ['Sampling?',       r.is_sampling?'Yes — Sampling':'No — Production'],
+                          ['Narration',       r.narration||'—'],
+                          ['Tally Synced',    r.tally_synced_at?new Date(r.tally_synced_at).toLocaleString('en-IN'):'—'],
+                        ].map(([l,v])=>(
+                          <div key={l} style={{background:T.surface,borderRadius:6,padding:'6px 10px',border:`1px solid ${T.border}`}}>
+                            <div style={{fontSize:9,color:T.muted,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{l}</div>
+                            <div style={{fontSize:12,fontWeight:500,color:T.text}}>{v||'—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </td></tr>
+                  )}
+                </>);
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  // ─── RENDER: Jobwork / Expenses tab ──────────────────────────
+  const renderJWOrExp = (rows, totalAmt, emptyLabel) => (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:'0 12px 12px 12px',overflow:'hidden'}}>
+      <div style={{padding:'8px 14px',borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',alignItems:'center',background:T.bg}}>
+        <span style={{fontSize:12,color:T.muted,fontWeight:600}}>{rows.length} entries</span>
+        <span style={{fontSize:12,fontWeight:700,color:T.gold}}>Total: {fmtL(totalAmt)}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{padding:40,textAlign:'center',color:T.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>🏭</div>
+          {emptyLabel}
+        </div>
+      ) : (
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+            <thead><tr>
+              <TH label="Voucher No"/>
+              <TH label="Date"/>
+              <TH label="Party / Mill"/>
+              <TH label="Type"/>
+              <TH label="Supplier Invoice"/>
+              <TH label="GP Number"/>
+              <TH label="Expense Amt" right/>
+              <TH label="GST" right/>
+              <TH label="Total" right/>
+              <TH label=""/>
+            </tr></thead>
+            <tbody>
+              {rows.map((r,i) => {
+                const isExp = expandedId === 'JW-'+r.id;
+                const gst = Number(r.cgst_amount||0)+Number(r.sgst_amount||0)+Number(r.igst_amount||0);
+                return (<>
+                  <tr key={r.id}
+                    onClick={()=>setExpandedId(isExp ? null : 'JW-'+r.id)}
+                    style={{borderBottom:`1px solid ${T.border}`,background:isExp?T.tealLight:i%2===0?T.surface:T.bg,cursor:'pointer'}}>
+                    <td style={{padding:'9px 12px',fontFamily:'monospace',fontSize:11,color:T.blue,fontWeight:700,whiteSpace:'nowrap'}}>{r.voucher_number||'—'}</td>
+                    <td style={{padding:'9px 12px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(r.voucher_date)}</td>
+                    <td style={{padding:'9px 12px',fontWeight:600,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.party_name||'—'}</td>
+                    <td style={{padding:'9px 12px'}}>{typeChip(r.voucher_type)}</td>
+                    <td style={{padding:'9px 12px',fontSize:11,color:T.orange,fontWeight:600}}>{r.supplier_invoice_no||'—'}</td>
+                    <td style={{padding:'9px 12px',fontSize:11,color:T.teal,fontWeight:600}}>{r.gp_number||'—'}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontFamily:'monospace',fontWeight:700}}>{fmt(r.expense_amount)}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontFamily:'monospace',fontSize:11,color:T.muted}}>{gst>0?fmt(gst):'—'}</td>
+                    <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:T.gold,fontFamily:'monospace'}}>{fmt(r.total_amount)}</td>
+                    <td style={{padding:'9px 12px',textAlign:'center',color:T.teal}}>{isExp?'▲':'▼'}</td>
+                  </tr>
+                  {isExp && (
+                    <tr key={'exp-'+r.id}><td colSpan={10} style={{padding:'14px 18px',background:'#F8FFFE',borderBottom:`2px solid ${T.teal}`}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+                        {[
+                          ['Voucher No',        r.voucher_number],
+                          ['Type',              r.voucher_type],
+                          ['Date',              fmtD(r.voucher_date)],
+                          ['Party Name',        r.party_name],
+                          ['Party GSTIN',       r.party_gstin||'—'],
+                          ['GST Reg Type',      r.gst_reg_type||'—'],
+                          ['Supplier Invoice',  r.supplier_invoice_no||'—'],
+                          ['Supplier Inv Date', r.supplier_invoice_date?fmtD(r.supplier_invoice_date):'—'],
+                          ['GP Number',         r.gp_number||'—'],
+                          ['Expense Ledger',    r.expense_ledger||'—'],
+                          ['Expense Amount',    fmt(r.expense_amount)],
+                          ['TDS Deducted',      r.tds_amount>0?fmt(r.tds_amount):'—'],
+                          ['CGST',              r.cgst_amount>0?fmt(r.cgst_amount):'—'],
+                          ['SGST',              r.sgst_amount>0?fmt(r.sgst_amount):'—'],
+                          ['IGST',              r.igst_amount>0?fmt(r.igst_amount):'—'],
+                          ['Total Amount',      fmt(r.total_amount)],
+                          ['Bill Ref',          r.bill_ref||'—'],
+                          ['Narration',         r.narration||'—'],
+                          ['Entered By',        r.entered_by||'—'],
+                          ['Place of Supply',   r.place_of_supply||'—'],
+                        ].map(([l,v])=>(
+                          <div key={l} style={{background:T.surface,borderRadius:6,padding:'6px 10px',border:`1px solid ${T.border}`}}>
+                            <div style={{fontSize:9,color:T.muted,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{l}</div>
+                            <div style={{fontSize:12,fontWeight:500,color:T.text,wordBreak:'break-word'}}>{v||'—'}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {r.gp_number && (
+                        <div style={{marginTop:10}}>
+                          <button onClick={()=>navigate(`/admin/accounting/process-issues?search=${r.gp_number}`)}
+                            style={{padding:'6px 12px',background:T.teal,color:'#fff',border:'none',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer'}}>
+                            🔗 Find Issue to Mill for GP {r.gp_number}
+                          </button>
+                        </div>
+                      )}
+                    </td></tr>
+                  )}
+                </>);
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif", background:T.bg, minHeight:'100vh', padding:'20px 24px'}}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
 
       {/* Header */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,flexWrap:'wrap',gap:10}}>
         <div>
-          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.text,margin:0,display:'flex',alignItems:'center',gap:8}}>
-            🧾 Job Work Bills
+          <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:T.text,margin:0}}>
+            🏭 Job Work Bills
           </h1>
           <p style={{color:T.muted,fontSize:12,margin:'4px 0 0'}}>
-            Issue to Mill · REC from Mill · Processing Charges — All Tally data
+            Issue to Mill · Jobwork Bills · Other Expenses — Tally synced data
           </p>
         </div>
-        <div style={{display:'flex',gap:10}}>
-          <button onClick={exportCSV} style={{padding:'8px 14px',background:T.green,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>📥 Export CSV</button>
-          <button onClick={load} style={{padding:'8px 14px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>🔄 Refresh</button>
-          <button onClick={() => navigate('/admin/design-lifecycle')} style={{padding:'8px 14px',background:T.tealDark,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>🔗 Design Chain</button>
-        </div>
+        <button onClick={load} style={{padding:'8px 14px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontWeight:600,fontSize:12,cursor:'pointer'}}>🔄 Refresh</button>
       </div>
 
       {/* KPI Cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:18}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:18}}>
         {[
-          {label:'Total Entries', value:filtered.length,              icon:'📋', color:T.blue},
-          {label:'Total Charges', value:fmt(totalAmount),             icon:'💰', color:T.gold},
-          {label:'Total Issued',  value:fmtQty(totalIssued)+' m',    icon:'📦', color:T.orange},
-          {label:'Total Received',value:fmtQty(totalRecvd)+' m',     icon:'✅', color:T.green},
-          {label:'Avg Shrinkage', value:(shortage==='—'?'—':shortage+'%'), icon:'📉', color: typeof shortage==='string'||parseFloat(shortage)<=5?T.green:T.red},
+          {label:'Issue to Mill',   value:`${fmtQty(totalIssueQty)} m`,  sub:`${filteredIssues.length} challans`,     icon:'📦', color:T.orange},
+          {label:'Issue Amount',    value:fmtL(totalIssueAmt),           sub:'at job rate',                           icon:'💸', color:T.blue},
+          {label:'Jobwork Bills',   value:fmtL(totalJWAmt),              sub:`${filteredJobwork.length} bills`,       icon:'🏭', color:T.teal},
+          {label:'Other Expenses',  value:fmtL(totalExpAmt),             sub:`${filteredExpenses.length} entries`,   icon:'🚛', color:T.purple},
         ].map((c,i) => (
           <div key={i} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 16px',position:'relative',overflow:'hidden'}}>
             <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:c.color}}/>
-            <div style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:'uppercase',letterSpacing:.4,marginBottom:6}}>{c.label}</div>
-            <div style={{fontSize:20,fontWeight:800,color:c.color,fontFamily:"'Playfair Display',serif"}}>{c.value}</div>
+            <div style={{fontSize:10,color:T.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:6}}>{c.icon} {c.label}</div>
+            <div style={{fontSize:20,fontWeight:800,color:c.color}}>{c.value}</div>
+            <div style={{fontSize:11,color:T.muted,marginTop:2}}>{c.sub}</div>
           </div>
         ))}
       </div>
 
-      {/* Filters Row */}
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:14,marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+      {/* Filters */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:14,marginBottom:0,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
 
-        {/* Date Range */}
-        <div>
-          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>From</div>
-          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
-            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none'}}/>
-        </div>
-        <div>
-          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>To</div>
-          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
-            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none'}}/>
-        </div>
-
-        {/* FY Quick Buttons */}
+        {/* FY tabs */}
         <div style={{display:'flex',gap:4,alignSelf:'flex-end',background:T.bg,padding:'4px',borderRadius:8,border:`1px solid ${T.border}`}}>
-          {[2022,2023,2024,2025,2026].map(y => {
-            const fFrom = `${y}-04-01`, fTo = `${y+1}-03-31`;
-            const active = dateFrom===fFrom && dateTo===fTo;
+          {FY_YEARS.map(y => {
+            const isActive = activeFY===y;
             return (
-              <button key={y} onClick={()=>{setDateFrom(fFrom);setDateTo(fTo);}}
+              <button key={y} onClick={()=>setFY(y)}
                 style={{padding:'5px 11px',fontSize:12,fontWeight:700,cursor:'pointer',borderRadius:6,border:'none',transition:'all .15s',
-                  background:active?T.teal:'transparent', color:active?'#fff':T.muted}}>
+                  background:isActive?T.teal:'transparent',color:isActive?'#fff':T.muted}}>
                 FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
               </button>
             );
@@ -288,241 +420,63 @@ export default function JobWorkBillsPage() {
 
         <div style={{width:1,height:32,background:T.border,alignSelf:'flex-end'}}/>
 
-        {/* Process Type Filter */}
         <div>
-          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Process Type</div>
-          <select value={processFilter} onChange={e=>setProcessFilter(e.target.value)}
-            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,background:'#fff',outline:'none',minWidth:140}}>
-            <option value="all">All Types</option>
-            {processTypes.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>From</div>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none'}}/>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>To</div>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none'}}/>
         </div>
 
-        {/* Worker Filter */}
         <div>
-          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Mill / Worker</div>
+          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Mill / Party</div>
           <select value={workerFilter} onChange={e=>setWorkerFilter(e.target.value)}
-            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,background:'#fff',outline:'none',minWidth:160}}>
-            <option value="all">All Mills</option>
-            {workers.map(w => <option key={w} value={w}>{w}</option>)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,background:'#fff',outline:'none',minWidth:160}}>
+            <option value="all">All</option>
+            {allWorkers.map(w=><option key={w} value={w}>{w}</option>)}
           </select>
         </div>
 
-        {/* Status Filter */}
-        <div>
-          <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Status</div>
-          <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}
-            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,background:'#fff',outline:'none'}}>
-            <option value="all">All Status</option>
-            <option value="synced">Synced</option>
-            <option value="paid">Paid</option>
-            <option value="pending">Pending</option>
-          </select>
-        </div>
-
-        {/* Search */}
         <div style={{flex:1,minWidth:180}}>
           <div style={{fontSize:10,color:T.muted,fontWeight:700,marginBottom:4,textTransform:'uppercase'}}>Search</div>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Bill no, worker, design, GP no, lot no…"
-            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+            placeholder="Lot no, party, voucher, GP no…"
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
         </div>
       </div>
 
-      {/* Table */}
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
-        <div style={{padding:'10px 14px',borderBottom:`1px solid ${T.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span style={{fontSize:12,color:T.muted,fontWeight:600}}>{filtered.length} entries</span>
-          <span style={{fontSize:12,color:T.teal,fontWeight:700}}>{fmt(totalAmount)} total charges</span>
-        </div>
-
-        {loading ? (
-          <div style={{padding:40,textAlign:'center',color:T.muted}}>Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div style={{padding:40,textAlign:'center',color:T.muted}}>
-            <div style={{fontSize:32,marginBottom:8}}>🧾</div>
-            <div>No records for the selected filters.</div>
-          </div>
-        ) : (
-          <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
-              <thead>
-                <tr>
-                  <TH label="Tally Vch"  col="bill_number"/>
-                  <TH label="Date"       col="issue_date"/>
-                  <TH label="Mill / Worker"/>
-                  <TH label="Process"    col="process_type"/>
-                  <TH label="Design No"  col="design_no"/>
-                  <TH label="JW Bill No" col="party_ch_no"/>
-                  <TH label="GP Bill"    col="gp_bill_no"/>
-                  <TH label="Lot No"     col="lot_no"/>
-                  <TH label="Qty (m)"    col="quantity"    right/>
-                  <TH label="Rate"       col="rate"        right/>
-                  <TH label="Amount"     col="job_amount"  right/>
-                  <TH label="Status"/>
-                  <TH label="Source"/>
-                  <TH label=""/>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r, i) => {
-                  const isExpanded = expandedId === r._id;
-                  const shortage_pct = parseFloat(r.shortage_pct||0);
-                  return (<>
-                    <tr key={r._id} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.surface:T.bg, cursor:'pointer'}}
-                      onClick={()=>setExpandedId(isExpanded?null:r._id)}>
-                      <td style={{padding:'9px 12px',fontWeight:500,color:T.muted,whiteSpace:'nowrap',fontSize:11}}>{r.bill_number}</td>
-                      <td style={{padding:'9px 12px',color:T.muted,whiteSpace:'nowrap'}}>{fmtD(r.issue_date)}</td>
-                      <td style={{padding:'9px 12px',fontWeight:500,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.worker_name||'—'}</td>
-                      <td style={{padding:'9px 12px'}}>{processChip(r.process_type)}</td>
-                      <td style={{padding:'9px 12px',color:T.blue,fontWeight:600}}>{r.design_no||'—'}</td>
-                      <td style={{padding:'9px 12px',color:T.teal,fontWeight:700}}>{r.party_ch_no||'—'}</td>
-                      <td style={{padding:'9px 12px',color:T.orange,fontWeight:600}}>{r.gp_bill_no||'—'}</td>
-                      <td style={{padding:'9px 12px',color:T.text,fontSize:11}}>{r.lot_no||'—'}</td>
-                      <td style={{padding:'9px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace"}}>{r.quantity!=null?fmtQty(r.quantity):'—'}</td>
-                      <td style={{padding:'9px 12px',textAlign:'right',fontFamily:"'DM Mono',monospace"}}>{r.rate?fmt(r.rate):'—'}</td>
-                      <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:T.gold,fontFamily:"'DM Mono',monospace"}}>{fmt(r.job_amount)}</td>
-                      <td style={{padding:'9px 12px'}}>{statusChip(r.status)}</td>
-                      <td style={{padding:'9px 12px',fontSize:10,color:T.muted}}>
-                        <span style={{padding:'2px 7px',borderRadius:4,background:r._src==='Tally'?'#DBEAFE':'#F3F4F6',color:r._src==='Tally'?'#1D4ED8':'#374151',fontWeight:700}}>
-                          {r._src}
-                        </span>
-                      </td>
-                      <td style={{padding:'9px 12px',textAlign:'center',color:T.teal}}>
-                        {isExpanded ? '▲' : '▼'}
-                      </td>
-                    </tr>
-
-                    {/* Expanded Detail Row */}
-                    {isExpanded && (
-                      <tr key={r._id+'-exp'} style={{borderBottom:`2px solid ${T.teal}`}}>
-                        <td colSpan={13} style={{padding:'16px 20px',background:'#F8FFFE',borderTop:`1px solid ${T.border}`}}>
-                          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
-
-                            {/* Column 1: Chain Info */}
-                            <div>
-                              <div style={{fontSize:11,fontWeight:800,color:T.teal,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}}>
-                                🔗 Chain Linkage
-                              </div>
-                              {[
-                                {l:'GP Purchase Bill No', v:r.gp_bill_no, link:r.gp_bill_no?`/admin/accounting/purchase-bills`:null, icon:'📥'},
-                                {l:'Grey Supplier Name',  v:r.supplier_name, color:T.purple},
-                                {l:'Purchase Price (Mtr)',v:r.purchase_rate?fmt(r.purchase_rate):null, color:T.gold},
-                                {l:'Lot No (Batch)',       v:r.lot_no},
-                                {l:'Issue Challan No',    v:r.issue_challan_no},
-                                {l:'Party Ch. No (JW Bill)', v:r.party_ch_no, icon:'🧾'},
-                                {l:'Grey Fabric',         v:r.grey_fabric_name},
-                                {l:'Finished Fabric',     v:r.finished_fabric_name},
-                                {l:'Mill Godown',         v:r.mill_godown},
-                                {l:'Source Godown',       v:r.source_godown},
-                              ].map(({l,v,link,icon}) => (
-                                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                                  <span style={{color:T.muted}}>{icon||''} {l}</span>
-                                  <span style={{fontWeight:600,color:link?T.blue:T.text,cursor:link?'pointer':'default',textDecoration:link?'underline':'none'}}
-                                    onClick={link?()=>navigate(link):undefined} title={typeof v === 'string' ? v : ''}>
-                                    {v && typeof v === 'string' && v.length > 80 ? v.substring(0, 80) + '...' : (v||'—')}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Column 2: Qty & Shortage */}
-                            <div>
-                              <div style={{fontSize:11,fontWeight:800,color:T.orange,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}}>
-                                📊 Quantities & Shortage
-                              </div>
-                              {[
-                                {l:'Metres Issued',     v: fmtQty(r.metres_issued)+' m'},
-                                {l:'Metres Received',   v: fmtQty(r.metres_received)+' m'},
-                                {l:'Shortage Metres',   v: r.shortage_mtrs ? fmtQty(r.shortage_mtrs)+' m' : '—'},
-                                {l:'Shortage %', v: shortage_pct ? shortage_pct.toFixed(2)+'%' : '—',
-                                 color: shortage_pct > 10 ? T.red : shortage_pct > 5 ? T.orange : T.green},
-                                {l:'Weaver Name',       v: r.weaver_name},
-                                {l:'Quality Name',      v: r.quality_name},
-                                {l:'Job Rate',          v: r.rate ? fmt(r.rate)+'/m' : '—'},
-                                {l:'Job Amount',        v: fmt(r.job_amount), color:T.gold},
-                                {l:'Consump Rate',      v: r.consumption_rate ? fmt(r.consumption_rate)+'/m' : null},
-                                {l:'Consump Amount',    v: r.consumption_amount ? fmt(r.consumption_amount) : null},
-                                {l:'Productn Rate',     v: r.production_rate ? fmt(r.production_rate)+'/m' : null},
-                                {l:'Productn Amount',   v: r.production_amount ? fmt(r.production_amount) : null},
-                              ].filter(f=>f.v).map(({l,v,color}) => (
-                                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                                  <span style={{color:T.muted}}>{l}</span>
-                                  <span style={{fontWeight:600, color:color||T.text}}>{v}</span>
-                                </div>
-                              ))}
-
-                              {/* Shortage alert */}
-                              {shortage_pct > 10 && (
-                                <div style={{marginTop:10,padding:'8px 12px',background:'#FFF5F5',border:`1px solid ${T.red}`,borderRadius:7,fontSize:11,color:T.red,fontWeight:600}}>
-                                  ⚠ High Shortage: {shortage_pct.toFixed(2)}% — Investigate with {r.worker_name}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Column 3: Notes & Design */}
-                            <div>
-                              <div style={{fontSize:11,fontWeight:800,color:T.blue,marginBottom:10,textTransform:'uppercase',letterSpacing:.5}}>
-                                🎨 Design & Notes
-                              </div>
-                              {[
-                                {l:'Design No',         v:r.design_no},
-                                {l:'Narration',         v:r.narration},
-                                {l:'Source',            v:r._src},
-                                {l:'Tally Synced At',   v:r.tally_synced_at?new Date(r.tally_synced_at).toLocaleString('en-IN'):null},
-                              ].map(({l,v}) => (
-                                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
-                                  <span style={{color:T.muted}}>{l}</span>
-                                  <span style={{fontWeight:600,color:T.text,maxWidth:200,textAlign:'right',wordBreak:'break-word'}} title={typeof v === 'string' ? v : ''}>
-                                    {v && typeof v === 'string' && v.length > 100 ? v.substring(0, 100) + '...' : (v||'—')}
-                                  </span>
-                                </div>
-                              ))}
-
-                              {/* Manual bill line items */}
-                              {r._src === 'Manual' && r.line_items?.length > 0 && (
-                                <div style={{marginTop:10}}>
-                                  <div style={{fontSize:10,fontWeight:700,color:T.muted,marginBottom:6,textTransform:'uppercase'}}>Line Items</div>
-                                  {r.line_items.map((li,idx) => (
-                                    <div key={idx} style={{display:'flex',justifyContent:'space-between',fontSize:11,padding:'3px 0',borderBottom:`1px dashed ${T.border}`}}>
-                                      <span>{li.item_name}</span>
-                                      <span style={{color:T.gold,fontWeight:700}}>{fmt(li.charges)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div style={{marginTop:12,display:'flex',gap:8,flexWrap:'wrap'}}>
-                                {r.design_no && (
-                                  <button onClick={()=>navigate(`/admin/design-lifecycle?design=${r.design_no}`)}
-                                    style={{padding:'6px 12px',background:T.teal,color:'#fff',border:'none',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer'}}>
-                                    🔗 View Design Chain
-                                  </button>
-                                )}
-                                {r.gp_bill_no && (
-                                  <button onClick={()=>navigate(`/admin/accounting/purchase-bills?search=${r.gp_bill_no}`)}
-                                    style={{padding:'6px 12px',background:T.orange,color:'#fff',border:'none',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer'}}>
-                                    📥 View GP Bill
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>);
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {/* Sync Banner */}
+      <div style={{marginTop:12}}>
+        <SyncBanner maxDate={maxIssueDate}/>
       </div>
 
-      {/* Footer info */}
+      {/* Tabs */}
+      <div style={{display:'flex',gap:2,borderBottom:`1px solid ${T.border}`,marginBottom:0}}>
+        <TabBtn label="Issue to Mill"   active={activeTab==='issues'}   count={filteredIssues.length}   color={T.orange} onClick={()=>setActiveTab('issues')}/>
+        <TabBtn label="Jobwork Bills"   active={activeTab==='jobwork'}  count={filteredJobwork.length}  color={T.teal}   onClick={()=>setActiveTab('jobwork')}/>
+        <TabBtn label="Other Expenses"  active={activeTab==='expenses'} count={filteredExpenses.length} color={T.purple} onClick={()=>setActiveTab('expenses')}/>
+      </div>
+
+      {/* Tab content */}
+      {loading ? (
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:'0 12px 12px 12px',padding:60,textAlign:'center',color:T.muted,fontSize:14}}>
+          Loading…
+        </div>
+      ) : (
+        <>
+          {activeTab==='issues'   && renderIssues()}
+          {activeTab==='jobwork'  && renderJWOrExp(filteredJobwork,  totalJWAmt,  `No Jobwork Bills in this period. Tally sync reached ${fmtD(maxIssueDate)}.`)}
+          {activeTab==='expenses' && renderJWOrExp(filteredExpenses, totalExpAmt, `No Expense entries in this period. Tally sync reached ${fmtD(maxIssueDate)}.`)}
+        </>
+      )}
+
       <div style={{marginTop:12,fontSize:11,color:T.muted,textAlign:'center'}}>
-        Click any row to expand full Tally detail · Chain: <strong>Purchase (GP Bill) → Issue to Mill → REC from Mill (Party Ch. No.) → Design No. → Sales</strong>
+        Issue to Mill = fabric sent to mill (Tally Stock Journal) ·
+        Jobwork Bills = payment vouchers for processing ·
+        Other Expenses = transport, electricity, misc
       </div>
     </div>
   );

@@ -131,6 +131,7 @@ import SalespersonDashboard from '@/pages/admin/sales/SalespersonDashboard';
 import AssignContactsPage from '@/pages/admin/sales/AssignContactsPage';
 import ProcessIssuesPage from '@/pages/admin/accounting/ProcessIssuesPage';
 import GreyPurchasePage from '@/pages/admin/accounting/GreyPurchasePage';
+import MissingRecFromMillPage from '@/pages/admin/accounting/MissingRecFromMillPage';
 
 const App = () => {
   useEffect(() => {
@@ -291,6 +292,7 @@ const App = () => {
                     <Route path="accounting/design-costing" element={<DesignCostingPage />} />
                      <Route path="accounting/process-issues" element={<ProcessIssuesPage />} />
                      <Route path="accounting/grey-purchase" element={<GreyPurchasePage />} />
+                     <Route path="accounting/missing-rec" element={<MissingRecFromMillPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

@@ -132,6 +132,7 @@ import AssignContactsPage from '@/pages/admin/sales/AssignContactsPage';
 import ProcessIssuesPage from '@/pages/admin/accounting/ProcessIssuesPage';
 import GreyPurchasePage from '@/pages/admin/accounting/GreyPurchasePage';
 import MissingRecFromMillPage from '@/pages/admin/accounting/MissingRecFromMillPage';
+import OutstandingReportPage from '@/pages/admin/accounting/OutstandingReportPage';
 
 const App = () => {
   useEffect(() => {
@@ -293,6 +294,7 @@ const App = () => {
                      <Route path="accounting/process-issues" element={<ProcessIssuesPage />} />
                      <Route path="accounting/grey-purchase" element={<GreyPurchasePage />} />
                      <Route path="accounting/missing-rec" element={<MissingRecFromMillPage />} />
+                     <Route path="accounting/outstanding" element={<OutstandingReportPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

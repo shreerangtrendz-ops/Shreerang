@@ -301,9 +301,9 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div style={{display:'flex',gap:10}}>
-          <button onClick={()=>navigate('/admin/accounting/sales-bills')}
+          <button onClick={()=>navigate('/admin/accounting/design-pnl')}
             style={{padding:'8px 16px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>
-            💹 Sales Bills
+            💹 Design P&L
           </button>
           <button onClick={()=>navigate('/admin/accounting/hub')}
             style={{padding:'8px 16px',background:'#fff',color:T.teal,border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer'}}>
@@ -332,8 +332,8 @@ export default function AdminDashboard() {
 
         {/* KPI Row 1 */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:16}}>
-          <KPICard label="Total Sales (FY)" value={fmtL(kpi.salesFY)} sub={`${kpi.salesCount} bills`} icon="💹" color={T.teal} onClick={()=>navigate('/admin/accounting/sales-bills')}/>
-          <KPICard label="Total Purchase (FY)" value={fmtL(kpi.purchaseFY)} sub={`${kpi.purchaseCount} bills`} icon="🛒" color={T.blue} onClick={()=>navigate('/admin/accounting/purchase-bills')}/>
+          <KPICard label="Total Sales (FY)" value={fmtL(kpi.salesFY)} sub={`${kpi.salesCount} bills`} icon="💹" color={T.teal} onClick={()=>navigate('/admin/accounting/hub')}/>
+          <KPICard label="Total Purchase (FY)" value={fmtL(kpi.purchaseFY)} sub={`${kpi.purchaseCount} bills`} icon="🛒" color={T.blue} onClick={()=>navigate('/admin/accounting/hub')}/>
           <KPICard label="This Month Sales" value={fmtL(kpi.salesThisMonth)} sub="current month" icon="📅" color={T.green}/>
           <KPICard label="Outstanding Receivable" value={fmtL(kpi.outstandingAmt)} sub={`${kpi.outstandingCount} bills overdue`} icon="⚠️" color={T.red} onClick={()=>navigate('/admin/outstanding-receivable-v2')}/>
         </div>
@@ -387,7 +387,7 @@ export default function AdminDashboard() {
           <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,color:T.text}}>Top Customers (FY)</div>
-              <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/sales-bills')}>View all →</span>
+              <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/hub')}>View all →</span>
             </div>
             {topCustomers.slice(0,7).map((c,i)=>(
               <MiniBar key={i} label={c.name} value={c.amt} max={maxCust} color={T.teal}/>
@@ -396,7 +396,7 @@ export default function AdminDashboard() {
           <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,color:T.text}}>Top Suppliers (FY)</div>
-              <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/purchase-bills')}>View all →</span>
+              <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/hub')}>View all →</span>
             </div>
             {topSuppliers.map((s,i)=>(
               <MiniBar key={i} label={s.name} value={s.amt} max={maxSupp} color={T.blue}/>
@@ -408,7 +408,7 @@ export default function AdminDashboard() {
         <div style={{background:'#fff',border:`1px solid ${T.border}`,borderRadius:14,padding:20}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,color:T.text}}>Recent Sales Activity</div>
-            <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/sales-bills')}>View all →</span>
+            <span style={{fontSize:11,color:T.teal,cursor:'pointer',fontWeight:600}} onClick={()=>navigate('/admin/accounting/hub')}>View all →</span>
           </div>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
             <thead>

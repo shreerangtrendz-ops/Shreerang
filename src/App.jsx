@@ -134,6 +134,9 @@ import GreyPurchasePage from '@/pages/admin/accounting/GreyPurchasePage';
 import MissingRecFromMillPage from '@/pages/admin/accounting/MissingRecFromMillPage';
 import OutstandingReportPage from '@/pages/admin/accounting/OutstandingReportPage';
 
+import RecFromMillPage from '@/pages/admin/accounting/RecFromMillPage';
+import DesignPnLPage from '@/pages/admin/accounting/DesignPnLPage';
+
 const App = () => {
   useEffect(() => {
     const handleError = (event) => {
@@ -294,7 +297,9 @@ const App = () => {
                      <Route path="accounting/process-issues" element={<ProcessIssuesPage />} />
                      <Route path="accounting/grey-purchase" element={<GreyPurchasePage />} />
                      <Route path="accounting/missing-rec" element={<MissingRecFromMillPage />} />
+                     <Route path="accounting/rec-from-mill" element={<RecFromMillPage />} />
                      <Route path="accounting/outstanding" element={<OutstandingReportPage />} />
+                     <Route path="accounting/design-pnl" element={<DesignPnLPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

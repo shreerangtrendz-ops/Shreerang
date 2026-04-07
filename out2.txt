@@ -1,0 +1,11 @@
+Connecting to Supabase...
+TLS connection failed with message: invalid peer certificate: UnknownIssuer
+Defaulting to non-encrypted connection
+error: Uncaught (in promise) PostgresError: Tenant or user not found
+      throw new PostgresError(parseNoticeMessage(msg));
+            ^
+    at assertSuccessfulStartup (https://deno.land/x/postgres@v0.19.3/connection/connection.ts:82:13)
+    at Connection.#startup (https://deno.land/x/postgres@v0.19.3/connection/connection.ts:414:7)
+    at async Connection.startup (https://deno.land/x/postgres@v0.19.3/connection/connection.ts:494:11)
+    at async Client.connect (https://deno.land/x/postgres@v0.19.3/client.ts:233:7)
+    at async file:///I:/My%20Drive/Automation/Shreerang%202026/Horizon%20Code/wipe.ts:35:1

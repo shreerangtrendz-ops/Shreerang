@@ -1,0 +1,17 @@
+TRUNCATE TABLE sales_bills CASCADE;
+TRUNCATE TABLE purchase_bills CASCADE;
+TRUNCATE TABLE grey_purchase CASCADE;
+TRUNCATE TABLE process_issues CASCADE;
+TRUNCATE TABLE issue_to_mill CASCADE;
+TRUNCATE TABLE rec_from_mill CASCADE;
+TRUNCATE TABLE stock_journal CASCADE;
+TRUNCATE TABLE credit_note CASCADE;
+TRUNCATE TABLE credit_note_items CASCADE;
+TRUNCATE TABLE debit_note CASCADE;
+TRUNCATE TABLE jobwork_expenses CASCADE;
+TRUNCATE TABLE accounting_vouchers CASCADE;
+TRUNCATE TABLE receipt_payment_lines CASCADE;
+TRUNCATE TABLE mill_challan_takas CASCADE;
+
+TRUNCATE TABLE tally_sync_log CASCADE;
+TRUNCATE TABLE tally_sync_state CASCADE;

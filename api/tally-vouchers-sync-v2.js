@@ -167,6 +167,7 @@ function parseVoucher(vxml) {
   const stateName = getXmlVal(vxml, 'STATENAME');
   const placeOfSupply = getXmlVal(vxml, 'PLACEOFSUPPLY');
   const reference = getXmlVal(vxml, 'REFERENCE');
+  const partyChNo = getXmlVal(vxml, 'PARTYCHNO');  // Mill's own challan/GP number
   const enteredBy = getXmlVal(vxml, 'ENTEREDBY');
   const irn = getXmlVal(vxml, 'IRN');
   const irnAckNo = getXmlVal(vxml, 'IRNACKNO');
@@ -229,7 +230,7 @@ function parseVoucher(vxml) {
 
   return {
     vtype, vnum, date, effectiveDate, party, partyGstin, stateName, placeOfSupply,
-    reference: cleanReference, enteredBy, irn, irnAckNo, transporter, lrNumber,
+    reference: cleanReference, partyChNo, enteredBy, irn, irnAckNo, transporter, lrNumber,
     destCity, destGodown, srcGodown, ewayBillNo, narration, voucherClass, totalTaka,
     totalAmount, igstAmount, cgstAmount, sgstAmount, roundOff,
     brokerName, commRate, commAmount, commAssValue, commNetRate,
@@ -247,6 +248,22 @@ function buildSalesRow(v) {
   const best = findBestBatch(invEntries);
   const printLines = getSalesPrintLines(v._vxml);
   
+  // Fix: For multi-design bills where top-level batch is 'Primary Batch',
+  // extract the actual design_no from line item batch allocations
+  let designNo = best.designNo || null;
+  if (!designNo || designNo === 'Primary Batch') {
+    for (const item of allItems) {
+      for (const b of (item.batches || [])) {
+        if (b.batch_name && b.batch_name !== 'Primary Batch') {
+          designNo = b.batch_name;
+          break;
+        }
+      }
+      if (designNo && designNo !== 'Primary Batch') break;
+    }
+    if (designNo === 'Primary Batch') designNo = null;
+  }
+  
   return {
     bill_number: v.vnum, bill_date: v.date,
     customer_name: v.party,
@@ -255,7 +272,7 @@ function buildSalesRow(v) {
     total_amount: v.totalAmount||null, taxable_value: Math.abs(first.amount)||null,
     fabric_name: first.stock_item||null, rate_per_mtr: first.rate||null,
     quantity_mtrs: first.qty||null, hsn_code: first.hsn||null,
-    design_no: best.designNo||null, batch_name: (first.batches&&first.batches[0]?.batch_name)||null,
+    design_no: designNo, batch_name: (first.batches&&first.batches[0]?.batch_name)||null,
     godown: best.godown||null,
     igst_amount: v.igstAmount||null, cgst_amount: v.cgstAmount||null, sgst_amount: v.sgstAmount||null,
     broker_name: v.brokerName||null, comm_rate: v.commRate||null,
@@ -386,7 +403,7 @@ function buildProcessRow(v) {
     batch_name: (first.batches&&first.batches[0]?.batch_name)||null,
     godown: best.godown || null,
     fabric_sku: v.narration || null,
-    party_ch_no: v.reference||null,
+    party_ch_no: v.partyChNo||v.reference||null,
     narration: v.narration||null,
     lot_no: lotNo,
     shortage_mtrs: shortageMtrs,

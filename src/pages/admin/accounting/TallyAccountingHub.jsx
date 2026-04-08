@@ -732,22 +732,27 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
   useEffect(()=>{ setExpanded(null); setPage(0); load(0); }, [activeType, dateFrom, dateTo, search]);
 
   // ─── Cell renderer ──────────────────────────────────────────────
-  function renderCell(col, val) {
-    if (val === null || val === undefined) return <span style={{color:T.muted}}>—</span>;
-    if (col.type==='date')  return <span style={{color:T.text}}>{fmtD(val)}</span>;
-    if (col.type==='amt')   return <span style={{color:T.navy,fontWeight:600}}>{fmt(val)}</span>;
-    if (col.type==='qty')   return <span style={{color:T.blue}}>{fmtQ(val)}</span>;
-    if (col.type==='key')   return (
-      <span style={{background:'#EEF4FF',color:'#2468C8',fontWeight:700,fontSize:10,padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>
-        {String(val).slice(0,30)}
-      </span>
-    );
-    if (col.type==='badge') {
-      const color = val==='matched'?T.green:val==='mismatch'?T.red:val==='Jobwork'?T.purple:val==='Expenses'?T.orange:T.muted;
-      return <span style={{background:color+'20',color,fontWeight:700,fontSize:9,padding:'2px 7px',borderRadius:10}}>{val}</span>;
-    }
-    return <span style={{color:T.text}}>{String(val).slice(0,45)}</span>;
+  // ─── Cell renderer ──────────────────────────────────────────────
+function renderCell(col, val) {
+  if (val === null || val === undefined) return <span style={{color:T.muted}}>—</span>;
+  if (col.type==='date')  return <span style={{color:T.text}}>{fmtD(val)}</span>;
+  if (col.type==='amt') {
+    const num = Number(val||0);
+    const color = num < 0 ? T.red : T.navy;
+    return <span style={{color, fontWeight:600}}>{num < 0 ? '-' : ''}{fmt(Math.abs(num))}</span>;
   }
+  if (col.type==='qty')   return <span style={{color:T.blue}}>{fmtQ(val)}</span>;
+  if (col.type==='key')   return (
+    <span style={{background:'#EEF4FF',color:'#2468C8',fontWeight:700,fontSize:10,padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>
+      {String(val).slice(0,30)}
+    </span>
+  );
+  if (col.type==='badge') {
+    const color = val==='matched'?T.green:val==='mismatch'?T.red:val==='Jobwork'?T.purple:val==='Expenses'?T.orange:T.muted;
+    return <span style={{background:color+'20',color,fontWeight:700,fontSize:9,padding:'2px 7px',borderRadius:10}}>{val}</span>;
+  }
+  return <span style={{color:T.text}}>{String(val).slice(0,45)}</span>;
+}
 
   return (
     <div>
@@ -809,14 +814,25 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
               <tr style={{background:T.navy}}>
                 {cols.map(c=>(
                   <th key={c.key} style={{
-                    padding:'9px 10px',color:'rgba(255,255,255,.85)',textAlign:'left',
-                    fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',whiteSpace:'nowrap',
-                    ...(c.type==='key'?{background:'rgba(255,255,255,.08)',borderLeft:'2px solid rgba(255,255,255,.2)'}:{})
+                    padding:'10px 12px',
+                    color:'#ffffff',
+                    textAlign: c.type==='amt'||c.type==='qty' ? 'right' : 'left',
+                    fontSize:11,
+                    fontWeight:700,
+                    textTransform:'uppercase',
+                    letterSpacing:'.4px',
+                    whiteSpace:'nowrap',
+                    borderRight:`1px solid rgba(255,255,255,.07)`,
+                    ...(c.type==='key' ? {
+                      background:'rgba(255,255,255,.12)',
+                      borderLeft:'3px solid rgba(255,255,255,.35)',
+                      color:'#C5F0E8',
+                    } : {}),
                   }}>
                     {c.label}
                   </th>
                 ))}
-                <th style={{padding:'9px 10px',color:'rgba(255,255,255,.75)',fontSize:9,width:28}}></th>
+                <th style={{padding:'10px 12px',color:'rgba(255,255,255,.5)',fontSize:11,fontWeight:700,width:32,textAlign:'center'}}>⋮</th>
               </tr>
             </thead>
             <tbody>

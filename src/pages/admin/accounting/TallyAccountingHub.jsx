@@ -718,9 +718,9 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
   const load = useCallback(async (pg=0) => {
     setLoading(true);
     const from=pg*PAGE, to=from+PAGE-1;
-    const selectFields = cols.filter(c=>!c.synthetic).map(c=>c.key).join(',');
+    // Fetch ALL fields to guarantee 100% coverage of Master Reference in expanded view
     let q = supabase.from(vt.table)
-      .select(selectFields+',id',{count:'exact'})
+      .select('*',{count:'exact'})
       .order(vt.dateField,{ascending:false})
       .range(from,to);
     if (dateFrom) q=q.gte(vt.dateField,dateFrom);
@@ -880,17 +880,24 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
                   </tr>
                   {expanded===i && (
                     <tr><td colSpan={cols.length+1} style={{padding:'0 10px 12px',background:'#FAFFFE'}}>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:5,paddingTop:8}}>
-                        {cols.map(c=>(
-                          <div key={c.key} style={{
-                            background:c.type==='key'?'#EEF4FF':T.surface,
-                            borderRadius:5,padding:'6px 10px',
-                            border:`1px solid ${c.type==='key'?vt.color:T.border}`
-                          }}>
-                            <div style={{fontSize:8,color:T.muted,textTransform:'uppercase',letterSpacing:'.4px',marginBottom:2}}>{c.label}</div>
-                            <div style={{fontSize:11}}>{renderCell(c, row[c.key])}</div>
-                          </div>
-                        ))}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:6,paddingTop:8}}>
+                        {Object.keys(row).filter(k=>!['id','created_at','updated_at'].includes(k)).map(k=>{
+                          const val = row[k];
+                          const c = cols.find(col=>col.key===k) || { type: typeof val==='number'?'amt':'text' }; // Fallback type
+                          const isKeyField = c.type === 'key';
+                          return (
+                            <div key={k} style={{
+                              background:isKeyField?'#EEF4FF':T.surface,
+                              borderRadius:5,padding:'6px 10px',
+                              border:`1px solid ${isKeyField?vt.color:T.border}`
+                            }}>
+                              <div style={{fontSize:8,color:T.muted,textTransform:'uppercase',letterSpacing:'.4px',marginBottom:2}}>
+                                {c.label || k.replace(/_/g, ' ')}
+                              </div>
+                              <div style={{fontSize:11, wordBreak: 'break-word'}}>{renderCell(c, val)}</div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </td></tr>
                   )}

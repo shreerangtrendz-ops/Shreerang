@@ -1,117 +1,153 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 
-const PAGE_SIZE = 50;
-const FY_YEARS = [2022, 2023, 2024, 2025, 2026];
+const T = {
+  teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6', teal100:'#9FE1CB',
+  gold:'#E8A800', goldLight:'#FFF8E8',
+  navy:'#0B2E2B', green:'#1E9E5A', greenLight:'#E8FFF4',
+  blue:'#2468C8', blueLight:'#EBF8FF',
+  red:'#D93025', redLight:'#FFF5F5',
+  orange:'#E67E22', orangeLight:'#FFF3E8',
+  purple:'#7C3AED', purpleLight:'#F5F3FF',
+  border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
+  text:'#0B2E2B', textMuted:'#6A9B95', textFaint:'#A8C9C3',
+};
+
+const fmt    = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
+const fmtL   = n => { const v=Math.abs(Number(n||0)); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:fmt(v); };
+const fmtMtr = n => Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+const PAGE = 50;
+const FY_YEARS = [2022,2023,2024,2025,2026];
 
 function getCurrentFY() {
   const now = new Date();
-  const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  return { from: `${yr}-04-01`, to: `${yr + 1}-03-31` };
+  const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1;
+  return { from:`${yr}-04-01`, to:`${yr+1}-03-31`, yr };
 }
 
-const fmtAmt = n => { const v=Number(n||0); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:`₹${Math.round(v).toLocaleString('en-IN')}`; };
-const fmtN   = (n,d=1) => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:d});
+function Badge({label, color=T.teal, bg}) {
+  return <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,background:bg||color+'22',color,letterSpacing:.3}}>{label}</span>;
+}
 
-const T = {
-  teal:'#2BA898', tealLight:'#EEF8F6', navy:'#0B2E2B',
-  green:'#1E9E5A', greenLight:'#E8FFF4',
-  red:'#E74C3C', orange:'#E67E22', blue:'#2468C8',
-  gold:'#E8A800', purple:'#9B59B6',
-  border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
-  text:'#0B2E2B', textMuted:'#6A9B95',
+function SummaryCard({label, value, sub, color=T.teal}) {
+  return (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 18px',borderTop:`3px solid ${color}`}}>
+      <div style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.6,marginBottom:6}}>{label}</div>
+      <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:22,color:T.text,lineHeight:1}}>{value}</div>
+      {sub && <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{sub}</div>}
+    </div>
+  );
+}
+
+const emptyForm = {
+  bill_number:'', bill_date:'', supplier_name:'', gst_number:'',
+  hsn_code:'', fabric_type:'', notes:'',
+  transporter_name:'', lr_no:'', lr_date:'', destination:'',
+  igst_amount:'', cgst_amount:'', sgst_amount:'', round_off:'', total_amount:'',
+  line_items: [{item_name:'', quantity:'', rate:'', amount:''}],
 };
 
 export default function PurchaseBillsPage() {
-  const navigate = useNavigate();
   const fy = getCurrentFY();
-
-  const [bills, setBills]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [syncing, setSyncing]     = useState(false);
+  const [bills, setBills]           = useState([]);
+  const [loading, setLoading]       = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage]           = useState(0);
-  const [expanded, setExpanded]   = useState(null);
+  const [page, setPage]             = useState(0);
+  const [expanded, setExpanded]     = useState(null);
+  const [activeFY, setActiveFY]     = useState(fy.yr);
 
-  // Filters
-  const [search, setSearch]       = useState('');
-  const [dateFrom, setDateFrom]   = useState(fy.from);
-  const [dateTo, setDateTo]       = useState(fy.to);
-  const [supplier, setSupplier]   = useState('');
-  const [source, setSource]       = useState('');   // '' | 'Tally' | 'Manual'
+  const [search, setSearch]         = useState('');
+  const [dateFrom, setDateFrom]     = useState(fy.from);
+  const [dateTo, setDateTo]         = useState(fy.to);
+  const [supplier, setSupplier]     = useState('');
+  const [source, setSource]         = useState('');   // '' | 'Tally' | 'Manual'
 
-  const activeFY = FY_YEARS.find(y => dateFrom === `${y}-04-01` && dateTo === `${y+1}-03-31`);
-  const setFY = (y) => { setDateFrom(`${y}-04-01`); setDateTo(`${y+1}-03-31`); setPage(0); setTimeout(()=>fetchBills(0),0); };
+  const [summary, setSummary] = useState({total:0, count:0, totalMtrs:0, tallyCount:0, manualCount:0});
 
-  // Form
-  const emptyForm = {
-    bill_number:'', bill_date:'', supplier_name:'', gst_number:'',
-    hsn_code:'', fabric_type:'', notes:'',
-    transporter_name:'', lr_no:'', lr_date:'', destination:'',
-    igst_amount:'', cgst_amount:'', sgst_amount:'', round_off:'', total_amount:'',
-    line_items: [{ item_name:'', quantity:'', rate:'', amount:'' }]
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState(emptyForm);
+  const [saving, setSaving]     = useState(false);
+  const [syncing, setSyncing]   = useState(false);
+
+  const setFY = yr => {
+    setActiveFY(yr);
+    setDateFrom(`${yr}-04-01`);
+    setDateTo(`${yr+1}-03-31`);
+    setPage(0);
   };
-  const [showForm, setShowForm]   = useState(false);
-  const [form, setForm]           = useState(emptyForm);
-  const [saving, setSaving]       = useState(false);
 
-  const fetchBills = useCallback(async (pg = 0) => {
-    setLoading(true);
-    const from = pg * PAGE_SIZE;
-    const to   = from + PAGE_SIZE - 1;
-
-    let q = supabase.from('purchase_bills')
-      .select('*', { count: 'exact' })
-      .order('bill_date', { ascending: false })
-      .range(from, to);
-
-    if (dateFrom)  q = q.gte('bill_date', dateFrom);
-    if (dateTo)    q = q.lte('bill_date', dateTo);
-    if (supplier)  q = q.ilike('supplier_name', `%${supplier}%`);
-    if (source === 'Tally')  q = q.eq('tally_sync_status', 'synced');
-    if (source === 'Manual') q = q.neq('tally_sync_status', 'synced');
-    if (search)    q = q.or(`supplier_name.ilike.%${search}%,bill_number.ilike.%${search}%,item_name.ilike.%${search}%`);
-
-    const { data, error, count } = await q;
-    if (!error) { setBills(data || []); setTotalCount(count || 0); }
-    setPage(pg);
-    setLoading(false);
+  const buildQuery = useCallback(() => {
+    let q = supabase.from('purchase_bills').order('bill_date',{ascending:false});
+    if (dateFrom)               q = q.gte('bill_date', dateFrom);
+    if (dateTo)                 q = q.lte('bill_date', dateTo);
+    if (supplier)               q = q.ilike('supplier_name', `%${supplier}%`);
+    if (source === 'Tally')     q = q.eq('tally_sync_status', 'synced');
+    if (source === 'Manual')    q = q.neq('tally_sync_status', 'synced');
+    if (search)                 q = q.or(`supplier_name.ilike.%${search}%,bill_number.ilike.%${search}%,item_name.ilike.%${search}%`);
+    return q;
   }, [dateFrom, dateTo, supplier, source, search]);
 
-  useEffect(() => { fetchBills(0); }, []);
+  const fetchBills = useCallback(async (pg=0) => {
+    setLoading(true);
+    const from = pg*PAGE, to = from+PAGE-1;
+    const {data, error, count} = await buildQuery()
+      .select('*', {count:'exact'})
+      .range(from, to);
+    if (!error) { setBills(data||[]); setTotalCount(count||0); }
+    setPage(pg);
+    setLoading(false);
+  }, [buildQuery]);
 
-  function applyFilters() { fetchBills(0); }
+  const fetchSummary = useCallback(async () => {
+    const {data} = await buildQuery()
+      .select('total_amount,quantity_mtrs,tally_sync_status');
+    if (data) {
+      setSummary({
+        total:       data.reduce((s,b) => s + Math.abs(Number(b.total_amount||0)), 0),
+        count:       data.length,
+        totalMtrs:   data.reduce((s,b) => s + Math.abs(Number(b.quantity_mtrs||0)), 0),
+        tallyCount:  data.filter(b => b.tally_sync_status === 'synced').length,
+        manualCount: data.filter(b => b.tally_sync_status !== 'synced').length,
+      });
+    }
+  }, [buildQuery]);
+
+  useEffect(() => { fetchBills(0); fetchSummary(); }, []);
+
+  function applyFilters() { fetchBills(0); fetchSummary(); }
   function resetFilters() {
     setSearch(''); setSupplier(''); setSource('');
-    setDateFrom(fy.from); setDateTo(fy.to);
-    setTimeout(() => fetchBills(0), 0);
+    const f = getCurrentFY();
+    setActiveFY(f.yr); setDateFrom(f.from); setDateTo(f.to);
+    setTimeout(() => { fetchBills(0); fetchSummary(); }, 0);
   }
 
   async function syncFromTally() {
     setSyncing(true);
     try {
-      const r = await fetch('/api/tally-sync', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+      const r = await fetch('/api/tally-sync', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
       const j = await r.json();
       if (j.success || j.synced?.purchase > 0) {
-        alert(`✅ Synced ${j.synced?.purchase || 0} purchase bills from Tally`);
-        fetchBills(0);
-      } else alert('Tally offline or no data: ' + (j.errors?.join(', ') || 'Check FRP tunnel'));
-    } catch(e) { alert('Error: ' + e.message); }
+        fetchBills(0); fetchSummary();
+      }
+    } catch { /* tunnel offline — silent */ }
     finally { setSyncing(false); }
   }
 
   async function saveBill() {
-    if (!form.bill_number || !form.bill_date || !form.supplier_name) { alert('Bill No, Date, Supplier required'); return; }
-    if (form.line_items.some(l => !l.item_name || !l.amount)) { alert('All line items must have a Name and Amount'); return; }
+    if (!form.bill_number || !form.bill_date || !form.supplier_name) return;
+    if (form.line_items.some(l => !l.item_name || !l.amount)) return;
     setSaving(true);
     const cleanItems = form.line_items.map(l => ({
-      item_name: l.item_name, quantity: parseFloat(l.quantity)||0,
-      rate: parseFloat(l.rate)||0, amount: parseFloat(l.amount)||0
+      item_name: l.item_name,
+      quantity:  parseFloat(l.quantity)||0,
+      rate:      parseFloat(l.rate)||0,
+      amount:    parseFloat(l.amount)||0,
     }));
     const itemsTotal = cleanItems.reduce((s,a) => s+a.amount, 0);
-    const taxTotal = (parseFloat(form.igst_amount)||0)+(parseFloat(form.cgst_amount)||0)+(parseFloat(form.sgst_amount)||0);
-    const roundOff = parseFloat(form.round_off)||0;
+    const taxTotal   = (parseFloat(form.igst_amount)||0)+(parseFloat(form.cgst_amount)||0)+(parseFloat(form.sgst_amount)||0);
+    const roundOff   = parseFloat(form.round_off)||0;
     const finalTotal = parseFloat(form.total_amount)||(itemsTotal+taxTotal+roundOff);
     const row = {
       bill_number: form.bill_number, bill_date: form.bill_date,
@@ -120,325 +156,367 @@ export default function PurchaseBillsPage() {
       lr_date: form.lr_date||null, destination: form.destination||null,
       hsn_code: form.hsn_code||null, fabric_type: form.fabric_type||null,
       notes: form.notes||null, line_items: cleanItems,
-      igst_amount: parseFloat(form.igst_amount)||0, cgst_amount: parseFloat(form.cgst_amount)||0,
-      sgst_amount: parseFloat(form.sgst_amount)||0, round_off: parseFloat(form.round_off)||0,
-      total_amount: finalTotal, status: 'pending_push', tally_sync_status: 'pending'
+      igst_amount: parseFloat(form.igst_amount)||0,
+      cgst_amount: parseFloat(form.cgst_amount)||0,
+      sgst_amount: parseFloat(form.sgst_amount)||0,
+      round_off: parseFloat(form.round_off)||0,
+      total_amount: finalTotal, status:'pending_push', tally_sync_status:'pending',
     };
-    const { error } = await supabase.from('purchase_bills').upsert(row, { onConflict: 'bill_number' });
-    if (error) alert('Error: ' + error.message);
-    else { setShowForm(false); setForm(emptyForm); fetchBills(0); }
+    const {error} = await supabase.from('purchase_bills').upsert(row, {onConflict:'bill_number'});
+    if (!error) { setShowForm(false); setForm(emptyForm); fetchBills(0); fetchSummary(); }
     setSaving(false);
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const totalAmt   = bills.reduce((s,b) => s+Number(b.total_amount||0), 0);
-  const fmt = n => '\u20B9'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
-
-  const ST   = { fontFamily:"'DM Sans',sans-serif", background:'var(--bg,#F4FBFA)', minHeight:'100vh' };
-  const CARD = { background:'#fff', borderRadius:12, padding:'16px 20px', boxShadow:'0 2px 10px rgba(0,0,0,.07)', border:'1px solid rgba(43,168,152,.12)' };
-  const BTN  = (extra={}) => ({ padding:'8px 16px', borderRadius:8, border:'none', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", ...extra });
-  const INP  = (extra={}) => ({ padding:'8px 12px', borderRadius:8, border:'1px solid rgba(43,168,152,.3)', fontSize:13, background:'#fff', ...extra });
-  const SEL  = (extra={}) => ({ ...INP(), ...extra });
+  const totalPages = Math.ceil(totalCount/PAGE);
 
   return (
-    <div style={ST}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
+
       {/* Header */}
-      <div style={{ background:'linear-gradient(135deg,#0B2E2B,#143F3C)', padding:'16px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div>
-          <div style={{ fontFamily:"'Playfair Display',serif", fontSize:19, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:20 }}>🛒</span> Purchase Bills
-          </div>
-          <p style={{ fontSize:11, color:'#6A9B95', margin:0 }}>Tally purchase vouchers · Supabase synced</p>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,color:T.text,margin:0}}>Purchase Bills</h1>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>Tally purchase vouchers · Supabase synced</div>
         </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button onClick={() => setShowForm(true)} style={BTN({ background:'#E8A800', color:'#fff' })}>+ Add Manual Bill</button>
-          <button onClick={syncFromTally} disabled={syncing} style={BTN({ background: syncing?'#555':'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', opacity: syncing?0.7:1 })}>
-            {syncing ? '⏳ Syncing…' : '↻ Sync from Tally'}
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
+          <button onClick={() => setShowForm(true)}
+            style={{padding:'7px 14px',background:T.gold,color:'#fff',border:'none',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer'}}>
+            + Manual Bill
+          </button>
+          <button onClick={syncFromTally} disabled={syncing}
+            style={{padding:'7px 14px',background:T.teal,color:'#fff',border:'none',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer',opacity:syncing?0.6:1}}>
+            {syncing ? 'Syncing…' : '↻ Sync Tally'}
           </button>
         </div>
       </div>
 
-      <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:16 }}>
-        {/* Summary cards */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
-          {[
-            { label:'Total Bills', value: totalCount.toLocaleString('en-IN'), color:'#2468C8' },
-            { label:`Page ${page+1} Amount`, value: fmt(totalAmt), color:'#1E9E5A' },
-            { label:'Showing', value: `${bills.length} of ${totalCount}`, color:'#D4920A' },
-          ].map((c,i) => (
-            <div key={i} style={CARD}>
-              <div style={{ fontSize:11, color:'#6A9B95', marginBottom:4 }}>{c.label}</div>
-              <div style={{ fontSize:20, fontWeight:800, color:c.color }}>{c.value}</div>
-            </div>
+      {/* FY Tabs */}
+      <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
+        {FY_YEARS.map(yr => (
+          <button key={yr} onClick={() => setFY(yr)}
+            style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,fontWeight:700,transition:'all .15s',
+              background:activeFY===yr?T.teal:'transparent',color:activeFY===yr?'#fff':T.textMuted}}>
+            FY {yr.toString().slice(2)}-{(yr+1).toString().slice(2)}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
+        <SummaryCard label="Total Purchase"  value={fmtL(summary.total)}      sub={`${summary.count} bills`}                        color={T.teal}/>
+        <SummaryCard label="Total Metres"    value={fmtMtr(summary.totalMtrs)} sub="billed quantity"                                 color={T.blue}/>
+        <SummaryCard label="From Tally"      value={summary.tallyCount}        sub="auto-synced vouchers"                            color={T.green}/>
+        <SummaryCard label="Manual Entry"    value={summary.manualCount}       sub="pending Tally push"                              color={T.orange}/>
+        <SummaryCard label="Avg Per Bill"    value={summary.count ? fmtL(summary.total/summary.count) : '—'} sub="per bill avg"     color={T.navy}/>
+      </div>
+
+      {/* Filters */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+        <div style={{flex:'1 1 180px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Search</div>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Bill no, supplier, item…"
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none',boxSizing:'border-box'}}/>
+        </div>
+        <div style={{flex:'1 1 150px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Supplier</div>
+          <input value={supplier} onChange={e=>setSupplier(e.target.value)} placeholder="Supplier name"
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none',boxSizing:'border-box'}}/>
+        </div>
+        <div style={{flex:'0 1 130px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Source</div>
+          <select value={source} onChange={e=>setSource(e.target.value)}
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none'}}>
+            <option value="">All Sources</option>
+            <option value="Tally">Tally Only</option>
+            <option value="Manual">Manual Only</option>
+          </select>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>From</div>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none'}}/>
+        </div>
+        <div>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>To</div>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none'}}/>
+        </div>
+        <button onClick={applyFilters} style={{padding:'8px 18px',background:T.teal,color:'#fff',border:'none',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer',height:34}}>Apply</button>
+        <button onClick={resetFilters} style={{padding:'8px 14px',background:'transparent',color:T.textMuted,border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,cursor:'pointer',height:34}}>Reset</button>
+      </div>
+
+      {/* Table */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+        {/* Header row */}
+        <div style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 140px 110px 90px 110px 90px 44px',background:T.bg,borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
+          {['Bill No','Date','Supplier','Fabric / Item','Metres','Rate/m','Amount','Source',''].map((h,i)=>(
+            <div key={i} style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,
+              textAlign:i>=4&&i<=6?'right':'left'}}>{h}</div>
           ))}
         </div>
 
-        {/* Filter bar */}
-        <div style={{ ...CARD, padding:'14px 16px' }}>
-          {/* FY Quick Buttons */}
-          <div style={{ display:'flex', gap:4, marginBottom:12, background:T.bg, padding:'4px', borderRadius:8, border:`1px solid ${T.border}`, width:'fit-content' }}>
-            {FY_YEARS.map(y => (
-              <button key={y} onClick={()=>setFY(y)}
-                style={{ padding:'4px 10px', fontSize:12, fontWeight:700, cursor:'pointer', borderRadius:6, border:'none', transition:'all .15s',
-                  background: activeFY===y ? T.teal : 'transparent',
-                  color: activeFY===y ? '#fff' : T.textMuted }}>
-                FY {y.toString().slice(2)}-{(y+1).toString().slice(2)}
-              </button>
-            ))}
-          </div>
-          <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
-            <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'2 1 200px' }}>
-              <label style={{ fontSize:11, color:'#6A9B95' }}>Search (Bill No / Supplier / Item)</label>
-              <input value={search} onChange={e=>setSearch(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&applyFilters()}
-                placeholder="e.g. VK INDUSTRIES, 1207…" style={INP({ width:'100%', boxSizing:'border-box' })} />
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'1 1 130px' }}>
-              <label style={{ fontSize:11, color:'#6A9B95' }}>Supplier Name</label>
-              <input value={supplier} onChange={e=>setSupplier(e.target.value)}
-                placeholder="e.g. Savatthi Textile" style={INP({ width:'100%', boxSizing:'border-box' })} />
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'1 1 120px' }}>
-              <label style={{ fontSize:11, color:'#6A9B95' }}>From Date</label>
-              <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={INP()} />
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'1 1 120px' }}>
-              <label style={{ fontSize:11, color:'#6A9B95' }}>To Date</label>
-              <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={INP()} />
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:4, flex:'1 1 110px' }}>
-              <label style={{ fontSize:11, color:'#6A9B95' }}>Source</label>
-              <select value={source} onChange={e=>setSource(e.target.value)} style={SEL()}>
-                <option value="">All Sources</option>
-                <option value="Tally">Tally Only</option>
-                <option value="Manual">Manual Only</option>
-              </select>
-            </div>
-            <div style={{ display:'flex', gap:8, alignItems:'flex-end', paddingBottom:0 }}>
-              <button onClick={applyFilters} style={BTN({ background:'#2BA898', color:'#fff', padding:'9px 18px' })}>Apply</button>
-              <button onClick={resetFilters} style={BTN({ background:'#f1f5f9', color:'#4A7A74', padding:'9px 14px' })}>Reset</button>
-            </div>
-          </div>
-        </div>
+        {loading ? (
+          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>Loading…</div>
+        ) : bills.length===0 ? (
+          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>No bills found for selected period</div>
+        ) : bills.map((b,i) => {
+          const isExp = expanded === b.id;
+          const lineItems = b.line_items?.inventory || (Array.isArray(b.line_items) ? b.line_items : []);
+          const isTally = b.tally_sync_status === 'synced';
+          return (
+            <div key={b.id} style={{borderBottom:`1px solid ${T.border}`}}>
+              <div
+                onClick={()=>setExpanded(isExp?null:b.id)}
+                style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 140px 110px 90px 110px 90px 44px',
+                  padding:'11px 16px',background:isExp?T.tealLight:'#fff',cursor:'pointer',alignItems:'center',transition:'background .12s'}}
+                onMouseEnter={e=>{if(!isExp)e.currentTarget.style.background=T.bg}}
+                onMouseLeave={e=>{if(!isExp)e.currentTarget.style.background='#fff'}}
+              >
+                <div style={{fontWeight:700,color:T.teal,fontSize:12,fontFamily:"'DM Mono',monospace"}}>{b.bill_number||'—'}</div>
+                <div style={{fontSize:12,color:T.textMuted}}>{fmtDate(b.bill_date)}</div>
+                <div>
+                  <div style={{fontSize:12.5,fontWeight:600,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:260}}>{b.supplier_name||'—'}</div>
+                  <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>
+                    {b.fabric_name||b.item_name||''}
+                    {b.design_no ? ` · Design: ${b.design_no}` : ''}
+                    {b.process_lot_no ? ` · Lot: ${b.process_lot_no}` : ''}
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:T.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {b.fabric_name||b.item_name||'—'}
+                </div>
+                <div style={{fontSize:12.5,textAlign:'right',fontFamily:"'DM Mono',monospace"}}>
+                  {b.quantity_mtrs ? fmtMtr(b.quantity_mtrs) : '—'}
+                </div>
+                <div style={{fontSize:12,textAlign:'right',color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>
+                  {b.rate_per_mtr ? `₹${Math.abs(Number(b.rate_per_mtr)).toFixed(2)}` : '—'}
+                </div>
+                <div style={{fontSize:13,textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>
+                  {fmt(b.total_amount)}
+                </div>
+                <div>
+                  <Badge
+                    label={isTally ? 'Tally' : 'Manual'}
+                    color={isTally ? T.green : T.orange}
+                  />
+                </div>
+                <div style={{textAlign:'right',fontSize:16,color:isExp?T.teal:T.textFaint}}>{isExp?'▲':'▼'}</div>
+              </div>
 
-        {/* Table */}
-        <div style={{ ...CARD, padding:0, overflow:'hidden' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
-            <thead>
-              <tr style={{ background:'#F4FBFA' }}>
-                {['Bill No','Date','Supplier','Fabric/Item','Qty (m)','Rate','Total','Status','Source',''].map(h=>(
-                  <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:700, color:'#0B2E2B', borderBottom:'1px solid rgba(43,168,152,.15)', whiteSpace:'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={10} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>Loading…</td></tr>
-              ) : bills.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding:30, textAlign:'center', color:'#6A9B95' }}>
-                  No bills found. Try adjusting filters or click "Reset" to see current FY.
-                </td></tr>
-              ) : bills.map(b => {
-                const isExp = expanded === b.id;
-                const lineItems = b.line_items?.inventory || (Array.isArray(b.line_items) ? b.line_items : []);
-                return (
-                  <>
-                    <tr key={b.id} style={{ borderBottom:`1px solid ${isExp?T.teal:'rgba(43,168,152,.08)'}`, background: isExp?T.tealLight:'inherit', cursor:'pointer' }}
-                      onClick={()=>setExpanded(isExp?null:b.id)}>
-                      <td style={{ padding:'9px 14px', fontWeight:600, color:T.blue, fontFamily:'monospace' }}>{b.bill_number}</td>
-                      <td style={{ padding:'9px 14px', color:'#4A7A74' }}>{b.bill_date}</td>
-                      <td style={{ padding:'9px 14px', fontWeight:500 }}>{b.supplier_name}</td>
-                      <td style={{ padding:'9px 14px', color:'#4A7A74', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.fabric_name||b.item_name||'—'}</td>
-                      <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.quantity_mtrs ? fmtN(b.quantity_mtrs) : '—'}</td>
-                      <td style={{ padding:'9px 14px', textAlign:'right' }}>{b.rate_per_mtr ? fmtAmt(b.rate_per_mtr) : '—'}</td>
-                      <td style={{ padding:'9px 14px', textAlign:'right', fontWeight:700, color:T.green }}>{fmtAmt(b.total_amount)}</td>
-                      <td style={{ padding:'9px 14px' }}>
-                        <span style={{ padding:'2px 8px', borderRadius:100, fontSize:10, fontWeight:700,
-                          background: b.tally_sync_status==='synced'?T.greenLight:'#FFF8E8',
-                          color: b.tally_sync_status==='synced'?T.green:'#D4920A' }}>
-                          {b.tally_sync_status==='synced'?'synced':'pending'}
-                        </span>
-                      </td>
-                      <td style={{ padding:'9px 14px', color:'#6A9B95', fontSize:11 }}>{b.tally_sync_status==='synced'?'Tally':'Manual'}</td>
-                      <td style={{ padding:'9px 14px', textAlign:'center' }}>
-                        <span style={{ fontSize:12, color:T.teal, fontWeight:700 }}>{isExp?'▲':'▼'}</span>
-                      </td>
-                    </tr>
-                    {isExp && (
-                      <tr key={`${b.id}-exp`}>
-                        <td colSpan={10} style={{ padding:0, background:T.tealLight, borderBottom:`2px solid ${T.teal}` }}>
-                          <div style={{ padding:'16px 20px', display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
-                            {/* Bill Info */}
-                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
-                              <div style={{ fontSize:11, fontWeight:700, color:T.teal, textTransform:'uppercase', marginBottom:8 }}>Bill Information</div>
-                              {[{l:'Bill Number',v:b.bill_number,mono:true},{l:'Date',v:b.bill_date},{l:'Supplier',v:b.supplier_name},
-                                {l:'Supplier GSTIN',v:b.supplier_gstin},{l:'Supplier State',v:b.supplier_state},
-                                {l:'Supplier Invoice No',v:b.supplier_invoice_no},{l:'Supplier Invoice Date',v:b.supplier_invoice_date},
-                                {l:'Process Mill Name',v:b.process_mill_name,color:T.purple},{l:'Process Lot No',v:b.process_lot_no,mono:true,color:T.gold},
-                                {l:'Purchase Ledger',v:b.purchase_ledger},
-                                {l:'Design No',v:b.design_no,mono:true},{l:'Batch',v:b.batch_name,mono:true},
-                                {l:'Godown',v:b.godown},{l:'Entered By',v:b.entered_by},
-                                {l:'Total Amount',v:fmtAmt(b.total_amount),bold:true,color:T.green},
-                              ].filter(f=>f.v).map((f,i)=>(
-                                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'3px 0', borderBottom:`1px solid ${T.border}`, fontSize:12 }}>
-                                  <span style={{ color:T.textMuted }}>{f.l}</span>
-                                  <span style={{ color:f.color||T.text, fontWeight:f.bold?700:500, fontFamily:f.mono?'monospace':'inherit' }}>{f.v}</span>
-                                </div>
-                              ))}
-                            </div>
-                            {/* Tax & Logistics */}
-                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
-                              <div style={{ fontSize:11, fontWeight:700, color:T.orange, textTransform:'uppercase', marginBottom:8 }}>Tax & Logistics</div>
-                              {[{l:'Taxable Value',v:b.taxable_value?fmtAmt(b.taxable_value):null},
-                                {l:'IGST',v:b.igst_amount>0?fmtAmt(b.igst_amount):null,color:T.blue},
-                                {l:'CGST',v:b.cgst_amount>0?fmtAmt(b.cgst_amount):null,color:T.blue},
-                                {l:'SGST',v:b.sgst_amount>0?fmtAmt(b.sgst_amount):null,color:T.blue},
-                                {l:'Round Off',v:b.round_off!=null?`₹${b.round_off}`:null},
-                                {l:'Qty (Mtrs)',v:b.quantity_mtrs?`${fmtN(b.quantity_mtrs)} m`:null},
-                                {l:'Rate/Mtr',v:b.rate_per_mtr?fmtAmt(b.rate_per_mtr):null},
-                                {l:'HSN Code',v:b.hsn_code},{l:'Transporter',v:b.transporter_name},
-                                {l:'LR Number',v:b.lr_number},{l:'Dest City',v:b.destination_city},
-                                {l:'Broker',v:b.broker_name,color:T.purple},{l:'Comm Rate',v:b.comm_rate?`${b.comm_rate}%`:null},
-                                {l:'Narration',v:b.narration},
-                              ].filter(f=>f.v).map((f,i)=>(
-                                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'3px 0', borderBottom:`1px solid ${T.border}`, fontSize:12, gap:8 }}>
-                                  <span style={{ color:T.textMuted, flexShrink:0 }}>{f.l}</span>
-                                  <span style={{ color:f.color||T.text, fontWeight:500, textAlign:'right', wordBreak:'break-word' }}>{f.v}</span>
-                                </div>
-                              ))}
-                            </div>
-                            {/* Line Items */}
-                            <div style={{ background:T.surface, borderRadius:8, padding:'10px 14px' }}>
-                              <div style={{ fontSize:11, fontWeight:700, color:T.purple, textTransform:'uppercase', marginBottom:8 }}>Stock Line Items ({lineItems.length || 1})</div>
-                              {lineItems.length > 0 ? lineItems.map((item,i)=>(
-                                <div key={i} style={{ padding:'6px 0', borderBottom:`1px solid ${T.border}`, fontSize:11 }}>
-                                  <div style={{ fontWeight:600, color:T.text }}>{item.stock_item||item.item_name||`Item ${i+1}`}</div>
-                                  <div style={{ display:'flex', gap:12, marginTop:2, color:T.textMuted, flexWrap:'wrap' }}>
-                                    {item.qty>0 && <span>{fmtN(item.qty)} m</span>}
-                                    {item.rate>0 && <span>@ {fmtAmt(item.rate)}/m</span>}
-                                    {item.amount && <span style={{ color:T.green, fontWeight:600 }}>{fmtAmt(Math.abs(item.amount))}</span>}
-                                    {item.lot_no && <span style={{ color:T.orange, fontWeight:600, fontFamily:'monospace' }}>Lot: {item.lot_no}</span>}
-                                    {item.taka_abc && <span>Taka ABC: {item.taka_abc}</span>}
-                                    {item.taka_no && <span>Taka No: {item.taka_no}</span>}
-                                  </div>
-                                  {(item.track_party || item.track_ref_no) && (
-                                    <div style={{ fontSize:10, color:T.blue, marginTop:4, padding:'4px 8px', background:T.blueLight, borderRadius:4, display:'inline-block' }}>
-                                      🔗 Linked to: <span style={{fontWeight:600}}>{item.track_party||'—'}</span> {item.track_ref_no?`(${item.track_ref_no})`:''}
-                                    </div>
-                                  )}
-                                  {item.batches?.slice(0,3).map((bt,bi)=>(
-                                    <div key={bi} style={{ fontSize:10, color:T.teal, marginTop:2 }}>📦 {bt.batch_name} · {fmtN(bt.qty)}m</div>
-                                  ))}
-                                </div>
-                              )) : (
-                                <div style={{ fontSize:12, color:T.textMuted }}>
-                                  <div>{b.fabric_name || '—'}</div>
-                                  {b.quantity_mtrs>0 && <div style={{ marginTop:4 }}>{fmtN(b.quantity_mtrs)} m @ {b.rate_per_mtr?fmtAmt(b.rate_per_mtr):'-'}/m</div>}
-                                </div>
-                              )}
-                              {b.total_taka_pcs > 0 && (
-                                <div style={{ marginTop:8, padding:'4px 8px', background:T.bg, borderRadius:6, fontSize:11, fontWeight:600, color:T.teal }}>Total Taka/Pcs: {b.total_taka_pcs}</div>
-                              )}
-                            </div>
+              {isExp && (
+                <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'16px 18px 20px'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+
+                    {/* Bill Info */}
+                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'12px 14px'}}>
+                      <div style={{fontSize:10,color:T.teal,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>Bill Information</div>
+                      {[
+                        ['Bill Number',       b.bill_number,                                  true],
+                        ['Bill Date',         fmtDate(b.bill_date),                           false],
+                        ['Supplier',          b.supplier_name,                                false],
+                        ['Supplier GSTIN',    b.supplier_gstin||b.gst_number,                 true],
+                        ['Supplier State',    b.supplier_state,                               false],
+                        ['Supplier Inv No',   b.supplier_invoice_no,                          true],
+                        ['Supplier Inv Date', b.supplier_invoice_date ? fmtDate(b.supplier_invoice_date) : null, false],
+                        ['Process Mill',      b.process_mill_name,                            false],
+                        ['Process Lot No',    b.process_lot_no,                               true],
+                        ['Purchase Ledger',   b.purchase_ledger,                              false],
+                        ['Design No',         b.design_no,                                    true],
+                        ['Batch',             b.batch_name,                                   true],
+                        ['Godown',            b.godown,                                       false],
+                        ['Entered By',        b.entered_by,                                   false],
+                        ['Narration',         b.narration,                                    false],
+                        ['Total Amount',      fmt(b.total_amount),                            false],
+                      ].filter(([,v]) => v).map(([k,v,mono]) => (
+                        <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:8}}>
+                          <span style={{color:T.textMuted,flexShrink:0}}>{k}</span>
+                          <span style={{color:T.text,fontWeight:500,fontFamily:mono?"'DM Mono',monospace":'inherit',textAlign:'right',wordBreak:'break-all'}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Tax & Logistics */}
+                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'12px 14px'}}>
+                      <div style={{fontSize:10,color:T.orange,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>Tax &amp; Logistics</div>
+                      {[
+                        ['Taxable Value', b.taxable_value ? fmt(b.taxable_value) : null],
+                        ['IGST',          b.igst_amount  ? fmt(b.igst_amount)    : null],
+                        ['CGST',          b.cgst_amount  ? fmt(b.cgst_amount)    : null],
+                        ['SGST',          b.sgst_amount  ? fmt(b.sgst_amount)    : null],
+                        ['Round Off',     b.round_off!=null ? `₹${b.round_off}`  : null],
+                        ['Qty (Mtrs)',     b.quantity_mtrs ? fmtMtr(b.quantity_mtrs) : null],
+                        ['Rate/Mtr',      b.rate_per_mtr  ? `₹${Math.abs(Number(b.rate_per_mtr)).toFixed(2)}` : null],
+                        ['Total Taka',    b.total_taka_pcs ? String(b.total_taka_pcs) : null],
+                        ['HSN Code',      b.hsn_code],
+                        ['Transporter',   b.transporter_name],
+                        ['LR Number',     b.lr_number||b.lr_no],
+                        ['Destination',   b.destination_city||b.destination],
+                        ['Broker',        b.broker_name],
+                        ['Comm Rate',     b.comm_rate ? `${b.comm_rate}%` : null],
+                      ].filter(([,v]) => v).map(([k,v]) => (
+                        <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:8}}>
+                          <span style={{color:T.textMuted,flexShrink:0}}>{k}</span>
+                          <span style={{color:T.text,fontWeight:500,textAlign:'right',wordBreak:'break-word'}}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Line Items */}
+                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'12px 14px'}}>
+                      <div style={{fontSize:10,color:T.purple,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>
+                        Stock Line Items ({lineItems.length||1})
+                      </div>
+                      {lineItems.length > 0 ? lineItems.map((item,idx) => (
+                        <div key={idx} style={{padding:'6px 0',borderBottom:`1px solid ${T.border}`,fontSize:11}}>
+                          <div style={{fontWeight:600,color:T.text}}>{item.stock_item||item.item_name||`Item ${idx+1}`}</div>
+                          <div style={{display:'flex',gap:10,marginTop:2,color:T.textMuted,flexWrap:'wrap'}}>
+                            {item.qty>0  && <span>{fmtMtr(item.qty)}</span>}
+                            {item.rate>0 && <span>@ ₹{Math.abs(Number(item.rate)).toFixed(2)}/m</span>}
+                            {item.amount && <span style={{color:T.green,fontWeight:600}}>{fmt(item.amount)}</span>}
+                            {item.lot_no && <span style={{color:T.orange,fontWeight:600,fontFamily:'monospace'}}>Lot: {item.lot_no}</span>}
                           </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          {(item.track_party||item.track_ref_no) && (
+                            <div style={{fontSize:10,color:T.blue,marginTop:4,padding:'3px 7px',background:T.blueLight,borderRadius:4,display:'inline-block'}}>
+                              Linked: {item.track_party||'—'}{item.track_ref_no?` (${item.track_ref_no})`:''}
+                            </div>
+                          )}
+                          {item.batches?.slice(0,3).map((bt,bi) => (
+                            <div key={bi} style={{fontSize:10,color:T.teal,marginTop:2}}>
+                              {bt.batch_name} · {fmtMtr(bt.qty)}
+                            </div>
+                          ))}
+                        </div>
+                      )) : (
+                        <div style={{fontSize:12,color:T.textMuted}}>
+                          <div>{b.fabric_name||'—'}</div>
+                          {b.quantity_mtrs>0 && (
+                            <div style={{marginTop:4}}>{fmtMtr(b.quantity_mtrs)} @ {b.rate_per_mtr?`₹${Math.abs(Number(b.rate_per_mtr)).toFixed(2)}/m`:'—'}</div>
+                          )}
+                        </div>
+                      )}
+                      {b.total_taka_pcs>0 && (
+                        <div style={{marginTop:8,padding:'4px 8px',background:T.bg,borderRadius:6,fontSize:11,fontWeight:600,color:T.teal}}>
+                          Total Taka/Pcs: {b.total_taka_pcs}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 4px' }}>
-            <span style={{ fontSize:12, color:'#6A9B95' }}>
-              Showing {page*PAGE_SIZE+1}–{Math.min((page+1)*PAGE_SIZE, totalCount)} of {totalCount.toLocaleString('en-IN')} bills
-            </span>
-            <div style={{ display:'flex', gap:6 }}>
-              <button onClick={()=>fetchBills(0)} disabled={page===0} style={BTN({ background: page===0?'#f1f5f9':'#E8FFF4', color: page===0?'#aaa':'#1E9E5A', padding:'6px 12px' })}>«</button>
-              <button onClick={()=>fetchBills(page-1)} disabled={page===0} style={BTN({ background: page===0?'#f1f5f9':'#E8FFF4', color: page===0?'#aaa':'#1E9E5A', padding:'6px 14px' })}>‹ Prev</button>
-              <span style={{ padding:'6px 14px', background:'#2BA898', color:'#fff', borderRadius:8, fontSize:12, fontWeight:700 }}>
-                {page+1} / {totalPages}
-              </span>
-              <button onClick={()=>fetchBills(page+1)} disabled={page>=totalPages-1} style={BTN({ background: page>=totalPages-1?'#f1f5f9':'#E8FFF4', color: page>=totalPages-1?'#aaa':'#1E9E5A', padding:'6px 14px' })}>Next ›</button>
-              <button onClick={()=>fetchBills(totalPages-1)} disabled={page>=totalPages-1} style={BTN({ background: page>=totalPages-1?'#f1f5f9':'#E8FFF4', color: page>=totalPages-1?'#aaa':'#1E9E5A', padding:'6px 12px' })}>»</button>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderTop:`1px solid ${T.border}`,background:T.bg}}>
+            <span style={{fontSize:12,color:T.textMuted}}>{totalCount.toLocaleString()} total · Page {page+1} of {totalPages}</span>
+            <div style={{display:'flex',gap:6}}>
+              {page>0 && <button onClick={()=>fetchBills(page-1)} style={{padding:'6px 14px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,cursor:'pointer',background:'#fff',color:T.text}}>← Prev</button>}
+              {page<totalPages-1 && <button onClick={()=>fetchBills(page+1)} style={{padding:'6px 14px',background:T.teal,border:'none',borderRadius:6,fontSize:12,cursor:'pointer',color:'#fff',fontWeight:700}}>Next →</button>}
             </div>
           </div>
         )}
       </div>
 
+      {/* Manual Bill Form */}
       {showForm && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding: 20 }}>
-          <div style={{ background:'#fff', borderRadius:14, padding:24, width:'100%', maxWidth: 800, maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontFamily:"'Playfair Display',serif", fontSize:20, fontWeight:700, marginBottom:16, display:'flex', justifyContent:'space-between', color:'#0B2E2B' }}>
-              Create Custom Purchase Bill <button onClick={()=>setShowForm(false)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer' }}>×</button>
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20}}>
+          <div style={{background:'#fff',borderRadius:14,padding:24,width:'100%',maxWidth:820,maxHeight:'90vh',overflowY:'auto'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:20,color:T.text}}>Create Purchase Bill</div>
+              <button onClick={()=>setShowForm(false)} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:T.textMuted}}>×</button>
             </div>
-            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>1. Primary Details</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
-                {[['bill_number','Bill No *'],['bill_date','Date *','date'],['supplier_name','Supplier *'],['gst_number','Supplier GSTIN'],['hsn_code','Default HSN'],['fabric_type','Fabric Type']].map(([k,l,t])=>(
+
+            {/* Primary Details */}
+            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px',marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>1. Primary Details</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+                {[['bill_number','Bill No *'],['bill_date','Date *','date'],['supplier_name','Supplier *'],
+                  ['gst_number','Supplier GSTIN'],['hsn_code','Default HSN'],['fabric_type','Fabric Type']].map(([k,l,t])=>(
                   <div key={k}>
-                    <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
+                    <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
                     <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
-                      style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                      style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
                   </div>
                 ))}
               </div>
             </div>
-            <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, marginBottom:16, border:'1px solid #E2E8F0' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.05em' }}>2. Line Items</div>
-                <button onClick={() => setForm(p => ({...p, line_items: [...p.line_items, {item_name:'', quantity:'', rate:'', amount:''}]}))} style={BTN({ background:'#E2E8F0', color:'#475569', padding:'4px 10px' })}>+ Add Row</button>
+
+            {/* Line Items */}
+            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px',marginBottom:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5}}>2. Line Items</div>
+                <button
+                  onClick={()=>setForm(p=>({...p,line_items:[...p.line_items,{item_name:'',quantity:'',rate:'',amount:''}]}))}
+                  style={{padding:'4px 10px',background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,cursor:'pointer',color:T.text}}>
+                  + Add Row
+                </button>
               </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {form.line_items.map((li, idx) => (
-                  <div key={idx} style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr 40px', gap:8, alignItems:'center' }}>
-                    <input placeholder="Fabric / Item Name *" value={li.item_name} onChange={e=>{const nl=[...form.line_items]; nl[idx].item_name=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
-                    <input type="number" placeholder="Qty (Mtrs)" value={li.quantity} onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
-                    <input type="number" placeholder="Rate (₹)" value={li.rate} onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13 }} />
-                    <input type="number" placeholder="Total Amt *" value={li.amount} onChange={e=>{const nl=[...form.line_items]; nl[idx].amount=e.target.value; setForm(p=>({...p,line_items:nl}))}} style={{ padding:'8px', borderRadius:6, border:'1px solid #CBD5E1', fontSize:13, background:'#F1F5F9', fontWeight:600 }} />
-                    <button onClick={()=>{const nl=form.line_items.filter((_,i)=>i!==idx); setForm(p=>({...p,line_items:nl}))}} style={{ background:'none', border:'none', color:'#EF4444', cursor:'pointer', fontSize:18 }}>×</button>
-                  </div>
-                ))}
-              </div>
+              {form.line_items.map((li,idx) => (
+                <div key={idx} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 36px',gap:8,alignItems:'center',marginBottom:8}}>
+                  <input placeholder="Fabric / Item Name *" value={li.item_name}
+                    onChange={e=>{const nl=[...form.line_items]; nl[idx].item_name=e.target.value; setForm(p=>({...p,line_items:nl}))}}
+                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
+                  <input type="number" placeholder="Qty (m)" value={li.quantity}
+                    onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}}
+                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
+                  <input type="number" placeholder="Rate (₹)" value={li.rate}
+                    onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}}
+                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
+                  <input type="number" placeholder="Total *" value={li.amount}
+                    onChange={e=>{const nl=[...form.line_items]; nl[idx].amount=e.target.value; setForm(p=>({...p,line_items:nl}))}}
+                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none',fontWeight:600}}/>
+                  <button onClick={()=>setForm(p=>({...p,line_items:p.line_items.filter((_,i)=>i!==idx)}))}
+                    style={{background:'none',border:'none',color:T.red,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+                </div>
+              ))}
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
-              <div style={{ background:'#F8FAFC', padding:16, borderRadius:8, border:'1px solid #E2E8F0' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#475569', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>3. Logistics</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+
+            {/* Logistics + Taxes */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px'}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>3. Logistics</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
                   {[['transporter_name','Transporter'],['lr_no','LR / E-Way No'],['lr_date','LR Date','date'],['destination','Origin City']].map(([k,l,t])=>(
                     <div key={k}>
-                      <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>{l}</label>
-                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box' }} />
+                      <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
+                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+                        style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ background:'#F0FDF4', padding:16, borderRadius:8, border:'1px solid #BBF7D0' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#166534', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.05em' }}>4. Taxes & Total</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                  {[['igst_amount','IGST Amt','number'],['cgst_amount','CGST Amt','number'],['sgst_amount','SGST Amt','number'],['round_off','Round Off','number'],['total_amount','Grand Total *','number']].map(([k,l,t])=>(
+              <div style={{background:T.greenLight,border:`1px solid ${T.green}33`,borderRadius:8,padding:'14px 16px'}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.green,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>4. Taxes &amp; Total</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  {[['igst_amount','IGST'],['cgst_amount','CGST'],['sgst_amount','SGST'],['round_off','Round Off'],['total_amount','Grand Total *']].map(([k,l])=>(
                     <div key={k}>
-                      <label style={{ fontSize:11, fontWeight:600, color:'#166534', display:'block', marginBottom:4 }}>{l}</label>
-                      <input type={t} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))} style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid #86EFAC', fontSize:13, boxSizing:'border-box', background:k==='total_amount'?'#DCFCE7':'#fff', fontWeight:k==='total_amount'?700:400 }} />
+                      <div style={{fontSize:10,color:T.green,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
+                      <input type="number" value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
+                        style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.green}44`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box',
+                          background:k==='total_amount'?T.greenLight:'#fff',fontWeight:k==='total_amount'?700:400}}/>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-            <div style={{ marginTop:16 }}>
-              <label style={{ fontSize:11, fontWeight:600, color:'#4A7A74', display:'block', marginBottom:4 }}>Notes</label>
+
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>Notes</div>
               <textarea value={form.notes||''} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
-                style={{ width:'100%', padding:'8px 10px', borderRadius:7, border:'1px solid rgba(43,168,152,.3)', fontSize:13, boxSizing:'border-box', minHeight:60 }} />
+                style={{width:'100%',padding:'8px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box',minHeight:60,resize:'vertical'}}/>
             </div>
-            <div style={{ display:'flex', gap:10, marginTop:20 }}>
-              <button onClick={saveBill} disabled={saving} style={BTN({ background:'linear-gradient(135deg,#3DBFAE,#2BA898)', color:'#fff', flex:1, padding:'12px', fontSize:14 })}>
-                {saving?'Saving…':'Save Bill'}
+
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={saveBill} disabled={saving}
+                style={{flex:1,padding:'11px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:700,cursor:'pointer',opacity:saving?0.6:1}}>
+                {saving ? 'Saving…' : 'Save Bill'}
               </button>
-              <button onClick={()=>setShowForm(false)} style={BTN({ background:'#f1f5f9', color:'#4A7A74', padding:'12px 24px' })}>Close</button>
+              <button onClick={()=>setShowForm(false)}
+                style={{padding:'11px 24px',background:'transparent',color:T.textMuted,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,cursor:'pointer'}}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>

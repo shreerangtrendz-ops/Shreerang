@@ -14,7 +14,8 @@ const ALL_GROUPS = [
       { icon: '📊', label: 'Analytics',         to: '/admin/analytics',          roles: ['admin','manager'] },
       { icon: '🏭', label: 'Mill Performance',   to: '/admin/mill-performance',   roles: ['admin','manager','operations'] },
       { icon: '🤝', label: 'Broker Analytics',   to: '/admin/broker-analytics',   roles: ['admin','manager','accounts'] },
-      { icon: '📋', label: 'Activity Log', to: '/admin/activity-logs',  roles: ['admin','manager'] },
+      { icon: '📋', label: 'Activity Log',  to: '/admin/activity-logs',  roles: ['admin','manager'] },
+      { icon: '🔍', label: 'Code Review',   to: '/admin/code-review',    roles: ['admin'] },
     ]
   },
   {

@@ -119,6 +119,7 @@ import OutstandingPayableV2 from '@/pages/reports/OutstandingPayableV2';
 import DesignCostingPage from '@/pages/admin/accounting/DesignCostingPage';
 import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
+import CodeReviewPage from '@/pages/admin/CodeReviewPage';
 import MediaLibraryPage from '@/pages/admin/MediaLibraryPage';
 import JobWorkChallansPage from '@/pages/admin/JobWorkChallansPage';
 import ManufacturingEntryPage from '@/pages/admin/ManufacturingEntryPage';
@@ -306,6 +307,7 @@ const App = () => {
                     <Route path="mill-performance" element={<MillPerformancePage />} />
                     <Route path="broker-analytics" element={<BrokerAnalyticsPage />} />
                     <Route path="activity-logs" element={<ActivityLogsPage />} />
+                    <Route path="code-review" element={<CodeReviewPage />} />
                     <Route path="media-library" element={<MediaLibraryPage />} />
                     <Route path="job-workers" element={<JobWorkersPage />} />
                     <Route path="challans" element={<JobCardsList />} />

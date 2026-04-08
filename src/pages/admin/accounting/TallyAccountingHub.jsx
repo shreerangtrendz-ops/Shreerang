@@ -1,835 +1,871 @@
-import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useState, useEffect, useCallback } from 'react';
+import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
-// ─── Supabase ────────────────────────────────────────────────────────────────
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+/* ══════════════════════════════════════════════════════════════════
+   TALLY ACCOUNTING HUB — v26
+   All 11 voucher types: fetch from Tally + view + push back
+   + Design costing P&L visibility
+   ══════════════════════════════════════════════════════════════════ */
 
-// ─── Financial Year Helper ───────────────────────────────────────────────────
-function getCurrentFY() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1; // 1-based
-  return m >= 4 ? { from: `${y}-04-01`, to: `${y + 1}-03-31` } : { from: `${y - 1}-04-01`, to: `${y}-03-31` };
-}
+const T = {
+  navy:'#0B2E2B', teal:'#2BA898', tealLight:'#EEF8F6',
+  green:'#1E9E5A', red:'#E74C3C', orange:'#E67E22',
+  blue:'#2468C8', gold:'#E8A800', purple:'#9B59B6',
+  border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
+  text:'#0B2E2B', muted:'#6A9B95',
+};
+const fmt = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');
+const fmtQ = n => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
+const fmtD = d => d ? new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
+const pct  = n => n != null ? Number(n).toFixed(1)+'%' : '—';
 
-// ─── Currency Formatter ──────────────────────────────────────────────────────
-const fmt = (v) =>
-  v == null
-    ? "—"
-    : Number(v).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
-const fmtQty = (v) => (v == null ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 }) + " m");
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "2-digit" }) : "—");
-const fmtPct = (v) => (v == null ? "—" : Number(v).toFixed(1) + "%");
-
-// ─── TAB CONFIG ──────────────────────────────────────────────────────────────
-// Each tab: { key, label, table, dateCol, columns[], sumCols[], searchCols[] }
-const TAB_CONFIG = [
-  {
-    key: "sales_bills",
-    label: "Sales Bills",
-    table: "sales_bills",
-    dateCol: "bill_date",
-    searchCols: ["bill_number", "tally_voucher_no", "customer_name", "design_no", "broker_name"],
-    sumCols: ["total_amount", "taxable_value", "quantity_mtrs"],
-    columns: [
-      { key: "bill_date",        header: "Date",           render: (r) => fmtDate(r.bill_date) },
-      { key: "bill_number",      header: "Bill No",        render: (r) => r.bill_number || "—" },
-      { key: "tally_voucher_no", header: "Tally Vch No",   render: (r) => r.tally_voucher_no || "—" },
-      { key: "customer_name",    header: "Party",          render: (r) => r.customer_name || "—", wide: true },
-      { key: "design_no",        header: "Design No",      render: (r) => r.design_no || <span className="null-badge">Multi/NULL</span> },
-      { key: "fabric_name",      header: "Fabric",         render: (r) => r.fabric_name || r.item_name || "—", wide: true },
-      { key: "quantity_mtrs",    header: "Qty (m)",        render: (r) => fmtQty(r.quantity_mtrs), align: "right" },
-      { key: "rate_per_mtr",     header: "Rate/m",         render: (r) => r.rate_per_mtr ? fmt(r.rate_per_mtr) : "—", align: "right" },
-      { key: "taxable_value",    header: "Taxable",        render: (r) => fmt(r.taxable_value), align: "right" },
-      { key: "cgst_amount",      header: "CGST",           render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",      header: "SGST",           render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",      header: "IGST",           render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "total_amount",     header: "Total Amt",      render: (r) => fmt(r.total_amount), align: "right", bold: true },
-      { key: "broker_name",      header: "Broker",         render: (r) => r.broker_name || "—" },
-      { key: "comm_rate",        header: "Comm%",          render: (r) => r.comm_rate ? fmtPct(r.comm_rate) : "—", align: "right" },
-      { key: "comm_amount",      header: "Comm Amt",       render: (r) => fmt(r.comm_amount), align: "right" },
-      { key: "agent_name",       header: "Agent",          render: (r) => r.agent_name || "—" },
-      { key: "place_of_supply",  header: "POS",            render: (r) => r.place_of_supply || "—" },
-      { key: "godown",           header: "Godown",         render: (r) => r.godown || "—" },
-      { key: "narration",        header: "Narration",      render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "credit_note",
-    label: "Credit Notes",
-    table: "credit_note",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "party_name", "original_voucher_no"],
-    sumCols: ["party_amount"],
-    columns: [
-      { key: "voucher_date",       header: "Date",           render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",   header: "CN No",          render: (r) => r.tally_voucher_no || "—" },
-      { key: "party_name",         header: "Party",          render: (r) => r.party_name || "—", wide: true },
-      { key: "original_voucher_no",header: "Orig Bill",      render: (r) => r.original_voucher_no || "—" },
-      { key: "original_bill_date", header: "Orig Date",      render: (r) => fmtDate(r.original_bill_date) },
-      { key: "party_amount",       header: "CN Amount",      render: (r) => fmt(r.party_amount), align: "right", bold: true },
-      { key: "cgst_amount",        header: "CGST",           render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",        header: "SGST",           render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",        header: "IGST",           render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "discount_amount",    header: "Discount",       render: (r) => fmt(r.discount_amount), align: "right" },
-      { key: "broker_name",        header: "Broker",         render: (r) => r.broker_name || "—" },
-      { key: "comm_rate",          header: "Comm%",          render: (r) => r.comm_rate ? fmtPct(r.comm_rate) : "—", align: "right" },
-      { key: "comm_amount",        header: "Comm Amt",       render: (r) => fmt(r.comm_amount), align: "right" },
-      { key: "place_of_supply",    header: "POS",            render: (r) => r.place_of_supply || "—" },
-      { key: "bill_ref",           header: "Bill Ref",       render: (r) => r.bill_ref || "—" },
-      { key: "narration",          header: "Narration",      render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "grey_purchase",
-    label: "Grey Purchase",
-    table: "grey_purchase",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "supplier_invoice_no", "supplier_name", "lot_no", "item_name"],
-    sumCols: ["total_amount", "actual_qty_mtrs"],
-    columns: [
-      { key: "voucher_date",          header: "Date",           render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",      header: "Tally Vch No",   render: (r) => r.tally_voucher_no || "—" },
-      { key: "supplier_invoice_no",   header: "Supplier Inv No",render: (r) => r.supplier_invoice_no || "—" },
-      { key: "supplier_invoice_date", header: "Inv Date",       render: (r) => fmtDate(r.supplier_invoice_date) },
-      { key: "supplier_name",         header: "Supplier",       render: (r) => r.supplier_name || "—", wide: true },
-      { key: "lot_no",                header: "Lot No",         render: (r) => r.lot_no || "—" },
-      { key: "item_name",             header: "Item",           render: (r) => r.item_name || "—", wide: true },
-      { key: "hsn_code",              header: "HSN",            render: (r) => r.hsn_code || "—" },
-      { key: "taka_pcs",              header: "Taka/Pcs",       render: (r) => r.taka_pcs ?? "—", align: "right" },
-      { key: "actual_qty_mtrs",       header: "Actual Qty (m)", render: (r) => fmtQty(r.actual_qty_mtrs), align: "right" },
-      { key: "billed_qty_mtrs",       header: "Billed Qty (m)", render: (r) => fmtQty(r.billed_qty_mtrs), align: "right" },
-      { key: "rate",                  header: "Rate/m",         render: (r) => r.rate ? fmt(r.rate) : "—", align: "right" },
-      { key: "item_amount",           header: "Item Amount",    render: (r) => fmt(r.item_amount), align: "right" },
-      { key: "assessable_value",      header: "Assessable Val", render: (r) => fmt(r.assessable_value), align: "right" },
-      { key: "cgst_amount",           header: "CGST",           render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",           header: "SGST",           render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",           header: "IGST",           render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "total_amount",          header: "Total Amt",      render: (r) => fmt(r.total_amount), align: "right", bold: true },
-      { key: "broker_name",           header: "Broker",         render: (r) => r.broker_name || "—" },
-      { key: "comm_rate",             header: "Comm%",          render: (r) => r.comm_rate ? fmtPct(r.comm_rate) : "—", align: "right" },
-      { key: "comm_amount",           header: "Comm Amt",       render: (r) => fmt(r.comm_amount), align: "right" },
-      { key: "godown_name",           header: "Godown",         render: (r) => r.godown_name || "—" },
-      { key: "process_lot_no",        header: "Process Lot No", render: (r) => r.process_lot_no || "—" },
-      { key: "process_mill_name",     header: "Process Mill",   render: (r) => r.process_mill_name || "—" },
-      { key: "narration",             header: "Narration",      render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "issue_to_mill",
-    label: "Issue to Mill",
-    table: "issue_to_mill",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "lot_no", "mill_name", "item_name", "destination_godown"],
-    sumCols: ["qty_mtrs", "amount"],
-    columns: [
-      { key: "voucher_date",       header: "Date",              render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",   header: "Tally Vch No",      render: (r) => r.tally_voucher_no || "—" },
-      { key: "lot_no",             header: "Lot No",            render: (r) => r.lot_no || "—" },
-      { key: "mill_name",          header: "Mill (Party)",      render: (r) => r.mill_name || "—", wide: true },
-      { key: "destination_godown", header: "Mill Godown",       render: (r) => r.destination_godown || "—" },
-      { key: "source_godown",      header: "Source Godown",     render: (r) => r.source_godown || "—" },
-      { key: "item_name",          header: "Item",              render: (r) => r.item_name || "—", wide: true },
-      { key: "hsn_code",           header: "HSN",               render: (r) => r.hsn_code || "—" },
-      { key: "taka_pcs",           header: "Taka/Pcs",          render: (r) => r.taka_pcs ?? "—", align: "right" },
-      { key: "qty_mtrs",           header: "Qty (m)",           render: (r) => fmtQty(r.qty_mtrs), align: "right" },
-      { key: "rate",               header: "Rate/m",            render: (r) => r.rate ? fmt(r.rate) : "—", align: "right" },
-      { key: "amount",             header: "Amount",            render: (r) => fmt(r.amount), align: "right", bold: true },
-      { key: "process_type",       header: "Process Type",      render: (r) => r.process_type || "—" },
-      { key: "stage_no",           header: "Stage No",          render: (r) => r.stage_no ?? "—", align: "right" },
-      { key: "parent_lot_no",      header: "Parent Lot",        render: (r) => r.parent_lot_no || "—" },
-      { key: "is_sampling",        header: "Sampling?",         render: (r) => r.is_sampling ? "Yes" : "No" },
-      { key: "purpose_note",       header: "Purpose",           render: (r) => r.purpose_note || "—" },
-      { key: "narration",          header: "Narration",         render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "rec_from_mill",
-    label: "REC from Mill",
-    table: "rec_from_mill",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "party_challan_no", "lot_no", "design_no", "job_godown"],
-    sumCols: ["finish_qty_mtrs", "job_amount"],
-    columns: [
-      { key: "voucher_date",       header: "Date",              render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",   header: "Tally Vch No",      render: (r) => r.tally_voucher_no || "—" },
-      { key: "party_challan_no",   header: "Mill Challan No",   render: (r) => r.party_challan_no || "—" },
-      { key: "lot_no",             header: "Lot No",            render: (r) => r.lot_no || "—" },
-      { key: "design_no",          header: "Design No",         render: (r) => r.design_no || "—" },
-      { key: "mill_name",          header: "Mill",              render: (r) => r.mill_name || r.job_godown || "—", wide: true },
-      { key: "job_godown",         header: "Job Godown",        render: (r) => r.job_godown || "—" },
-      { key: "our_godown",         header: "Our Godown",        render: (r) => r.our_godown || "—" },
-      { key: "grey_issued_qty_mtrs",header: "Grey Issued (m)",  render: (r) => fmtQty(r.grey_issued_qty_mtrs), align: "right" },
-      { key: "finish_qty_mtrs",    header: "Finish Qty (m)",    render: (r) => fmtQty(r.finish_qty_mtrs), align: "right" },
-      { key: "grey_recd_qty_mtrs", header: "Grey Recd (m)",     render: (r) => fmtQty(r.grey_recd_qty_mtrs), align: "right" },
-      { key: "shortage_mtrs",      header: "Shortage (m)",      render: (r) => fmtQty(r.shortage_mtrs), align: "right" },
-      { key: "shortage_pct",       header: "Shortage%",         render: (r) => {
-          const v = r.shortage_pct;
-          if (v == null) return "—";
-          const cls = v > 15 ? "badge-red" : v > 5 ? "badge-amber" : "badge-green";
-          return <span className={cls}>{fmtPct(v)}</span>;
-        }
-      },
-      { key: "job_rate",           header: "Job Rate",          render: (r) => r.job_rate ? fmt(r.job_rate) : "—", align: "right" },
-      { key: "job_amount",         header: "Job Amount",        render: (r) => fmt(r.job_amount), align: "right", bold: true },
-      { key: "grey_purchase_rate", header: "Grey Rate",         render: (r) => r.grey_purchase_rate ? fmt(r.grey_purchase_rate) : "—", align: "right" },
-      { key: "grey_cost_actual",   header: "Grey Cost",         render: (r) => fmt(r.grey_cost_actual), align: "right" },
-      { key: "jw_allocated_cost",  header: "JW Alloc Cost",     render: (r) => fmt(r.jw_allocated_cost), align: "right" },
-      { key: "cumulative_cost_per_mtr", header: "Cumul Cost/m", render: (r) => r.cumulative_cost_per_mtr ? fmt(r.cumulative_cost_per_mtr) : "—", align: "right" },
-      { key: "stage_no",           header: "Stage No",          render: (r) => r.stage_no ?? "—", align: "right" },
-      { key: "process_type",       header: "Process Type",      render: (r) => r.process_type || "—" },
-      { key: "parent_lot_no",      header: "Parent Lot",        render: (r) => r.parent_lot_no || "—" },
-      { key: "quality_name",       header: "Quality",           render: (r) => r.quality_name || "—" },
-      { key: "narration",          header: "Narration",         render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "purchase_bills",
-    label: "Purchase Bills",
-    table: "purchase_bills",
-    dateCol: "bill_date",
-    searchCols: ["bill_number", "tally_voucher_no", "supplier_name", "supplier_invoice_no", "design_no"],
-    sumCols: ["total_amount", "quantity_mtrs"],
-    columns: [
-      { key: "bill_date",           header: "Date",            render: (r) => fmtDate(r.bill_date) },
-      { key: "bill_number",         header: "Bill No",         render: (r) => r.bill_number || "—" },
-      { key: "tally_voucher_no",    header: "Tally Vch No",    render: (r) => r.tally_voucher_no || "—" },
-      { key: "supplier_invoice_no", header: "Supp Inv No",     render: (r) => r.supplier_invoice_no || "—" },
-      { key: "supplier_name",       header: "Supplier",        render: (r) => r.supplier_name || r.party_name || "—", wide: true },
-      { key: "fabric_name",         header: "Fabric",          render: (r) => r.fabric_name || "—", wide: true },
-      { key: "design_no",           header: "Design No",       render: (r) => r.design_no || "—" },
-      { key: "batch_name",          header: "Batch",           render: (r) => r.batch_name || "—" },
-      { key: "hsn_code",            header: "HSN",             render: (r) => r.hsn_code || "—" },
-      { key: "quantity_mtrs",       header: "Qty (m)",         render: (r) => fmtQty(r.quantity_mtrs), align: "right" },
-      { key: "rate_per_mtr",        header: "Rate/m",          render: (r) => r.rate_per_mtr ? fmt(r.rate_per_mtr) : "—", align: "right" },
-      { key: "taxable_value",       header: "Taxable",         render: (r) => fmt(r.taxable_value), align: "right" },
-      { key: "cgst_amount",         header: "CGST",            render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",         header: "SGST",            render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",         header: "IGST",            render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "total_amount",        header: "Total Amt",       render: (r) => fmt(r.total_amount), align: "right", bold: true },
-      { key: "broker_name",         header: "Broker",          render: (r) => r.broker_name || "—" },
-      { key: "godown",              header: "Godown",          render: (r) => r.godown || "—" },
-      { key: "narration",           header: "Narration",       render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "jobwork_expenses",
-    label: "Jobwork / Exp",
-    table: "jobwork_expenses",
-    dateCol: "voucher_date",
-    searchCols: ["voucher_number", "supplier_invoice_no", "party_name"],
-    sumCols: ["party_amount", "total_amount"],
-    columns: [
-      { key: "voucher_date",         header: "Date",           render: (r) => fmtDate(r.voucher_date) },
-      { key: "voucher_number",       header: "Voucher No",     render: (r) => r.voucher_number || "—" },
-      { key: "voucher_type",         header: "Type",           render: (r) => r.voucher_type || "—" },
-      { key: "supplier_invoice_no",  header: "Supp Inv No",    render: (r) => r.supplier_invoice_no || "—" },
-      { key: "supplier_invoice_date",header: "Inv Date",       render: (r) => fmtDate(r.supplier_invoice_date) },
-      { key: "party_name",           header: "Party",          render: (r) => r.party_name || "—", wide: true },
-      { key: "party_gstin",          header: "GSTIN",          render: (r) => r.party_gstin || "—" },
-      { key: "expense_ledger",       header: "Expense Ledger", render: (r) => r.expense_ledger || "—", wide: true },
-      { key: "expense_amount",       header: "Exp Amount",     render: (r) => fmt(r.expense_amount), align: "right" },
-      { key: "tds_amount",           header: "TDS",            render: (r) => fmt(r.tds_amount), align: "right" },
-      { key: "cgst_amount",          header: "CGST",           render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",          header: "SGST",           render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",          header: "IGST",           render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "round_off",            header: "Round Off",      render: (r) => fmt(r.round_off), align: "right" },
-      { key: "total_amount",         header: "Total Amt",      render: (r) => fmt(r.total_amount), align: "right", bold: true },
-      { key: "party_amount",         header: "Party Amt",      render: (r) => fmt(r.party_amount), align: "right", bold: true },
-      { key: "bill_type",            header: "Bill Type",      render: (r) => r.bill_type || "—" },
-      { key: "place_of_supply",      header: "POS",            render: (r) => r.place_of_supply || "—" },
-      { key: "narration",            header: "Narration",      render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "debit_note",
-    label: "Debit Notes",
-    table: "debit_note",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "party_name", "original_bill_ref"],
-    sumCols: ["party_amount"],
-    columns: [
-      { key: "voucher_date",      header: "Date",            render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",  header: "Debit Note No",   render: (r) => r.tally_voucher_no || "—" },
-      { key: "party_name",        header: "Party",           render: (r) => r.party_name || "—", wide: true },
-      { key: "party_gstin",       header: "GSTIN",           render: (r) => r.party_gstin || "—" },
-      { key: "original_bill_ref", header: "Orig Bill",       render: (r) => r.original_bill_ref || "—" },
-      { key: "original_bill_date",header: "Orig Date",       render: (r) => fmtDate(r.original_bill_date) },
-      { key: "nature_of_return",  header: "Nature",          render: (r) => r.nature_of_return || "—" },
-      { key: "expense_ledger",    header: "Expense Ledger",  render: (r) => r.expense_ledger || "—", wide: true },
-      { key: "expense_amount",    header: "Exp Amount",      render: (r) => fmt(r.expense_amount), align: "right" },
-      { key: "cgst_amount",       header: "CGST",            render: (r) => fmt(r.cgst_amount), align: "right" },
-      { key: "sgst_amount",       header: "SGST",            render: (r) => fmt(r.sgst_amount), align: "right" },
-      { key: "igst_amount",       header: "IGST",            render: (r) => fmt(r.igst_amount), align: "right" },
-      { key: "round_off",         header: "Round Off",       render: (r) => fmt(r.round_off), align: "right" },
-      { key: "party_amount",      header: "Party Amt",       render: (r) => fmt(r.party_amount), align: "right", bold: true },
-      { key: "bill_ref",          header: "Bill Ref",        render: (r) => r.bill_ref || "—" },
-      { key: "place_of_supply",   header: "POS",             render: (r) => r.place_of_supply || "—" },
-      { key: "narration",         header: "Narration",       render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "accounting_vouchers",
-    label: "Acctg Vouchers",
-    table: "accounting_vouchers",
-    dateCol: "voucher_date",
-    searchCols: ["voucher_number", "voucher_type", "party_name", "bank_ledger", "dr_ledger"],
-    sumCols: ["total_amount"],
-    columns: [
-      { key: "voucher_date",    header: "Date",           render: (r) => fmtDate(r.voucher_date) },
-      { key: "voucher_number",  header: "Voucher No",     render: (r) => r.voucher_number || "—" },
-      { key: "voucher_type",    header: "Type",           render: (r) => r.voucher_type || "—" },
-      { key: "party_name",      header: "Party",          render: (r) => r.party_name || "—", wide: true },
-      { key: "dr_ledger",       header: "DR Ledger",      render: (r) => r.dr_ledger || "—", wide: true },
-      { key: "cr_ledger",       header: "CR Ledger",      render: (r) => r.cr_ledger || "—", wide: true },
-      { key: "dr_amount",       header: "DR Amount",      render: (r) => fmt(r.dr_amount), align: "right" },
-      { key: "cr_amount",       header: "CR Amount",      render: (r) => fmt(r.cr_amount), align: "right" },
-      { key: "total_amount",    header: "Total Amt",      render: (r) => fmt(r.total_amount), align: "right", bold: true },
-      { key: "bank_ledger",     header: "Bank Ledger",    render: (r) => r.bank_ledger || "—" },
-      { key: "payment_mode",    header: "Mode",           render: (r) => r.payment_mode || "—" },
-      { key: "instrument_no",   header: "Instrument No",  render: (r) => r.instrument_no || "—" },
-      { key: "instrument_date", header: "Instr Date",     render: (r) => fmtDate(r.instrument_date) },
-      { key: "payment_favouring",header: "Favouring",     render: (r) => r.payment_favouring || "—" },
-      { key: "bank_name",       header: "Bank",           render: (r) => r.bank_name || "—" },
-      { key: "account_number",  header: "Account No",     render: (r) => r.account_number || "—" },
-      { key: "entered_by",      header: "Entered By",     render: (r) => r.entered_by || "—" },
-      { key: "multi_bill",      header: "Multi-Bill",     render: (r) => r.multi_bill ? <span className="badge-amber">Yes</span> : "No" },
-      { key: "total_lines",     header: "Lines",          render: (r) => r.total_lines ?? "—", align: "right" },
-      { key: "narration",       header: "Narration",      render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "receipt_payment_lines",
-    label: "Receipt/Payment",
-    table: "receipt_payment_lines",
-    dateCol: "voucher_date",
-    searchCols: ["voucher_number", "voucher_type", "party_name", "bill_ref", "bank_ledger"],
-    sumCols: ["bill_amount"],
-    columns: [
-      { key: "voucher_date",   header: "Date",          render: (r) => fmtDate(r.voucher_date) },
-      { key: "voucher_number", header: "Voucher No",    render: (r) => r.voucher_number || "—" },
-      { key: "voucher_type",   header: "Type",          render: (r) => r.voucher_type || "—" },
-      { key: "party_name",     header: "Party",         render: (r) => r.party_name || "—", wide: true },
-      { key: "bill_ref",       header: "Bill Ref",      render: (r) => r.bill_ref || "—" },
-      { key: "bill_amount",    header: "Amount",        render: (r) => fmt(r.bill_amount), align: "right", bold: true },
-      { key: "bank_ledger",    header: "Bank Ledger",   render: (r) => r.bank_ledger || "—", wide: true },
-      { key: "payment_mode",   header: "Mode",          render: (r) => r.payment_mode || "—" },
-      { key: "instrument_no",  header: "Instr No",      render: (r) => r.instrument_no || "—" },
-      { key: "narration",      header: "Narration",     render: (r) => r.narration || "—", wide: true },
-    ],
-  },
-  {
-    key: "stock_journal",
-    label: "Stock Journal",
-    table: "stock_journal",
-    dateCol: "voucher_date",
-    searchCols: ["tally_voucher_no", "lot_no", "design_no", "grey_item_name", "finished_item_name"],
-    sumCols: ["finished_qty_mtrs"],
-    columns: [
-      { key: "voucher_date",       header: "Date",              render: (r) => fmtDate(r.voucher_date) },
-      { key: "tally_voucher_no",   header: "Tally Vch No",      render: (r) => r.tally_voucher_no || "—" },
-      { key: "lot_no",             header: "Lot No",            render: (r) => r.lot_no || "—" },
-      { key: "design_no",          header: "Design No",         render: (r) => r.design_no || "—" },
-      { key: "grey_item_name",     header: "Grey Item",         render: (r) => r.grey_item_name || "—", wide: true },
-      { key: "finished_item_name", header: "Finished Item",     render: (r) => r.finished_item_name || "—", wide: true },
-      { key: "grey_qty_mtrs",      header: "Grey Qty (m)",      render: (r) => fmtQty(r.grey_qty_mtrs), align: "right" },
-      { key: "finished_qty_mtrs",  header: "Finished Qty (m)",  render: (r) => fmtQty(r.finished_qty_mtrs), align: "right" },
-      { key: "short_qty_mtrs",     header: "Short (m)",         render: (r) => fmtQty(r.short_qty_mtrs), align: "right" },
-      { key: "shortage_pct",       header: "Shortage%",         render: (r) => fmtPct(r.shortage_pct), align: "right" },
-      { key: "quality_name",       header: "Quality",           render: (r) => r.quality_name || "—" },
-      { key: "narration",          header: "Narration",         render: (r) => r.narration || "—", wide: true },
-    ],
-  },
+const VOUCHER_TYPES = [
+  { key:'sales',       label:'Sales Bills',         table:'sales_bills',       icon:'📤', color:T.green,  conflict:'bill_number',                  dateField:'bill_date',    partyField:'customer_name',  amtField:'total_amount' },
+  { key:'purchase',    label:'Purchase Bills',       table:'purchase_bills',    icon:'📥', color:T.blue,   conflict:'bill_number',                  dateField:'bill_date',    partyField:'supplier_name',  amtField:'total_amount' },
+  { key:'grey',        label:'Grey Purchase',        table:'grey_purchase',     icon:'🧵', color:'#8B5CF6', conflict:'supplier_invoice_no,voucher_date', dateField:'voucher_date', partyField:'supplier_name',  amtField:'total_amount' },
+  { key:'issue',       label:'Issue to Mill',        table:'issue_to_mill',     icon:'🏭', color:'#C86020', conflict:'lot_no,voucher_date',           dateField:'voucher_date', partyField:'mill_name',      amtField:'amount' },
+  { key:'rec',         label:'REC from Mill',        table:'rec_from_mill',     icon:'🏗', color:'#E8A800', conflict:'party_challan_no,voucher_date', dateField:'voucher_date', partyField:'mill_name',      amtField:'gross_amount' },
+  { key:'process',     label:'Process Issues',       table:'process_issues',    icon:'⚙️', color:'#6B7280', conflict:'challan_no',                   dateField:'issue_date',   partyField:'worker_name',    amtField:'job_amount' },
+  { key:'jobwork',     label:'Jobwork & Expenses',   table:'jobwork_expenses',  icon:'🧾', color:'#9333EA', conflict:'voucher_number',               dateField:'voucher_date', partyField:'party_name',     amtField:'total_amount' },
+  { key:'financial',   label:'Financial Vouchers',   table:'accounting_vouchers',icon:'💰', color:T.teal,   conflict:'voucher_number,voucher_type',  dateField:'voucher_date', partyField:'party_name',     amtField:'total_amount' },
+  { key:'credit_note', label:'Credit Notes',         table:'credit_note',       icon:'📋', color:'#DB2777', conflict:'tally_voucher_no',             dateField:'voucher_date', partyField:'party_name',     amtField:'party_amount' },
+  { key:'debit_note',  label:'Debit Notes',          table:'debit_note',        icon:'📝', color:T.red,    conflict:'tally_voucher_no',             dateField:'voucher_date', partyField:'party_name',     amtField:'party_amount' },
+  { key:'stock_jnl',  label:'Stock Journals',        table:'stock_journal',     icon:'📒', color:'#4338CA', conflict:'tally_voucher_no',             dateField:'voucher_date', partyField:'grey_item_name', amtField:'grey_qty_mtrs' },
 ];
 
-// ─── Page Size ───────────────────────────────────────────────────────────────
-const PAGE_SIZE = 100;
+const N8N_WEBHOOK = 'https://n8n.shreerangtrendz.com/webhook/tally-sync';
+const TALLY_URL   = 'https://tally.shreerangtrendz.com';
 
-// ─── Main Component ──────────────────────────────────────────────────────────
-export default function TallyAccountingHub() {
-  const fy = getCurrentFY();
-  const [activeTab, setActiveTab] = useState(TAB_CONFIG[0].key);
-  const [dateFrom, setDateFrom] = useState(fy.from);
-  const [dateTo, setDateTo] = useState(fy.to);
-  const [search, setSearch] = useState("");
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(0);
+function getCurrentFY() {
+  const now = new Date();
+  const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return { from: `${yr}-04-01`, to: `${yr+1}-03-31`, label:`${yr}-${String(yr+1).slice(2)}` };
+}
 
-  const tab = TAB_CONFIG.find((t) => t.key === activeTab);
-
-  const fetchData = useCallback(async () => {
-    if (!tab) return;
-    setLoading(true);
-    setError(null);
-    try {
-      let q = supabase
-        .from(tab.table)
-        .select("*", { count: "exact" })
-        .gte(tab.dateCol, dateFrom)
-        .lte(tab.dateCol, dateTo)
-        .order(tab.dateCol, { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (search.trim()) {
-        const s = search.trim();
-        const orParts = tab.searchCols.map((c) => `${c}.ilike.%${s}%`).join(",");
-        q = q.or(orParts);
-      }
-
-      const { data, error: err, count } = await q;
-      if (err) throw err;
-      setRows(data || []);
-      setTotalCount(count || 0);
-    } catch (e) {
-      setError(e.message);
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, dateFrom, dateTo, search, page]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [activeTab, dateFrom, dateTo, search]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Summary sums
-  const sums = {};
-  tab?.sumCols.forEach((col) => {
-    sums[col] = rows.reduce((acc, r) => acc + (Number(r[col]) || 0), 0);
-  });
-
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-
+// ─── Stat Card ───────────────────────────────────────────────────
+function StatCard({ label, value, sub, color, icon }) {
   return (
-    <div className="hub-root">
-      {/* ── Header ── */}
-      <div className="hub-header">
-        <div className="hub-title">
-          <span className="hub-logo">SRTPL</span>
-          <h1>Tally Accounting Hub</h1>
-          <span className="hub-sub">SheeRang Trendz Pvt. Ltd.</span>
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px',borderTop:`3px solid ${color}`}}>
+      <div style={{fontSize:22,marginBottom:4}}>{icon}</div>
+      <div style={{fontSize:22,fontWeight:800,color:T.navy}}>{value}</div>
+      <div style={{fontSize:12,fontWeight:600,color:T.text}}>{label}</div>
+      {sub && <div style={{fontSize:10,color:T.muted,marginTop:2}}>{sub}</div>}
+    </div>
+  );
+}
+
+// ─── Voucher Type Card ───────────────────────────────────────────
+function VoucherCard({ vt, count, amount, lastSync, onView, fetching, onFetch }) {
+  return (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden',cursor:'pointer',transition:'box-shadow .15s'}}
+      onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'}
+      onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}>
+      <div style={{background:vt.color,padding:'10px 14px',display:'flex',alignItems:'center',gap:8}}>
+        <span style={{fontSize:18}}>{vt.icon}</span>
+        <span style={{color:'#fff',fontWeight:700,fontSize:13}}>{vt.label}</span>
+      </div>
+      <div style={{padding:'12px 14px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+          <div>
+            <div style={{fontSize:20,fontWeight:800,color:T.navy}}>{(count||0).toLocaleString()}</div>
+            <div style={{fontSize:10,color:T.muted}}>records</div>
+          </div>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:14,fontWeight:700,color:vt.color}}>{fmt(amount)}</div>
+            <div style={{fontSize:10,color:T.muted}}>total value</div>
+          </div>
         </div>
-        <div className="hub-controls">
-          <label>
-            From
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          </label>
-          <label>
-            To
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          </label>
-          <input
-            className="hub-search"
-            type="text"
-            placeholder="Search…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <button className="btn-refresh" onClick={fetchData} title="Refresh">
-            ⟳
+        <div style={{fontSize:10,color:T.muted,marginBottom:10}}>
+          Last sync: {lastSync ? fmtD(lastSync.slice(0,10)) : '—'}
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <button onClick={onView} style={{flex:1,background:T.tealLight,border:`1px solid ${T.border}`,borderRadius:6,padding:'6px 0',fontSize:11,fontWeight:600,color:T.navy,cursor:'pointer'}}>
+            View All
+          </button>
+          <button onClick={onFetch} disabled={fetching}
+            style={{flex:1,background:fetching?'#ccc':vt.color,border:'none',borderRadius:6,padding:'6px 0',fontSize:11,fontWeight:700,color:'#fff',cursor:fetching?'not-allowed':'pointer',opacity:fetching?.7:1}}>
+            {fetching?'Syncing…':'↓ Fetch'}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* ── Tab Bar ── */}
-      <div className="hub-tabs">
-        {TAB_CONFIG.map((t) => (
-          <button
-            key={t.key}
-            className={`hub-tab ${activeTab === t.key ? "active" : ""}`}
-            onClick={() => setActiveTab(t.key)}
-          >
+// ─── Design Costing Row ──────────────────────────────────────────
+function CostingRow({ row, expanded, onToggle }) {
+  const margin = Number(row.gross_margin_pct||0);
+  const marginColor = margin>20?T.green:margin>5?T.gold:T.red;
+  return (
+    <>
+      <tr onClick={onToggle} style={{cursor:'pointer',background:expanded?T.tealLight:'#fff',borderBottom:`1px solid ${T.border}`}}>
+        <td style={{padding:'8px 12px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            {row.primary_image_url
+              ? <img src={row.primary_image_url} style={{width:36,height:36,objectFit:'cover',borderRadius:4}} />
+              : <div style={{width:36,height:36,background:T.tealLight,borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14}}>🎨</div>}
+            <div>
+              <div style={{fontWeight:700,color:T.navy,fontSize:12}}>D No-{row.design_no}</div>
+              <div style={{fontSize:10,color:T.muted}}>{(row.finish_item_name||'').slice(0,30)}</div>
+            </div>
+          </div>
+        </td>
+        <td style={{padding:'8px 12px',fontSize:11}}>{row.mill_name||'—'}</td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'right'}}>{fmtQ(row.finish_qty_mtrs)}</td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'right',color:T.blue}}>{fmt(row.factory_cost_per_mtr||0)}/m</td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'right',color:T.green}}>{fmt(row.avg_selling_rate||0)}/m</td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'right',color:marginColor,fontWeight:700}}>
+          {pct(row.gross_margin_pct)}
+        </td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'right'}}>{fmtQ(row.unsold_qty_mtrs||0)}</td>
+        <td style={{padding:'8px 12px',fontSize:11,textAlign:'center'}}>
+          <span style={{fontSize:10}}>{expanded?'▲':'▼'}</span>
+        </td>
+      </tr>
+      {expanded && (
+        <tr style={{background:'#FAFFFE'}}>
+          <td colSpan={8} style={{padding:'0 12px 12px 12px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,paddingTop:8}}>
+              {[
+                ['Lot No',          row.lot_no||'—',                           T.text,  false],
+                ['Supplier',        row.supplier_name||'—',                    T.text,  false],
+                ['Supplier Invoice',row.supplier_invoice_no||'—',              T.blue,  true ],
+                ['Process Date',    fmtD(row.process_date),                    T.muted, false],
+                ['Grey Issued',     fmtQ(row.grey_issued_qty_mtrs),            T.text,  false],
+                ['Finish Received', fmtQ(row.finish_qty_mtrs),                 T.green, false],
+                ['Shortage',        fmtQ(row.short_qty_mtrs)+' ('+pct(row.shortage_pct)+')', T.red, false],
+                ['Grey Purchase Rate', fmt(row.grey_purchase_rate||0)+'/m',    T.blue,  false],
+                ['Grey Fabric Cost', fmt(row.grey_fabric_cost||0),             T.text,  false],
+                ['Mill Processing', fmt(row.mill_processing_cost||0)+' @'+fmt(row.mill_processing_rate||0)+'/m', T.text, false],
+                ['Total Batch Cost', fmt(row.total_batch_cost||0),             T.navy,  true ],
+                ['Factory Cost/m',  fmt(row.factory_cost_per_mtr||0),         T.red,   true ],
+                ['Sold Qty',        fmtQ(row.sold_qty_mtrs),                  T.green, false],
+                ['Gross Revenue',   fmt(row.gross_revenue||0),                 T.green, false],
+                ['Credit Note Adj', fmt(row.credit_note_adj||0),               T.red,   false],
+                ['Net Revenue',     fmt(row.net_revenue||0),                   T.green, true ],
+                ['Broker Comm',     fmt(row.broker_commission||0),             T.orange,false],
+                ['Avg Selling/m',   fmt(row.avg_selling_rate||0),              T.green, false],
+                ['Profit/m',        fmt(row.profit_per_mtr||0),                margin>0?T.green:T.red, true],
+                ['Sales Bills',     String(row.sales_bills_count||0),          T.muted, false],
+              ].map(([lbl,val,col,bold])=>(
+                <div key={lbl} style={{background:T.surface,borderRadius:6,padding:'6px 10px',border:`1px solid ${T.border}`}}>
+                  <div style={{fontSize:9,color:T.muted,textTransform:'uppercase',letterSpacing:'.5px'}}>{lbl}</div>
+                  <div style={{fontSize:12,fontWeight:bold?700:500,color:col,marginTop:1}}>{val}</div>
+                </div>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+export default function TallyAccountingHub() {
+  const fy = getCurrentFY();
+  const [stats, setStats]           = useState({});
+  const [loading, setLoading]       = useState(true);
+  const [syncing, setSyncing]       = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+  const [tab, setTab]               = useState('overview');   // overview | costing | vouchers
+  const [activeVoucherKey, setActiveVoucherKey] = useState(VOUCHER_TYPES[0].key);
+  const [fetchingKey, setFetchingKey] = useState(null);
+
+  // Costing
+  const [costing, setCosting]       = useState([]);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costExpanded, setCostExpanded] = useState(null);
+  const [costSearch, setCostSearch] = useState('');
+  const [costSort, setCostSort]     = useState('gross_margin_pct');
+
+  // Sync state
+  const [syncState, setSyncState]   = useState(null);
+  const [tallyStatus, setTallyStatus] = useState('checking');
+
+  const [dateFrom, setDateFrom]     = useState(fy.from);
+  const [dateTo, setDateTo]         = useState(fy.to);
+
+  // ─── Load table stats ──────────────────────────────────────────
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    const results = {};
+    await Promise.all(VOUCHER_TYPES.map(async vt => {
+      try {
+        const { count } = await supabase.from(vt.table).select('*',{count:'exact',head:true});
+        // Get max date and total
+        const { data } = await supabase.from(vt.table)
+          .select(`${vt.dateField},${vt.amtField}`)
+          .order(vt.dateField,{ascending:false}).limit(1);
+        const { data: totData } = await supabase.from(vt.table)
+          .select(vt.amtField).gte(vt.dateField, dateFrom).lte(vt.dateField, dateTo);
+        const total = (totData||[]).reduce((s,r)=>s+Number(r[vt.amtField]||0),0);
+        results[vt.key] = {
+          count: count||0,
+          lastSync: data?.[0]?.[vt.dateField],
+          amount: total
+        };
+      } catch { results[vt.key] = {count:0,lastSync:null,amount:0}; }
+    }));
+    setStats(results);
+
+    // Load sync state
+    try {
+      const { data } = await supabase.from('tally_sync_state')
+        .select('*').eq('sync_type','vouchers').single();
+      setSyncState(data);
+    } catch {}
+
+    setLoading(false);
+  }, [dateFrom, dateTo]);
+
+  // ─── Check Tally status ────────────────────────────────────────
+  const checkTally = useCallback(async () => {
+    setTallyStatus('checking');
+    try {
+      const r = await fetch(TALLY_URL, {method:'GET',signal:AbortSignal.timeout(5000)});
+      setTallyStatus(r.status < 500 ? 'online' : 'offline');
+    } catch { setTallyStatus('offline'); }
+  }, []);
+
+  // ─── Load design costing ───────────────────────────────────────
+  const loadCosting = useCallback(async () => {
+    setCostLoading(true);
+    try {
+      const { data, error } = await supabase.from('design_costing_v1')
+        .select('*').order(costSort, {ascending:false}).limit(200);
+      if (!error) setCosting(data||[]);
+    } catch {}
+    setCostLoading(false);
+  }, [costSort]);
+
+  useEffect(() => { loadStats(); checkTally(); }, [loadStats, checkTally]);
+  useEffect(() => { if (tab==='costing') loadCosting(); }, [tab, loadCosting]);
+
+  // ─── Trigger n8n sync ─────────────────────────────────────────
+  const triggerSync = async (fromDate, toDate) => {
+    setSyncing(true); setSyncResult(null);
+    try {
+      const r = await fetch(N8N_WEBHOOK, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ from: fromDate, to: toDate, trigger:'manual' })
+      });
+      const d = await r.json();
+      setSyncResult(d);
+      await loadStats();
+    } catch(e) { setSyncResult({error:e.message}); }
+    setSyncing(false);
+  };
+
+  // ─── Fetch single voucher type ─────────────────────────────────
+  const fetchVoucherType = async (vt) => {
+    setFetchingKey(vt.key);
+    await triggerSync(dateFrom, dateTo);
+    setFetchingKey(null);
+  };
+
+  // ─── KPIs ──────────────────────────────────────────────────────
+  const totalSales     = stats.sales?.amount||0;
+  const totalPurchase  = (stats.purchase?.amount||0) + (stats.grey?.amount||0);
+  const totalJobwork   = stats.jobwork?.amount||0;
+  const totalReceipts  = stats.financial?.amount||0;
+  const totalRecords   = VOUCHER_TYPES.reduce((s,vt)=>s+(stats[vt.key]?.count||0),0);
+
+  // ─── Costing filters ──────────────────────────────────────────
+  const filteredCosting = costing.filter(r =>
+    !costSearch || String(r.design_no).includes(costSearch) ||
+    (r.finish_item_name||'').toLowerCase().includes(costSearch.toLowerCase()) ||
+    (r.mill_name||'').toLowerCase().includes(costSearch.toLowerCase())
+  );
+
+  // Costing aggregates
+  const costAgg = filteredCosting.reduce((a,r)=>({
+    totalBatchCost: a.totalBatchCost+(Number(r.total_batch_cost)||0),
+    totalRevenue:   a.totalRevenue+(Number(r.net_revenue)||0),
+    totalUnsold:    a.totalUnsold+(Number(r.unsold_qty_mtrs)||0),
+    count: a.count+1
+  }),{totalBatchCost:0,totalRevenue:0,totalUnsold:0,count:0});
+  const overallMargin = costAgg.totalBatchCost>0
+    ? ((costAgg.totalRevenue-costAgg.totalBatchCost)/costAgg.totalBatchCost*100).toFixed(1)
+    : '—';
+
+  const tallyDot = tallyStatus==='online'?T.green:tallyStatus==='offline'?T.red:'#F59E0B';
+
+  return (
+    <div style={{minHeight:'100vh',background:T.bg,padding:'20px 24px',fontFamily:"'DM Sans',sans-serif"}}>
+      {/* Header */}
+      <div style={{marginBottom:24}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:800,color:T.navy,margin:0}}>⚡ Tally Accounting Hub</h1>
+            <p style={{fontSize:12,color:T.muted,margin:'4px 0 0'}}>All vouchers · Sync status · Design P&L · Push to Tally</p>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+            {/* Tally status */}
+            <div style={{display:'flex',alignItems:'center',gap:6,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:'6px 12px'}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:tallyDot,boxShadow:`0 0 6px ${tallyDot}`}} />
+              <span style={{fontSize:11,fontWeight:600,color:T.text}}>
+                Tally {tallyStatus==='checking'?'Checking…':tallyStatus==='online'?'Online':'Offline'}
+              </span>
+              <button onClick={checkTally} style={{background:'none',border:'none',cursor:'pointer',fontSize:11,color:T.teal,padding:0}}>↺</button>
+            </div>
+            {/* Sync state */}
+            {syncState && (
+              <div style={{fontSize:11,color:T.muted,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:'6px 12px'}}>
+                Last sync: {fmtD(syncState.last_synced_voucher_date)} · {(syncState.total_records_synced||0).toLocaleString()} records
+              </div>
+            )}
+            {/* Date range */}
+            <div style={{display:'flex',alignItems:'center',gap:4}}>
+              <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+                style={{fontSize:11,padding:'5px 8px',border:`1px solid ${T.border}`,borderRadius:6,color:T.text}} />
+              <span style={{fontSize:11,color:T.muted}}>to</span>
+              <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+                style={{fontSize:11,padding:'5px 8px',border:`1px solid ${T.border}`,borderRadius:6,color:T.text}} />
+            </div>
+            <button onClick={()=>triggerSync(dateFrom,dateTo)} disabled={syncing||tallyStatus!=='online'}
+              style={{background:syncing||tallyStatus!=='online'?'#ccc':T.teal,border:'none',borderRadius:8,padding:'8px 20px',color:'#fff',fontWeight:700,fontSize:12,cursor:syncing||tallyStatus!=='online'?'not-allowed':'pointer',display:'flex',alignItems:'center',gap:6}}>
+              <span style={{display:'inline-block',animation:syncing?'spin 1s linear infinite':'none'}}>⟳</span>
+              {syncing?'Syncing All…':'⚡ Sync All Now'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sync result banner */}
+      {syncResult && (
+        <div style={{marginBottom:16,background:syncResult.error?'#FEF2F2':syncResult.status==='success'?'#ECFDF5':'#FFF7ED',
+          border:`1px solid ${syncResult.error?T.red:syncResult.status==='success'?T.green:T.orange}`,
+          borderRadius:8,padding:'10px 16px',fontSize:12,display:'flex',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
+          <span style={{fontSize:16}}>{syncResult.error?'❌':syncResult.status==='success'?'✅':'⚠️'}</span>
+          {syncResult.error ? (
+            <span style={{color:T.red,fontWeight:600}}>{syncResult.error}</span>
+          ) : (
+            <div>
+              <div style={{fontWeight:700,color:T.navy,marginBottom:4}}>
+                Sync {syncResult.status} · {syncResult.batch}
+              </div>
+              {syncResult.synced && (
+                <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                  {Object.entries(syncResult.synced).map(([k,v])=>(
+                    <span key={k} style={{fontSize:10,color:T.muted}}>
+                      <strong style={{color:T.navy}}>{v}</strong> {k}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {syncResult.log && (
+                <details style={{marginTop:6}}>
+                  <summary style={{fontSize:10,color:T.teal,cursor:'pointer'}}>View sync log</summary>
+                  <pre style={{fontSize:9,color:T.muted,marginTop:4,maxHeight:120,overflow:'auto',background:'#f8f8f8',padding:6,borderRadius:4}}>
+                    {(syncResult.log||[]).join('\n')}
+                  </pre>
+                </details>
+              )}
+            </div>
+          )}
+          <button onClick={()=>setSyncResult(null)} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:T.muted,fontSize:16}}>×</button>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:`2px solid ${T.border}`}}>
+        {[
+          {key:'overview', label:'📊 Overview'},
+          {key:'costing',  label:'💹 Design Costing'},
+          {key:'vouchers', label:'📋 All Vouchers'},
+        ].map(t=>(
+          <button key={t.key} onClick={()=>setTab(t.key)}
+            style={{padding:'8px 20px',borderRadius:'8px 8px 0 0',border:`2px solid ${tab===t.key?T.teal:T.border}`,
+              borderBottom:'none',background:tab===t.key?T.teal:T.surface,color:tab===t.key?'#fff':T.text,
+              fontWeight:tab===t.key?700:500,fontSize:12,cursor:'pointer',marginBottom:-2}}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── Summary Bar ── */}
-      <div className="hub-summary">
-        <span className="summary-count">
-          {loading ? "Loading…" : `${totalCount.toLocaleString("en-IN")} records`}
-        </span>
-        {tab?.sumCols.map((col) => (
-          <span key={col} className="summary-item">
-            <span className="summary-label">
-              {tab.columns.find((c) => c.key === col)?.header || col}:
-            </span>
-            <span className="summary-val">
-              {col.includes("qty") || col.includes("mtrs")
-                ? fmtQty(sums[col])
-                : fmt(sums[col])}
-            </span>
-          </span>
-        ))}
-        {totalPages > 1 && (
-          <span className="summary-page">
-            Page {page + 1} / {totalPages}
-          </span>
-        )}
-      </div>
+      {/* ── TAB: OVERVIEW ── */}
+      {tab==='overview' && (
+        <>
+          {/* KPI Row */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
+            <StatCard label="Total Sales" value={fmt(totalSales)} sub={fy.label} color={T.green} icon="📤" />
+            <StatCard label="Total Purchases" value={fmt(totalPurchase)} sub="Grey + Bills" color={T.blue} icon="📥" />
+            <StatCard label="Jobwork Cost" value={fmt(totalJobwork)} sub="Mill processing" color={T.orange} icon="🏭" />
+            <StatCard label="Vouchers Synced" value={totalRecords.toLocaleString()} sub="All types" color={T.teal} icon="🔄" />
+            <StatCard label="Receipt Lines" value={loading?'…':'Ready'} sub="receipt_payment_lines" color={T.purple} icon="💰" />
+          </div>
 
-      {/* ── Error ── */}
-      {error && <div className="hub-error">⚠ {error}</div>}
+          {/* Voucher Type Cards */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+            {VOUCHER_TYPES.map(vt => (
+              <VoucherCard key={vt.key} vt={vt}
+                count={stats[vt.key]?.count||0}
+                amount={stats[vt.key]?.amount||0}
+                lastSync={stats[vt.key]?.lastSync}
+                fetching={fetchingKey===vt.key}
+                onFetch={()=>fetchVoucherType(vt)}
+                onView={()=>{setActiveVoucherKey(vt.key);setTab('vouchers');}}
+              />
+            ))}
+          </div>
 
-      {/* ── Table ── */}
-      <div className="hub-table-wrap">
-        <table className="hub-table">
-          <thead>
-            <tr>
-              {tab?.columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={[col.align === "right" ? "r" : "", col.wide ? "wide" : ""].join(" ")}
-                >
-                  {col.header}
-                </th>
+          {/* Info panel */}
+          <div style={{marginTop:20,background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'16px 20px'}}>
+            <h3 style={{fontSize:13,fontWeight:700,color:T.navy,margin:'0 0 12px'}}>📐 Key Business Relationships</h3>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:10}}>
+              {[
+                ['grey_purchase → issue_to_mill','lot_no links purchase to mill issue challan'],
+                ['issue_to_mill → rec_from_mill','grey_lot_no = lot_no links what was issued to what returned'],
+                ['rec_from_mill → jobwork_expenses','party_challan_no links receipt to mill\'s invoice'],
+                ['rec_from_mill → sales_bills','design_no links finished fabric to sale'],
+                ['sales_bills → receipt_payments','bill_number links invoice to customer payment'],
+                ['receipt_payment_lines','Per-bill breakdown with broker UDF fields for exact outstanding'],
+              ].map(([key,val])=>(
+                <div key={key} style={{background:T.tealLight,borderRadius:6,padding:'8px 12px'}}>
+                  <div style={{fontSize:10,fontWeight:700,color:T.teal,fontFamily:'monospace'}}>{key}</div>
+                  <div style={{fontSize:10,color:T.muted,marginTop:2}}>{val}</div>
+                </div>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={tab?.columns.length} className="hub-loading-cell">
-                  <div className="hub-spinner" />
-                  Loading…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={tab?.columns.length} className="hub-empty-cell">
-                  No records found for the selected filters.
-                </td>
-              </tr>
-            ) : (
-              rows.map((row, i) => (
-                <tr key={row.id || i} className={i % 2 === 0 ? "even" : "odd"}>
-                  {tab.columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={[col.align === "right" ? "r" : "", col.bold ? "bold-cell" : "", col.wide ? "wide" : ""].join(" ")}
-                    >
-                      {col.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* ── Pagination ── */}
-      {totalPages > 1 && (
-        <div className="hub-pagination">
-          <button disabled={page === 0} onClick={() => setPage(0)}>«</button>
-          <button disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
-          <span>
-            {page + 1} / {totalPages}
-          </span>
-          <button disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>›</button>
-          <button disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>»</button>
+      {/* ── TAB: DESIGN COSTING ── */}
+      {tab==='costing' && (
+        <div>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap'}}>
+            <input value={costSearch} onChange={e=>setCostSearch(e.target.value)}
+              placeholder="Search design no, fabric, mill…"
+              style={{flex:'1 1 200px',minWidth:0,padding:'8px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text}} />
+            <select value={costSort} onChange={e=>setCostSort(e.target.value)}
+              style={{padding:'8px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text,background:T.surface}}>
+              <option value="gross_margin_pct">Sort: Margin %</option>
+              <option value="profit_per_mtr">Sort: Profit/m</option>
+              <option value="total_batch_cost">Sort: Batch Cost</option>
+              <option value="net_revenue">Sort: Revenue</option>
+              <option value="process_date">Sort: Date</option>
+              <option value="unsold_qty_mtrs">Sort: Unsold Stock</option>
+            </select>
+            <button onClick={loadCosting} disabled={costLoading}
+              style={{background:T.teal,border:'none',borderRadius:8,padding:'8px 16px',color:'#fff',fontWeight:700,fontSize:12,cursor:'pointer'}}>
+              {costLoading?'Loading…':'⟳ Refresh'}
+            </button>
+          </div>
+
+          {/* Costing KPIs */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16}}>
+            <StatCard label="Designs" value={costAgg.count} sub="in range" color={T.teal} icon="🎨" />
+            <StatCard label="Total Batch Cost" value={fmt(costAgg.totalBatchCost)} sub="Grey+Job" color={T.red} icon="🏭" />
+            <StatCard label="Net Revenue" value={fmt(costAgg.totalRevenue)} sub="After CN" color={T.green} icon="💰" />
+            <StatCard label="Overall Margin" value={overallMargin+'%'} sub="(Revenue-Cost)/Cost" color={Number(overallMargin)>15?T.green:T.orange} icon="📊" />
+            <StatCard label="Unsold Stock" value={fmtQ(costAgg.totalUnsold)} sub="At factory cost" color={T.gold} icon="📦" />
+          </div>
+
+          {/* Costing Table */}
+          {costLoading ? (
+            <div style={{textAlign:'center',padding:40,color:T.muted}}>Loading design costing data…</div>
+          ) : filteredCosting.length === 0 ? (
+            <div style={{textAlign:'center',padding:40,color:T.muted}}>
+              No costing data found.{' '}
+              <button onClick={loadCosting} style={{color:T.teal,background:'none',border:'none',cursor:'pointer',textDecoration:'underline'}}>Refresh</button>
+            </div>
+          ) : (
+            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                <thead>
+                  <tr style={{background:T.navy}}>
+                    {['Design','Mill','Finish Qty','Cost/m','Sell/m','Margin %','Unsold',''].map(h=>(
+                      <th key={h} style={{padding:'10px 12px',color:'rgba(255,255,255,.8)',textAlign:['Finish Qty','Cost/m','Sell/m','Margin %','Unsold'].includes(h)?'right':'left',fontSize:10,fontWeight:700,letterSpacing:'.5px',textTransform:'uppercase'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCosting.map((row,i) => (
+                    <CostingRow key={row.design_no+(row.lot_no||'')+i} row={row}
+                      expanded={costExpanded===(row.design_no+row.lot_no)}
+                      onToggle={()=>setCostExpanded(costExpanded===(row.design_no+row.lot_no)?null:(row.design_no+row.lot_no))} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      <style>{`
-        .hub-root {
-          font-family: 'IBM Plex Mono', 'Courier New', monospace;
-          background: #0f1117;
-          color: #e2e8f0;
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-        }
+      {/* ── TAB: ALL VOUCHERS ── */}
+      {tab==='vouchers' && (
+        <VouchersDetailTab dateFrom={dateFrom} dateTo={dateTo} initialType={activeVoucherKey} />
+      )}
 
-        /* ── Header ── */
-        .hub-header {
-          display: flex;
-          align-items: center;
-          gap: 24px;
-          padding: 14px 20px;
-          background: #161b27;
-          border-bottom: 1px solid #2d3748;
-          flex-wrap: wrap;
-        }
-        .hub-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .hub-logo {
-          background: #f6ad55;
-          color: #1a202c;
-          font-weight: 700;
-          font-size: 11px;
-          padding: 3px 8px;
-          border-radius: 4px;
-          letter-spacing: 1px;
-        }
-        .hub-header h1 {
-          font-size: 16px;
-          font-weight: 600;
-          margin: 0;
-          color: #f7fafc;
-        }
-        .hub-sub {
-          font-size: 11px;
-          color: #718096;
-        }
-        .hub-controls {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-left: auto;
-          flex-wrap: wrap;
-        }
-        .hub-controls label {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          color: #a0aec0;
-        }
-        .hub-controls input[type="date"] {
-          background: #1a202c;
-          border: 1px solid #4a5568;
-          color: #e2e8f0;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-          font-family: inherit;
-        }
-        .hub-search {
-          background: #1a202c;
-          border: 1px solid #4a5568;
-          color: #e2e8f0;
-          padding: 5px 12px;
-          border-radius: 4px;
-          font-size: 12px;
-          font-family: inherit;
-          width: 200px;
-        }
-        .hub-search:focus, .hub-controls input[type="date"]:focus {
-          outline: none;
-          border-color: #f6ad55;
-        }
-        .btn-refresh {
-          background: #2d3748;
-          border: 1px solid #4a5568;
-          color: #e2e8f0;
-          padding: 5px 12px;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 16px;
-        }
-        .btn-refresh:hover { background: #4a5568; }
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
 
-        /* ── Tab Bar ── */
-        .hub-tabs {
-          display: flex;
-          gap: 2px;
-          padding: 0 20px;
-          background: #0d1117;
-          border-bottom: 1px solid #2d3748;
-          overflow-x: auto;
-          flex-shrink: 0;
-        }
-        .hub-tab {
-          background: none;
-          border: none;
-          border-bottom: 2px solid transparent;
-          color: #718096;
-          padding: 10px 14px;
-          font-size: 12px;
-          font-family: inherit;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: color 0.15s, border-color 0.15s;
-        }
-        .hub-tab:hover { color: #e2e8f0; }
-        .hub-tab.active {
-          color: #f6ad55;
-          border-bottom-color: #f6ad55;
-          font-weight: 600;
-        }
+/* ─── Per-tab column + header config (sourced from MASTER_REFERENCE) ─────── */
+const TAB_CONFIG = {
+  sales: {
+    title: 'Sales Bills',
+    subtitle: 'Tally → sales_bills · Key field: design_no (KEY 3 — links to REC from Mill)',
+    joinInfo: 'design_no → rec_from_mill.design_no · bill_number → credit_note.bill_ref · tally_voucher_no → receipt_payment_lines.bill_ref',
+    notes: '⚠ 1,067 bills have design_no = NULL (Primary Batch) — n8n not extracting stock allocation sub-screen. customer_id not populated from Tally.',
+    cols: [
+      { key:'bill_number',      label:'Bill No',          type:'text' },
+      { key:'bill_date',        label:'Bill Date',        type:'date' },
+      { key:'customer_name',    label:'Customer',         type:'text' },
+      { key:'design_no',        label:'Design No (KEY 3)',type:'key'  },
+      { key:'item_name',        label:'Item Name',        type:'text' },
+      { key:'quantity_mtrs',    label:'Qty (m)',          type:'qty'  },
+      { key:'rate_per_mtr',     label:'Rate/m',           type:'amt'  },
+      { key:'taxable_value',    label:'Taxable Value',    type:'amt'  },
+      { key:'total_amount',     label:'Total Amount',     type:'amt'  },
+      { key:'broker_name',      label:'Broker',           type:'text' },
+    ],
+  },
+  purchase: {
+    title: 'Purchase Bills',
+    subtitle: 'Tally → purchase_bills · Finished fabric purchases from market',
+    joinInfo: 'Standalone — not linked to job work chain. bill_number is the voucher identifier.',
+    notes: '950 records. No dedicated dedicated page currently exists for this table.',
+    cols: [
+      { key:'bill_number',      label:'Bill No',          type:'text' },
+      { key:'bill_date',        label:'Bill Date',        type:'date' },
+      { key:'supplier_name',    label:'Supplier',         type:'text' },
+      { key:'item_name',        label:'Item Name',        type:'text' },
+      { key:'quantity_mtrs',    label:'Qty (m)',          type:'qty'  },
+      { key:'rate',             label:'Rate/m',           type:'amt'  },
+      { key:'total_amount',     label:'Total Amount',     type:'amt'  },
+      { key:'tally_voucher_no', label:'Tally Voucher No', type:'text' },
+    ],
+  },
+  grey: {
+    title: 'Grey Purchase',
+    subtitle: 'Tally Purchase Voucher → grey_purchase · Key field: lot_no (KEY 1 — Grey Batch Identity)',
+    joinInfo: 'lot_no → issue_to_mill.lot_no (forward) · lot_no → rec_from_mill.grey_lot_no (end-to-end)',
+    notes: '⚠ lot_no is the single most important field — it links the entire chain from purchase → mill → finished fabric.',
+    cols: [
+      { key:'tally_voucher_no',     label:'Voucher No',          type:'text' },
+      { key:'voucher_date',         label:'Date',                type:'date' },
+      { key:'supplier_name',        label:'Supplier',            type:'text' },
+      { key:'lot_no',               label:'Lot No (KEY 1)',      type:'key'  },
+      { key:'item_name',            label:'Item Name',           type:'text' },
+      { key:'actual_qty_mtrs',      label:'Actual Qty (m)',      type:'qty'  },
+      { key:'billed_qty_mtrs',      label:'Billed Qty (m)',      type:'qty'  },
+      { key:'rate',                 label:'Rate/m',              type:'amt'  },
+      { key:'total_amount',         label:'Total Amount',        type:'amt'  },
+      { key:'process_mill_name',    label:'Process Mill',        type:'text' },
+    ],
+  },
+  issue: {
+    title: 'Issue to Mill',
+    subtitle: 'Tally Stock Journal → issue_to_mill · Key field: lot_no (KEY 1 — same as grey_purchase.lot_no)',
+    joinInfo: 'lot_no = grey_purchase.lot_no (backward KEY 1) · lot_no = rec_from_mill.grey_lot_no (forward KEY 1)',
+    notes: '⚠ qty_mtrs = 0 for many older entries — use grey_purchase.actual_qty_mtrs via lot_no join for actual metres. mill_name may be NULL — use destination_godown.',
+    cols: [
+      { key:'tally_voucher_no',   label:'Voucher No',        type:'text' },
+      { key:'voucher_date',       label:'Date',              type:'date' },
+      { key:'lot_no',             label:'Lot No (KEY 1)',    type:'key'  },
+      { key:'mill_name',          label:'Mill Name',         type:'text' },
+      { key:'destination_godown', label:'Destination (Mill Godown)', type:'text' },
+      { key:'item_name',          label:'Grey Item',         type:'text' },
+      { key:'qty_mtrs',           label:'Qty (m) ⚠use grey_purchase', type:'qty' },
+      { key:'amount',             label:'Amount',            type:'amt'  },
+      { key:'stage_no',           label:'Stage No',          type:'text' },
+      { key:'godown_name',        label:'Source Godown',     type:'text' },
+    ],
+  },
+  rec: {
+    title: 'REC from Mill',
+    subtitle: 'Tally Inventory Voucher → rec_from_mill · KEY 1 (grey_lot_no) + KEY 2 (party_challan_no) + KEY 3 born here (design_no)',
+    joinInfo: 'grey_lot_no = grey_purchase.lot_no (KEY 1) · party_challan_no = jobwork_expenses.supplier_invoice_no (KEY 2 ⚠BROKEN) · design_no = sales_bills.design_no (KEY 3)',
+    notes: '⚠ KNOWN BUG: mill_name NULL for 97% of rows — use job_godown instead. party_challan_no currently stores Reference No (wrong) — n8n v28 fix pending. design_no is BORN here in Destination batch.',
+    cols: [
+      { key:'tally_voucher_no',   label:'Voucher No',              type:'text' },
+      { key:'voucher_date',       label:'Date',                    type:'date' },
+      { key:'grey_lot_no',        label:'Grey Lot No (KEY 1)',      type:'key'  },
+      { key:'design_no',          label:'Design No (KEY 3 BORN HERE)', type:'key' },
+      { key:'party_challan_no',   label:'Party Challan No (KEY 2 ⚠)', type:'key' },
+      { key:'job_godown',         label:'Mill (job_godown)',        type:'text' },
+      { key:'finish_qty_mtrs',    label:'Finish Qty (m)',           type:'qty'  },
+      { key:'grey_issued_qty_mtrs', label:'Grey Issued (m)',        type:'qty'  },
+      { key:'job_amount',         label:'Job Amount (cost)',        type:'amt'  },
+      { key:'gross_amount',       label:'Gross Amount',            type:'amt'  },
+    ],
+  },
+  process: {
+    title: 'Process Issues',
+    subtitle: 'Tally Process Vouchers → process_issues · Challan-level fabric processing tracking',
+    joinInfo: 'challan_no is the conflict key. Links to internal process tracking workflow.',
+    notes: 'process_issues tracks individual challan-level detail. 14,409 records total across all challans.',
+    cols: [
+      { key:'challan_no',         label:'Challan No',        type:'text' },
+      { key:'issue_date',         label:'Issue Date',        type:'date' },
+      { key:'worker_name',        label:'Worker / Mill',     type:'text' },
+      { key:'item_name',          label:'Item',              type:'text' },
+      { key:'qty_mtrs',           label:'Qty (m)',           type:'qty'  },
+      { key:'job_amount',         label:'Job Amount',        type:'amt'  },
+      { key:'process_type',       label:'Process Type',      type:'text' },
+      { key:'godown_name',        label:'Godown',            type:'text' },
+    ],
+  },
+  jobwork: {
+    title: 'Jobwork & Expenses',
+    subtitle: 'Tally Purchase (Jobwork/Expenses type) → jobwork_expenses · KEY 2: supplier_invoice_no links to rec_from_mill.party_challan_no',
+    joinInfo: 'supplier_invoice_no = rec_from_mill.party_challan_no (KEY 2 ⚠PARTIALLY BROKEN) · Match also by: job_godown→mill_godown_map→party_name AND same voucher_date',
+    notes: '⚠ NO `amount` column — always use expense_amount. Two voucher_types: "Jobwork" and "Expenses". JW cost allocated proportionally: (finish_qty_mtrs / group_total_mtrs) × expense_amount.',
+    cols: [
+      { key:'voucher_number',      label:'Voucher No',          type:'text' },
+      { key:'voucher_date',        label:'Date',                type:'date' },
+      { key:'voucher_type',        label:'Type (Jobwork/Exp)', type:'badge' },
+      { key:'party_name',          label:'Mill / Party',        type:'text' },
+      { key:'supplier_invoice_no', label:'Supplier Inv No (KEY 2)', type:'key' },
+      { key:'supplier_invoice_date', label:'Supplier Inv Date', type:'date' },
+      { key:'expense_amount',      label:'Expense Amount',      type:'amt'  },
+      { key:'total_amount',        label:'Total (incl. GST)',   type:'amt'  },
+      { key:'recon_status',        label:'Recon Status',        type:'badge' },
+    ],
+  },
+  financial: {
+    title: 'Financial Vouchers',
+    subtitle: 'Tally Receipt / Payment / Contra / Journal → accounting_vouchers + receipt_payment_lines',
+    joinInfo: 'bill_allocations JSONB contains bill-wise settlement · receipt_payment_lines.bill_ref = sales_bills.tally_voucher_no (for outstanding)',
+    notes: 'Outstanding = sales_bills.total_amount − SUM(receipt_payment_lines.bill_amount WHERE voucher_type=Receipt). receipt_payment_lines data only from Jul-2024.',
+    cols: [
+      { key:'voucher_number',    label:'Voucher No',         type:'text' },
+      { key:'voucher_date',      label:'Date',               type:'date' },
+      { key:'voucher_type',      label:'Type',               type:'badge' },
+      { key:'party_name',        label:'Party',              type:'text' },
+      { key:'dr_ledger',         label:'Dr Ledger',          type:'text' },
+      { key:'cr_ledger',         label:'Cr Ledger',          type:'text' },
+      { key:'total_amount',      label:'Amount',             type:'amt'  },
+      { key:'payment_mode',      label:'Payment Mode',       type:'text' },
+      { key:'bank_ledger',       label:'Bank',               type:'text' },
+    ],
+  },
+  credit_note: {
+    title: 'Credit Notes',
+    subtitle: 'Tally Credit Note → credit_note (header) + credit_note_items · KEY 4: bill_ref links to sales_bills.bill_number',
+    joinInfo: 'bill_ref = sales_bills.bill_number (KEY 4) · credit_note_items.design_no = returned design (KEY 3 — may differ from original sale)',
+    notes: '⚠ design_no in credit_note_items = RETURNED design (not original sale design). 56% of CN items have NULL design_no — Tally batch not allocated in CN.',
+    cols: [
+      { key:'tally_voucher_no',    label:'Voucher No',         type:'text' },
+      { key:'voucher_date',        label:'Date',               type:'date' },
+      { key:'party_name',          label:'Customer',           type:'text' },
+      { key:'bill_ref',            label:'Against Bill (KEY 4)', type:'key' },
+      { key:'original_voucher_no', label:'Original Bill No',   type:'text' },
+      { key:'party_amount',        label:'Credit Amount',      type:'amt'  },
+      { key:'igst_amount',         label:'IGST',               type:'amt'  },
+      { key:'cgst_amount',         label:'CGST',               type:'amt'  },
+      { key:'sgst_amount',         label:'SGST',               type:'amt'  },
+    ],
+  },
+  debit_note: {
+    title: 'Debit Notes',
+    subtitle: 'Tally Debit Note → debit_note · Supplier returns / purchase deductions',
+    joinInfo: 'bill_ref links to original purchase bill. original_bill_ref for supplier reference.',
+    notes: '29 records. Used for grey fabric returns or purchase adjustments with suppliers.',
+    cols: [
+      { key:'tally_voucher_no',   label:'Voucher No',      type:'text' },
+      { key:'voucher_date',       label:'Date',            type:'date' },
+      { key:'party_name',         label:'Supplier',        type:'text' },
+      { key:'original_bill_ref',  label:'Original Bill',   type:'text' },
+      { key:'nature_of_return',   label:'Nature',          type:'text' },
+      { key:'expense_amount',     label:'Expense Amount',  type:'amt'  },
+      { key:'party_amount',       label:'Party Amount',    type:'amt'  },
+      { key:'narration',          label:'Narration',       type:'text' },
+    ],
+  },
+  stock_jnl: {
+    title: 'Stock Journals',
+    subtitle: 'Tally Stock Journal → stock_journal · Internal stock transfer / adjustment entries',
+    joinInfo: 'tally_voucher_no is the conflict key. Tracks grey fabric movements within godowns.',
+    notes: '25 records. Used for internal adjustments, godown transfers, and opening stock entries.',
+    cols: [
+      { key:'tally_voucher_no',  label:'Voucher No',      type:'text' },
+      { key:'voucher_date',      label:'Date',            type:'date' },
+      { key:'grey_item_name',    label:'Grey Item',       type:'text' },
+      { key:'grey_qty_mtrs',     label:'Grey Qty (m)',    type:'qty'  },
+      { key:'source_godown',     label:'Source Godown',   type:'text' },
+      { key:'dest_godown',       label:'Dest Godown',     type:'text' },
+      { key:'narration',         label:'Narration',       type:'text' },
+    ],
+  },
+};
 
-        /* ── Summary Bar ── */
-        .hub-summary {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          padding: 8px 20px;
-          background: #161b27;
-          border-bottom: 1px solid #2d3748;
-          font-size: 12px;
-          flex-wrap: wrap;
-          flex-shrink: 0;
-        }
-        .summary-count {
-          color: #a0aec0;
-          min-width: 120px;
-        }
-        .summary-item {
-          display: flex;
-          gap: 6px;
-          align-items: center;
-        }
-        .summary-label { color: #718096; }
-        .summary-val { color: #68d391; font-weight: 600; }
-        .summary-page { color: #718096; margin-left: auto; }
+/* ─── Vouchers Detail Tab ────────────────────────────────────────── */
+function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
+  const [activeType, setActiveType] = useState(initialType || VOUCHER_TYPES[0].key);
 
-        /* ── Error ── */
-        .hub-error {
-          background: #2d1515;
-          border: 1px solid #c53030;
-          color: #fc8181;
-          padding: 8px 20px;
-          font-size: 12px;
-        }
+  // Sync when parent changes initialType (e.g. "View All" from a specific card)
+  useEffect(() => { if (initialType) setActiveType(initialType); }, [initialType]);
+  const [rows, setRows]             = useState([]);
+  const [loading, setLoading]       = useState(false);
+  const [total, setTotal]           = useState(0);
+  const [page, setPage]             = useState(0);
+  const [search, setSearch]         = useState('');
+  const [expanded, setExpanded]     = useState(null);
+  const PAGE = 50;
 
-        /* ── Table ── */
-        .hub-table-wrap {
-          flex: 1;
-          overflow: auto;
-        }
-        .hub-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 12px;
-          table-layout: auto;
-        }
-        .hub-table thead {
-          position: sticky;
-          top: 0;
-          z-index: 10;
-        }
-        .hub-table thead tr {
-          background: #1a202c;
-        }
-        .hub-table th {
-          padding: 9px 12px;
-          text-align: left;
-          font-size: 11px;
-          font-weight: 600;
-          color: #f6ad55;
-          border-bottom: 2px solid #f6ad55;
-          white-space: nowrap;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-        }
-        .hub-table th.r { text-align: right; }
-        .hub-table th.wide { min-width: 160px; }
+  const vt  = VOUCHER_TYPES.find(v=>v.key===activeType);
+  const cfg = TAB_CONFIG[activeType];
+  const cols = cfg?.cols || [];
 
-        .hub-table td {
-          padding: 7px 12px;
-          border-bottom: 1px solid #1e2535;
-          color: #cbd5e0;
-          white-space: nowrap;
-          max-width: 240px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .hub-table td.r { text-align: right; }
-        .hub-table td.wide { white-space: nowrap; }
-        .hub-table td.bold-cell { color: #f7fafc; font-weight: 600; }
+  const load = useCallback(async (pg=0) => {
+    setLoading(true);
+    const from=pg*PAGE, to=from+PAGE-1;
+    const selectFields = cols.map(c=>c.key).join(',');
+    let q = supabase.from(vt.table)
+      .select(selectFields+',id',{count:'exact'})
+      .order(vt.dateField,{ascending:false})
+      .range(from,to);
+    if (dateFrom) q=q.gte(vt.dateField,dateFrom);
+    if (dateTo)   q=q.lte(vt.dateField,dateTo);
+    if (search)   q=q.or(`${vt.partyField}.ilike.%${search}%`);
+    const {data,count,error} = await q;
+    if (!error) { setRows(data||[]); setTotal(count||0); }
+    setPage(pg); setLoading(false);
+  }, [vt, cfg, dateFrom, dateTo, search]);
 
-        .hub-table tr.even td { background: #0f1117; }
-        .hub-table tr.odd td { background: #111724; }
-        .hub-table tr:hover td { background: #1a2338; }
+  useEffect(()=>{ setExpanded(null); setPage(0); load(0); }, [activeType, dateFrom, dateTo, search]);
 
-        .hub-loading-cell, .hub-empty-cell {
-          text-align: center;
-          padding: 40px;
-          color: #4a5568;
-        }
-        .hub-spinner {
-          display: inline-block;
-          width: 18px;
-          height: 18px;
-          border: 2px solid #4a5568;
-          border-top-color: #f6ad55;
-          border-radius: 50%;
-          animation: spin 0.7s linear infinite;
-          vertical-align: middle;
-          margin-right: 8px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+  // ─── Cell renderer ──────────────────────────────────────────────
+  function renderCell(col, val) {
+    if (val === null || val === undefined) return <span style={{color:T.muted}}>—</span>;
+    if (col.type==='date')  return <span style={{color:T.text}}>{fmtD(val)}</span>;
+    if (col.type==='amt')   return <span style={{color:T.navy,fontWeight:600}}>{fmt(val)}</span>;
+    if (col.type==='qty')   return <span style={{color:T.blue}}>{fmtQ(val)}</span>;
+    if (col.type==='key')   return (
+      <span style={{background:'#EEF4FF',color:'#2468C8',fontWeight:700,fontSize:10,padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>
+        {String(val).slice(0,30)}
+      </span>
+    );
+    if (col.type==='badge') {
+      const color = val==='matched'?T.green:val==='mismatch'?T.red:val==='Jobwork'?T.purple:val==='Expenses'?T.orange:T.muted;
+      return <span style={{background:color+'20',color,fontWeight:700,fontSize:9,padding:'2px 7px',borderRadius:10}}>{val}</span>;
+    }
+    return <span style={{color:T.text}}>{String(val).slice(0,45)}</span>;
+  }
 
-        /* ── Badges ── */
-        .null-badge {
-          color: #718096;
-          font-style: italic;
-          font-size: 11px;
-        }
-        .badge-red {
-          background: #2d1515;
-          color: #fc8181;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 11px;
-        }
-        .badge-amber {
-          background: #2d2515;
-          color: #fbd38d;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 11px;
-        }
-        .badge-green {
-          background: #152d1e;
-          color: #68d391;
-          padding: 2px 6px;
-          border-radius: 3px;
-          font-size: 11px;
-        }
+  return (
+    <div>
+      {/* ── Type selector ── */}
+      <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:16}}>
+        {VOUCHER_TYPES.map(v=>(
+          <button key={v.key} onClick={()=>{setActiveType(v.key);setSearch('');}}
+            style={{padding:'5px 12px',borderRadius:20,border:`1px solid ${activeType===v.key?v.color:T.border}`,
+              background:activeType===v.key?v.color:T.surface,color:activeType===v.key?'#fff':T.text,
+              fontSize:11,fontWeight:activeType===v.key?700:400,cursor:'pointer'}}>
+            {v.icon} {v.label}
+          </button>
+        ))}
+      </div>
 
-        /* ── Pagination ── */
-        .hub-pagination {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          justify-content: center;
-          padding: 10px;
-          background: #161b27;
-          border-top: 1px solid #2d3748;
-          font-size: 12px;
-          flex-shrink: 0;
-        }
-        .hub-pagination button {
-          background: #2d3748;
-          border: 1px solid #4a5568;
-          color: #e2e8f0;
-          padding: 4px 10px;
-          border-radius: 4px;
-          cursor: pointer;
-          font-family: inherit;
-        }
-        .hub-pagination button:disabled {
-          opacity: 0.35;
-          cursor: not-allowed;
-        }
-        .hub-pagination button:not(:disabled):hover { background: #4a5568; }
-        .hub-pagination span { color: #a0aec0; }
+      {/* ── Per-tab Header ── */}
+      {cfg && (
+        <div style={{background:T.surface,border:`2px solid ${vt.color}`,borderRadius:12,padding:'14px 18px',marginBottom:16}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+            <div style={{fontSize:26}}>{vt.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:4}}>
+                <h2 style={{margin:0,fontSize:16,fontWeight:800,color:T.navy}}>{cfg.title}</h2>
+                <span style={{background:vt.color,color:'#fff',fontSize:9,fontWeight:700,padding:'2px 8px',borderRadius:10,letterSpacing:'.5px'}}>
+                  {total.toLocaleString()} records
+                </span>
+              </div>
+              <div style={{fontSize:11,color:T.muted,marginBottom:6}}>{cfg.subtitle}</div>
+              <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
+                <div style={{flex:'1 1 300px',minWidth:0}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.teal,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:2}}>🔗 Join Keys</div>
+                  <div style={{fontSize:10,color:T.text,fontFamily:'monospace',background:T.tealLight,borderRadius:6,padding:'4px 8px'}}>{cfg.joinInfo}</div>
+                </div>
+                <div style={{flex:'1 1 260px',minWidth:0}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.orange,textTransform:'uppercase',letterSpacing:'.5px',marginBottom:2}}>⚠ Notes</div>
+                  <div style={{fontSize:10,color:T.text,background:'#FFF8ED',border:`1px solid ${T.orange}30`,borderRadius:6,padding:'4px 8px'}}>{cfg.notes}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-        /* ── Scrollbar ── */
-        .hub-table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
-        .hub-table-wrap::-webkit-scrollbar-track { background: #0f1117; }
-        .hub-table-wrap::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+      {/* ── Search bar ── */}
+      <div style={{display:'flex',gap:8,marginBottom:12}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder={`Search ${vt?.label}…`}
+          style={{flex:1,padding:'7px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:12}} />
+      </div>
 
-        /* ── Tab scroll ── */
-        .hub-tabs::-webkit-scrollbar { height: 4px; }
-        .hub-tabs::-webkit-scrollbar-track { background: #0d1117; }
-        .hub-tabs::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 2px; }
-      `}</style>
+      {loading ? (
+        <div style={{textAlign:'center',padding:40,color:T.muted}}>Loading…</div>
+      ) : rows.length === 0 ? (
+        <div style={{textAlign:'center',padding:40,color:T.muted}}>No records found for this period.</div>
+      ) : (
+        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+            <thead>
+              <tr style={{background:T.navy}}>
+                {cols.map(c=>(
+                  <th key={c.key} style={{
+                    padding:'9px 10px',color:'rgba(255,255,255,.85)',textAlign:'left',
+                    fontSize:9,textTransform:'uppercase',letterSpacing:'.5px',whiteSpace:'nowrap',
+                    ...(c.type==='key'?{background:'rgba(255,255,255,.08)',borderLeft:'2px solid rgba(255,255,255,.2)'}:{})
+                  }}>
+                    {c.label}
+                  </th>
+                ))}
+                <th style={{padding:'9px 10px',color:'rgba(255,255,255,.75)',fontSize:9,width:28}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row,i) => (
+                <>
+                  <tr key={row.id||i} onClick={()=>setExpanded(expanded===i?null:i)}
+                    style={{background:expanded===i?T.tealLight:i%2===0?'#fff':'#FAFFFE',cursor:'pointer',borderBottom:`1px solid ${T.border}`}}>
+                    {cols.map(c=>(
+                      <td key={c.key} style={{
+                        padding:'7px 10px',whiteSpace:'nowrap',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',
+                        ...(c.type==='key'?{borderLeft:`2px solid ${vt.color}30`,background:'#F8F9FF'}:{})
+                      }}>
+                        {renderCell(c, row[c.key])}
+                      </td>
+                    ))}
+                    <td style={{padding:'7px 10px',textAlign:'center',color:T.muted,fontSize:10}}>{expanded===i?'▲':'▼'}</td>
+                  </tr>
+                  {expanded===i && (
+                    <tr><td colSpan={cols.length+1} style={{padding:'0 10px 12px',background:'#FAFFFE'}}>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:5,paddingTop:8}}>
+                        {cols.map(c=>(
+                          <div key={c.key} style={{
+                            background:c.type==='key'?'#EEF4FF':T.surface,
+                            borderRadius:5,padding:'6px 10px',
+                            border:`1px solid ${c.type==='key'?vt.color:T.border}`
+                          }}>
+                            <div style={{fontSize:8,color:T.muted,textTransform:'uppercase',letterSpacing:'.4px',marginBottom:2}}>{c.label}</div>
+                            <div style={{fontSize:11}}>{renderCell(c, row[c.key])}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </td></tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+          {/* Pagination */}
+          {total > PAGE && (
+            <div style={{padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',borderTop:`1px solid ${T.border}`}}>
+              <button disabled={page===0} onClick={()=>load(page-1)}
+                style={{padding:'5px 14px',border:`1px solid ${T.border}`,borderRadius:6,cursor:page===0?'not-allowed':'pointer',background:T.surface,fontSize:11,color:T.text}}>← Prev</button>
+              <span style={{fontSize:11,color:T.muted}}>Page {page+1} of {Math.ceil(total/PAGE)}</span>
+              <button disabled={(page+1)*PAGE>=total} onClick={()=>load(page+1)}
+                style={{padding:'5px 14px',border:`1px solid ${T.border}`,borderRadius:6,cursor:(page+1)*PAGE>=total?'not-allowed':'pointer',background:T.surface,fontSize:11,color:T.text}}>Next →</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

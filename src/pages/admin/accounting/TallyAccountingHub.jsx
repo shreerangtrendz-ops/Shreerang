@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
 /* ══════════════════════════════════════════════════════════════════
@@ -586,12 +586,14 @@ const TAB_CONFIG = {
       { key:'tally_voucher_no',   label:'Voucher No',              type:'text' },
       { key:'voucher_date',       label:'Date',                    type:'date' },
       { key:'grey_lot_no',        label:'Grey Lot No (KEY 1)',      type:'key'  },
+      { key:'mapped_mill_name',   label:'Mill (Mapped via Issue)',  type:'text', synthetic:true },
+      { key:'mapped_jw_bill',     label:'Jobwork Bill (Mapped)',    type:'badge', synthetic:true },
       { key:'design_no',          label:'Design No (KEY 3 BORN HERE)', type:'key' },
       { key:'party_challan_no',   label:'Party Challan No (KEY 2 ⚠)', type:'key' },
       { key:'job_godown',         label:'Mill (job_godown)',        type:'text' },
       { key:'finish_qty_mtrs',    label:'Finish Qty (m)',           type:'qty'  },
       { key:'grey_issued_qty_mtrs', label:'Grey Issued (m)',        type:'qty'  },
-      { key:'job_amount',         label:'Job Amount (cost)',        type:'amt'  },
+      { key:'job_amount',         label:'Job Cost',                 type:'amt'  },
       { key:'gross_amount',       label:'Gross Amount',            type:'amt'  },
     ],
   },
@@ -716,7 +718,7 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
   const load = useCallback(async (pg=0) => {
     setLoading(true);
     const from=pg*PAGE, to=from+PAGE-1;
-    const selectFields = cols.map(c=>c.key).join(',');
+    const selectFields = cols.filter(c=>!c.synthetic).map(c=>c.key).join(',');
     let q = supabase.from(vt.table)
       .select(selectFields+',id',{count:'exact'})
       .order(vt.dateField,{ascending:false})
@@ -725,31 +727,56 @@ function VouchersDetailTab({ dateFrom, dateTo, initialType }) {
     if (dateTo)   q=q.lte(vt.dateField,dateTo);
     if (search)   q=q.or(`${vt.partyField}.ilike.%${search}%`);
     const {data,count,error} = await q;
-    if (!error) { setRows(data||[]); setTotal(count||0); }
+    
+    if (!error) { 
+      let finalData = data || [];
+      // Secondary lookups for REC tab
+      if (activeType === 'rec' && finalData.length > 0) {
+        const lotNos = [...new Set(finalData.map(r=>r.grey_lot_no).filter(Boolean))];
+        const challanNos = [...new Set(finalData.map(r=>r.party_challan_no).filter(Boolean))];
+
+        const [issuesRes, jwRes] = await Promise.all([
+          lotNos.length ? supabase.from('issue_to_mill').select('lot_no, mill_name').in('lot_no', lotNos) : {data:[]},
+          challanNos.length ? supabase.from('jobwork_expenses').select('supplier_invoice_no, voucher_number, total_amount').in('supplier_invoice_no', challanNos) : {data:[]}
+        ]);
+
+        const millMap = (issuesRes.data||[]).reduce((a,r)=>{ a[r.lot_no]=r.mill_name; return a; }, {});
+        const jwMap = (jwRes.data||[]).reduce((a,r)=>{ a[r.supplier_invoice_no]=r; return a; }, {});
+
+        finalData = finalData.map(r => ({
+          ...r,
+          mapped_mill_name: millMap[r.grey_lot_no] || '—',
+          mapped_jw_bill: jwMap[r.party_challan_no] ? `${jwMap[r.party_challan_no].voucher_number}` : null
+        }));
+      }
+
+      setRows(finalData); 
+      setTotal(count||0); 
+    }
     setPage(pg); setLoading(false);
-  }, [vt, cfg, dateFrom, dateTo, search]);
+  }, [vt, cols, dateFrom, dateTo, search, activeType]);
 
   useEffect(()=>{ setExpanded(null); setPage(0); load(0); }, [activeType, dateFrom, dateTo, search]);
 
   // ─── Cell renderer ──────────────────────────────────────────────
-  // ─── Cell renderer ──────────────────────────────────────────────
-function renderCell(col, val) {
+  function renderCell(col, val) {
   if (val === null || val === undefined) return <span style={{color:T.muted}}>—</span>;
   if (col.type==='date')  return <span style={{color:T.text}}>{fmtD(val)}</span>;
   if (col.type==='amt') {
     const num = Number(val||0);
-    const color = num < 0 ? T.red : T.navy;
-    return <span style={{color, fontWeight:600}}>{num < 0 ? '-' : ''}{fmt(Math.abs(num))}</span>;
+    // User requested: "Why is job amount negative". Convert to positive, show as a cost.
+    return <span style={{color: T.navy, fontWeight:600}}>{fmt(Math.abs(num))}</span>;
   }
   if (col.type==='qty')   return <span style={{color:T.blue}}>{fmtQ(val)}</span>;
   if (col.type==='key')   return (
-    <span style={{background:'#EEF4FF',color:'#2468C8',fontWeight:700,fontSize:10,padding:'2px 6px',borderRadius:4,fontFamily:'monospace'}}>
+    <span style={{background:'#EEF4FF',color:'#2468C8',fontWeight:700,fontSize:11,padding:'3px 6px',borderRadius:4,fontFamily:'monospace'}}>
       {String(val).slice(0,30)}
     </span>
   );
   if (col.type==='badge') {
-    const color = val==='matched'?T.green:val==='mismatch'?T.red:val==='Jobwork'?T.purple:val==='Expenses'?T.orange:T.muted;
-    return <span style={{background:color+'20',color,fontWeight:700,fontSize:9,padding:'2px 7px',borderRadius:10}}>{val}</span>;
+    const isJobwork = String(val).includes('JB-') || val === 'Jobwork';
+    const color = val==='matched'?T.green:val==='mismatch'?T.red:isJobwork?T.purple:val==='Expenses'?T.orange:T.muted;
+    return <span style={{background:color+'20',color,fontWeight:700,fontSize:10,padding:'3px 8px',borderRadius:10}}>{val}</span>;
   }
   return <span style={{color:T.text}}>{String(val).slice(0,45)}</span>;
 }
@@ -809,13 +836,14 @@ function renderCell(col, val) {
         <div style={{textAlign:'center',padding:40,color:T.muted}}>No records found for this period.</div>
       ) : (
         <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
-              <tr style={{background:T.navy}}>
+              <tr>
                 {cols.map(c=>(
                   <th key={c.key} style={{
                     padding:'10px 12px',
                     color:'#ffffff',
+                    background: T.navy,
                     textAlign: c.type==='amt'||c.type==='qty' ? 'right' : 'left',
                     fontSize:11,
                     fontWeight:700,
@@ -824,7 +852,7 @@ function renderCell(col, val) {
                     whiteSpace:'nowrap',
                     borderRight:`1px solid rgba(255,255,255,.07)`,
                     ...(c.type==='key' ? {
-                      background:'rgba(255,255,255,.12)',
+                      background:'#092321', // Darker navy for keys
                       borderLeft:'3px solid rgba(255,255,255,.35)',
                       color:'#C5F0E8',
                     } : {}),
@@ -832,17 +860,17 @@ function renderCell(col, val) {
                     {c.label}
                   </th>
                 ))}
-                <th style={{padding:'10px 12px',color:'rgba(255,255,255,.5)',fontSize:11,fontWeight:700,width:32,textAlign:'center'}}>⋮</th>
+                <th style={{padding:'10px 12px',color:'rgba(255,255,255,.5)',background:T.navy,fontSize:11,fontWeight:700,width:32,textAlign:'center'}}>⋮</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row,i) => (
-                <>
-                  <tr key={row.id||i} onClick={()=>setExpanded(expanded===i?null:i)}
+                <React.Fragment key={row.id||i}>
+                  <tr onClick={()=>setExpanded(expanded===i?null:i)}
                     style={{background:expanded===i?T.tealLight:i%2===0?'#fff':'#FAFFFE',cursor:'pointer',borderBottom:`1px solid ${T.border}`}}>
                     {cols.map(c=>(
                       <td key={c.key} style={{
-                        padding:'7px 10px',whiteSpace:'nowrap',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',
+                        padding:'9px 12px',whiteSpace:'nowrap',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',
                         ...(c.type==='key'?{borderLeft:`2px solid ${vt.color}30`,background:'#F8F9FF'}:{})
                       }}>
                         {renderCell(c, row[c.key])}
@@ -866,7 +894,7 @@ function renderCell(col, val) {
                       </div>
                     </td></tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>

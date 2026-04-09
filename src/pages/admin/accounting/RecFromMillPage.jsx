@@ -1,295 +1,505 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
-
-// ═══════════════════════════════════════════════════════════════════
-// REC FROM MILL PAGE (DEDICATED)
-// Data Source: rec_from_mill table
-// Goal: Provide full visibility into the crucial REC voucher where
-//       "design_no" is born and final cost per meter is calculated.
-// ═══════════════════════════════════════════════════════════════════
+import OriginPanel from '../../../components/accounting/OriginPanel';
 
 const T = {
-  teal:'#2BA898', tealLight:'#EEF8F6',
-  red:'#D93025', redLight:'#FFF5F5',
-  orange:'#E67E22', orangeLight:'#FFF8F0',
+  teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6', teal100:'#9FE1CB',
   gold:'#E8A800', goldLight:'#FFF8E8',
-  green:'#1E9E5A', greenLight:'#E8FFF4',
+  navy:'#0B2E2B', green:'#1E9E5A', greenLight:'#E8FFF4',
   blue:'#2468C8', blueLight:'#EBF8FF',
-  muted:'#6A9B95', border:'#D0EDE8',
-  bg:'#F0F9F7', surface:'#FFFFFF', text:'#0B2E2B',
+  red:'#D93025', redLight:'#FFF5F5',
+  orange:'#E67E22', orangeLight:'#FFF3E8',
+  border:'#D0EDE8', bg:'#F0F9F7', surface:'#FFFFFF',
+  text:'#0B2E2B', textMuted:'#6A9B95', textFaint:'#A8C9C3',
 };
 
-const fmt  = n => n ? '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits:0}) : '—';
-const fmtQ = n => n ? Number(n).toLocaleString('en-IN', {maximumFractionDigits:1})+'m' : '—';
-const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'2-digit'}) : '—';
+const fmt    = n => '₹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
+const fmtL   = n => { const v=Math.abs(Number(n||0)); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(1)}L`:'₹'+v.toLocaleString('en-IN',{maximumFractionDigits:0}); };
+const fmtMtr = n => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+const PAGE = 50;
+const FY_YEARS = [2022,2023,2024,2025,2026];
 
-function KPICard({ label, value, sub, color }) {
+function getCurrentFY() {
+  const now = new Date();
+  const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1;
+  return { from:`${yr}-04-01`, to:`${yr+1}-03-31`, yr };
+}
+
+function cleanDesignNo(val) {
+  if (!val) return '—';
+  return val.replace(/^D\s*No\.?\s*/i,'').trim() || val;
+}
+
+function Badge({label, color=T.teal, bg}) {
   return (
-    <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12,
-      padding:'14px 18px', borderTop:`3px solid ${color}` }}>
-      <div style={{ fontSize:10, color:T.muted, fontWeight:700, textTransform:'uppercase', marginBottom:6 }}>{label}</div>
-      <div style={{ fontSize:22, fontWeight:800, color:T.text }}>{value}</div>
-      {sub && <div style={{ fontSize:11, color:T.muted, marginTop:3 }}>{sub}</div>}
+    <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,
+      background:bg||color+'22',color,letterSpacing:.3}}>
+      {label}
+    </span>
+  );
+}
+
+function SummaryCard({label, value, sub, color=T.teal}) {
+  return (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,
+      padding:'14px 18px',borderTop:`3px solid ${color}`}}>
+      <div style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
+        letterSpacing:.6,marginBottom:6}}>{label}</div>
+      <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:22,color:T.text,lineHeight:1}}>{value}</div>
+      {sub && <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{sub}</div>}
     </div>
   );
 }
 
+function ReconBadge({status}) {
+  if (!status || status === 'pending')
+    return <Badge label="PENDING"  color={T.orange} bg={T.orangeLight}/>;
+  if (status === 'matched')
+    return <Badge label="MATCHED"  color={T.green}  bg={T.greenLight}/>;
+  if (status === 'mismatch')
+    return <Badge label="MISMATCH" color={T.red}    bg={T.redLight}/>;
+  return <Badge label={status.toUpperCase()} color={T.textMuted}/>;
+}
+
+const COLS = '130px 85px 1fr 90px 80px 105px 95px 95px 85px 30px';
+const HDRS = ['Voucher / Date','Design','Lot → Mill','Finish m','Short %','Job Amt','JW Alloc','Cost/m','Status',''];
+
 export default function RecFromMillPage() {
-  const [rows, setRows]     = useState([]);
-  const [loading, setLoading]  = useState(true);
-  const [expanded, setExpanded] = useState(null);
-  
-  // Filters
-  const [millFilter, setMillFilter]   = useState('all');
-  const [search, setSearch]       = useState('');
-  
-  // Summary
-  const [summary, setSummary] = useState({ total_designs:0, total_mtrs:0, total_shortage:0, high_shortages:0 });
+  const fy = getCurrentFY();
+  const [rows, setRows]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage]             = useState(0);
+  const [expanded, setExpanded]     = useState(null);
+  const [activeFY, setActiveFY]     = useState(fy.yr);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('rec_from_mill')
-      .select('*')
-      .order('voucher_date', { ascending: false })
-      .limit(2000); // Prevent massive payloads
+  const [dateFrom, setDateFrom]           = useState(fy.from);
+  const [dateTo, setDateTo]               = useState(fy.to);
+  const [godownFilter, setGodownFilter]   = useState('');
+  const [processFilter, setProcessFilter] = useState('');
+  const [reconFilter, setReconFilter]     = useState('');
+  const [highShortOnly, setHighShortOnly] = useState(false);
+  const [search, setSearch]               = useState('');
 
-    const d = data || [];
-    setRows(d);
-    
-    // Calculate summary
-    setSummary({
-      total_designs: new Set(d.map(r=>r.design_no).filter(Boolean)).size,
-      total_mtrs: d.reduce((s,r)=>s+Number(r.finish_qty_mtrs||0),0),
-      total_shortage: d.reduce((s,r)=>s+Number(r.shortage_mtrs||0),0),
-      high_shortages: d.filter(r=>Number(r.shortage_pct||0) > 15).length
+  const [summary, setSummary]           = useState({count:0,totalMtrs:0,avgShortage:0,totalJwCost:0});
+  const [godownOptions, setGodownOptions] = useState([]);
+  const [processOptions, setProcessOptions] = useState([]);
+
+  // Load dropdown options once on mount
+  useEffect(() => {
+    supabase.from('rec_from_mill').select('job_godown').then(({data}) => {
+      if (data) setGodownOptions([...new Set(data.map(r=>r.job_godown).filter(Boolean))].sort());
     });
-    setLoading(false);
+    supabase.from('rec_from_mill').select('process_type').then(({data}) => {
+      if (data) setProcessOptions([...new Set(data.map(r=>r.process_type).filter(Boolean))].sort());
+    });
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const setFY = yr => {
+    setActiveFY(yr);
+    setDateFrom(`${yr}-04-01`);
+    setDateTo(`${yr+1}-03-31`);
+    setPage(0);
+  };
 
-  const allMills = [...new Set(rows.map(r=>r.job_godown).filter(Boolean))].sort();
+  // Shared filter builder applied to any Supabase query
+  const applyFilters = useCallback((q) => {
+    if (dateFrom)      q = q.gte('voucher_date', dateFrom);
+    if (dateTo)        q = q.lte('voucher_date', dateTo);
+    if (godownFilter)  q = q.eq('job_godown', godownFilter);
+    if (processFilter) q = q.eq('process_type', processFilter);
+    if (reconFilter)   q = q.eq('recon_status', reconFilter);
+    if (highShortOnly) q = q.gt('shortage_pct', 15);
+    if (search)        q = q.or([
+      `design_no.ilike.%${search}%`,
+      `grey_lot_no.ilike.%${search}%`,
+      `tally_voucher_no.ilike.%${search}%`,
+      `party_challan_no.ilike.%${search}%`,
+    ].join(','));
+    return q;
+  }, [dateFrom, dateTo, godownFilter, processFilter, reconFilter, highShortOnly, search]);
 
-  const filtered = rows.filter(r => {
-    if (millFilter !== 'all' && r.job_godown !== millFilter) return false;
-    if (search) {
-      const sq = search.toLowerCase();
-      return (r.design_no||'').toLowerCase().includes(sq)
-          || (r.grey_lot_no||'').toLowerCase().includes(sq)
-          || (r.tally_voucher_no||'').toLowerCase().includes(sq)
-          || (r.party_challan_no||'').toLowerCase().includes(sq);
+  const fetchRows = useCallback(async (pg=0) => {
+    setLoading(true);
+    const from = pg*PAGE, to = from+PAGE-1;
+    let q = supabase.from('rec_from_mill')
+      .select('*', {count:'exact'})
+      .order('voucher_date', {ascending:false})
+      .range(from, to);
+    q = applyFilters(q);
+    const {data, error, count} = await q;
+    if (!error) { setRows(data||[]); setTotalCount(count||0); }
+    setPage(pg);
+    setLoading(false);
+  }, [applyFilters]);
+
+  const fetchSummary = useCallback(async () => {
+    let q = supabase.from('rec_from_mill')
+      .select('finish_qty_mtrs,shortage_pct,jw_allocated_cost');
+    q = applyFilters(q);
+    const {data} = await q;
+    if (data) {
+      const withShort = data.filter(r => r.shortage_pct != null);
+      setSummary({
+        count:       data.length,
+        totalMtrs:   data.reduce((s,r) => s + Math.abs(Number(r.finish_qty_mtrs||0)), 0),
+        avgShortage: withShort.length
+          ? withShort.reduce((s,r) => s + Number(r.shortage_pct||0), 0) / withShort.length
+          : 0,
+        totalJwCost: data.reduce((s,r) => s + Math.abs(Number(r.jw_allocated_cost||0)), 0),
+      });
     }
-    return true;
-  });
+  }, [applyFilters]);
 
-  const TH = ({ l, r }) => (
-    <th style={{ padding:'10px 12px', textAlign:r?'right':'left', fontSize:10, fontWeight:700,
-      color:T.muted, textTransform:'uppercase', letterSpacing:.4,
-      borderBottom:`1px solid ${T.border}`, background:T.bg, whiteSpace:'nowrap' }}>{l}</th>
-  );
+  useEffect(() => { fetchRows(0); fetchSummary(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function runFilters()  { fetchRows(0); fetchSummary(); }
+  function resetFilters() {
+    setSearch(''); setGodownFilter(''); setProcessFilter('');
+    setReconFilter(''); setHighShortOnly(false);
+    const f = getCurrentFY();
+    setActiveFY(f.yr); setDateFrom(f.from); setDateTo(f.to);
+    setTimeout(() => { fetchRows(0); fetchSummary(); }, 0);
+  }
+
+  const totalPages = Math.ceil(totalCount / PAGE);
 
   return (
-    <div style={{ fontFamily:"'DM Sans',sans-serif", background:T.bg, minHeight:'100vh', padding:'20px 24px' }}>
+    <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
+
       {/* Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div>
-          <h1 style={{ fontSize:22, fontWeight:800, color:T.text, margin:0 }}>🏭 Receive From Mill (Finished Goods)</h1>
-          <p style={{ color:T.muted, fontSize:12, margin:'4px 0 0' }}>
-            Track finished design batches, actual shortage %, and allocated processing costs directly from Tally.
-          </p>
+          <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,color:T.text,margin:0}}>
+            Receive From Mill
+          </h1>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
+            Design born here · cumulative cost per metre · V-04 REC voucher data from Tally
+          </div>
         </div>
-        <button onClick={load} style={{ padding:'8px 14px', background:T.teal, color:'#fff',
-          border:'none', borderRadius:8, fontWeight:600, fontSize:12, cursor:'pointer' }}>
-          🔄 Refresh Data
-        </button>
+        <Badge label={`${totalCount.toLocaleString()} records`} color={T.teal} bg={T.tealLight}/>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
-        <KPICard label="Finished Batches" value={filtered.length} sub={`${summary.total_designs} unique designs`} color={T.blue}/>
-        <KPICard label="Total Finish Qty" value={fmtQ(summary.total_mtrs)} sub="Total metres received" color={T.green}/>
-        <KPICard label="Overall Shortage" value={fmtQ(summary.total_shortage)} sub="Total mtrs lost in process" color={T.orange}/>
-        <KPICard label="⚠️ High Shortage (>15%)" value={summary.high_shortages} sub="Batches needing attention" color={T.red}/>
+      {/* FY Tabs */}
+      <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,
+        borderRadius:8,padding:4,width:'fit-content'}}>
+        {FY_YEARS.map(yr => (
+          <button key={yr} onClick={() => setFY(yr)}
+            style={{padding:'5px 12px',borderRadius:6,border:'none',cursor:'pointer',fontSize:12,
+              fontWeight:700,transition:'all .15s',
+              background:activeFY===yr?T.teal:'transparent',
+              color:activeFY===yr?'#fff':T.textMuted}}>
+            FY {yr.toString().slice(2)}-{(yr+1).toString().slice(2)}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary Cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+        <SummaryCard
+          label="Total Records"
+          value={summary.count.toLocaleString('en-IN')}
+          sub="REC vouchers in period"
+          color={T.teal}
+        />
+        <SummaryCard
+          label="Total Finish Qty"
+          value={fmtMtr(summary.totalMtrs)}
+          sub="metres received from mills"
+          color={T.blue}
+        />
+        <SummaryCard
+          label="Avg Shortage"
+          value={summary.avgShortage ? `${summary.avgShortage.toFixed(1)}%` : '—'}
+          sub="average across batches"
+          color={T.orange}
+        />
+        <SummaryCard
+          label="Total JW Alloc Cost"
+          value={fmtL(summary.totalJwCost)}
+          sub="allocated job work cost"
+          color={T.gold}
+        />
       </div>
 
       {/* Filters */}
-      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10,
-        padding:'10px 14px', marginBottom:16, display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
-        
-        <div style={{ flex:'1 1 200px' }}>
-          <div style={{ fontSize:10, color:T.muted, fontWeight:700, marginBottom:3, textTransform:'uppercase' }}>Search Design or Lot</div>
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,
+        padding:'14px 18px',marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+
+        <div style={{flex:'1 1 180px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+            textTransform:'uppercase',letterSpacing:.4}}>Search</div>
           <input value={search} onChange={e=>setSearch(e.target.value)}
-            placeholder="Design no, Lot no, voucher…"
-            style={{ width:'100%', padding:'7px 10px', border:`1px solid ${T.border}`,
-              borderRadius:7, fontSize:12, outline:'none', boxSizing:'border-box' }}/>
+            placeholder="Design, lot, voucher, challan…"
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+              fontSize:12,color:T.text,background:'#fff',outline:'none',boxSizing:'border-box'}}/>
         </div>
 
-        <div style={{ flex:'1 1 200px' }}>
-          <div style={{ fontSize:10, color:T.muted, fontWeight:700, marginBottom:3, textTransform:'uppercase' }}>Filter by Job Godown (Mill)</div>
-          <select value={millFilter} onChange={e=>setMillFilter(e.target.value)}
-            style={{ width:'100%', padding:'7px 10px', border:`1px solid ${T.border}`,
-              borderRadius:7, fontSize:12, background:'#fff', outline:'none' }}>
-            <option value="all">All Godowns</option>
-            {allMills.map(m=><option key={m} value={m}>{m}</option>)}
+        <div style={{flex:'1 1 150px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+            textTransform:'uppercase',letterSpacing:.4}}>Job Godown</div>
+          <select value={godownFilter} onChange={e=>setGodownFilter(e.target.value)}
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+              fontSize:12,background:'#fff',color:T.text,outline:'none'}}>
+            <option value="">All Godowns</option>
+            {godownOptions.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
         </div>
+
+        {processOptions.length > 0 && (
+          <div style={{flex:'1 1 140px'}}>
+            <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+              textTransform:'uppercase',letterSpacing:.4}}>Process Type</div>
+            <select value={processFilter} onChange={e=>setProcessFilter(e.target.value)}
+              style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+                fontSize:12,background:'#fff',color:T.text,outline:'none'}}>
+              <option value="">All Types</option>
+              {processOptions.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div style={{flex:'1 1 130px'}}>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+            textTransform:'uppercase',letterSpacing:.4}}>Recon Status</div>
+          <select value={reconFilter} onChange={e=>setReconFilter(e.target.value)}
+            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+              fontSize:12,background:'#fff',color:T.text,outline:'none'}}>
+            <option value="">All Statuses</option>
+            <option value="matched">Matched</option>
+            <option value="pending">Pending</option>
+            <option value="mismatch">Mismatch</option>
+          </select>
+        </div>
+
+        <div>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+            textTransform:'uppercase',letterSpacing:.4}}>From</div>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+              fontSize:12,color:T.text,background:'#fff',outline:'none'}}/>
+        </div>
+
+        <div>
+          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,
+            textTransform:'uppercase',letterSpacing:.4}}>To</div>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,
+              fontSize:12,color:T.text,background:'#fff',outline:'none'}}/>
+        </div>
+
+        <div style={{display:'flex',alignItems:'center',gap:6,paddingBottom:2}}>
+          <input type="checkbox" id="highShort" checked={highShortOnly}
+            onChange={e=>setHighShortOnly(e.target.checked)}
+            style={{accentColor:T.red,width:14,height:14,cursor:'pointer'}}/>
+          <label htmlFor="highShort" style={{fontSize:12,color:T.red,fontWeight:700,
+            cursor:'pointer',whiteSpace:'nowrap'}}>Shortage &gt;15%</label>
+        </div>
+
+        <button onClick={runFilters}
+          style={{padding:'8px 18px',background:T.teal,color:'#fff',border:'none',
+            borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer',height:34}}>
+          Apply
+        </button>
+        <button onClick={resetFilters}
+          style={{padding:'8px 14px',background:'transparent',color:T.textMuted,
+            border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,cursor:'pointer',height:34}}>
+          Reset
+        </button>
       </div>
 
-      {/* Data Table */}
-      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, overflow:'hidden' }}>
+      {/* Table */}
+      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+
+        {/* Header row */}
+        <div style={{display:'grid',gridTemplateColumns:COLS,background:T.bg,
+          borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
+          {HDRS.map((h,i) => (
+            <div key={i} style={{fontSize:10,color:T.textMuted,fontWeight:700,
+              textTransform:'uppercase',letterSpacing:.5,
+              textAlign:i>=3&&i<=7?'right':'left'}}>{h}</div>
+          ))}
+        </div>
+
         {loading ? (
-          <div style={{ padding:60, textAlign:'center', color:T.muted }}>Loading recent receipts...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding:60, textAlign:'center', color:T.muted }}>No matching REC entries found.</div>
-        ) : (
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}>
-              <thead>
-                <tr>
-                  <TH l="Voucher / Date"/>
-                  <TH l="Job Godown"/>
-                  <TH l="Grey Lot (Source)"/>
-                  <TH l="Design (Dest)"/>
-                  <TH l="Finish Qty" r/>
-                  <TH l="Shortage %" r/>
-                  <TH l="Grey Rate" r/>
-                  <TH l="Job Rate" r/>
-                  <TH l="Cum. Cost" r/>
-                  <TH l=""/>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r, i) => {
-                  const exp = expanded === r.id;
-                  const shortage = Number(r.shortage_pct||0);
-                  const isHighShortage = shortage > 15;
-                  return (
-                    <React.Fragment key={r.id}>
-                      <tr onClick={() => setExpanded(exp ? null : r.id)}
-                        style={{ borderBottom:`1px solid ${T.border}`,
-                          background: exp ? T.tealLight : i%2===0 ? T.surface : T.bg,
-                          cursor:'pointer' }}>
-                        <td style={{ padding:'10px 12px' }}>
-                          <div style={{ fontWeight:700, color:T.teal }}>{r.tally_voucher_no}</div>
-                          <div style={{ fontSize:10, color:T.muted, marginTop:2 }}>{fmtD(r.voucher_date)}</div>
-                        </td>
-                        <td style={{ padding:'10px 12px', fontWeight:600, maxWidth:180, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                          {r.job_godown || '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', fontFamily:'monospace', color:T.muted }}>
-                          {r.grey_lot_no || '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', fontFamily:'monospace', fontWeight:800, color:T.blue }}>
-                          {r.design_no || '—'}
-                          {r.design_no === 'Primary Batch' && <span style={{fontSize:9,color:T.red,marginLeft:4}}>(Needs Allocation)</span>}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:700, fontFamily:'monospace' }}>
-                          {fmtQ(r.finish_qty_mtrs)}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:isHighShortage?800:500, color:isHighShortage?T.red:T.muted, fontFamily:'monospace' }}>
-                          {shortage > 0 ? `${shortage.toFixed(1)}%` : '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontFamily:'monospace' }}>
-                          {r.grey_purchase_rate ? `₹${Number(r.grey_purchase_rate).toFixed(1)}` : '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', color:T.muted, fontFamily:'monospace' }}>
-                          {r.job_rate ? `₹${Number(r.job_rate).toFixed(1)}` : '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', fontWeight:800, color:T.gold, fontFamily:'monospace' }}>
-                          {r.cumulative_cost_per_mtr ? `₹${Number(r.cumulative_cost_per_mtr).toFixed(1)}` : '—'}
-                        </td>
-                        <td style={{ padding:'10px 12px', textAlign:'center', color:T.teal }}>{exp?'▲':'▼'}</td>
-                      </tr>
+          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>Loading…</div>
+        ) : rows.length === 0 ? (
+          <div style={{padding:60,textAlign:'center',color:T.textMuted}}>
+            No REC records found for selected period
+          </div>
+        ) : rows.map(r => {
+          const isExp    = expanded === r.id;
+          const shortage = Number(r.shortage_pct || 0);
+          const highShort = shortage > 15;
+          const mill     = r.job_godown || r.mill_name || '—';
+          const design   = cleanDesignNo(r.design_no);
+          const isPrimary = r.design_no === 'Primary Batch';
 
-                      {exp && (
-                        <tr key={'exp-'+r.id}>
-                          <td colSpan={10} style={{ padding:'16px 18px', background:'#F8FFFE', borderBottom:`2px solid ${T.teal}` }}>
-                            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:24 }}>
-                              
-                              {/* Source Specs */}
-                              <div>
-                                <div style={{ fontSize:11, fontWeight:800, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>
-                                  Source Details (Grey OUT)
-                                </div>
-                                <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:8, padding:'10px' }}>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Grey Item:</span><strong style={{textAlign:'right'}}>{r.grey_item_name}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Source Lot No:</span><strong>{r.grey_lot_no}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Issued Qty:</span><strong>{fmtQ(r.grey_issued_qty_mtrs)}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
-                                    <span style={{color:T.muted}}>Grey Purchase Rate:</span><strong style={{color:T.gold}}>{r.grey_purchase_rate?`₹${Number(r.grey_purchase_rate).toFixed(2)}`:'—'}</strong>
-                                  </div>
-                                </div>
-                              </div>
+          return (
+            <div key={r.id} style={{borderBottom:`1px solid ${T.border}`}}>
 
-                              {/* Destination Specs */}
-                              <div>
-                                <div style={{ fontSize:11, fontWeight:800, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>
-                                  Destination Details (Finish IN)
-                                </div>
-                                <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:8, padding:'10px' }}>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Finish Item:</span><strong style={{textAlign:'right'}}>{r.finish_item_name}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Design No:</span><strong style={{color:T.blue}}>{r.design_no}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Received Qty:</span><strong>{fmtQ(r.finish_qty_mtrs)}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
-                                    <span style={{color:T.muted}}>Shortage:</span>
-                                    <strong style={{color:isHighShortage?T.red:T.text}}>
-                                      {fmtQ(r.shortage_mtrs)} ({Number(r.shortage_pct||0).toFixed(1)}%)
-                                    </strong>
-                                  </div>
-                                </div>
-                              </div>
+              {/* Main row */}
+              <div
+                onClick={() => setExpanded(isExp ? null : r.id)}
+                style={{display:'grid',gridTemplateColumns:COLS,padding:'11px 16px',
+                  background:isExp?T.tealLight:'#fff',cursor:'pointer',
+                  alignItems:'center',transition:'background .12s'}}
+                onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = T.bg; }}
+                onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = '#fff'; }}
+              >
+                {/* Voucher / Date */}
+                <div>
+                  <div style={{fontWeight:700,color:T.teal,fontSize:12,
+                    fontFamily:"'DM Mono',monospace"}}>{r.tally_voucher_no||'—'}</div>
+                  <div style={{fontSize:10,color:T.textMuted,marginTop:2}}>{fmtDate(r.voucher_date)}</div>
+                </div>
 
-                              {/* Jobwork & Allocations */}
-                              <div>
-                                <div style={{ fontSize:11, fontWeight:800, color:T.muted, textTransform:'uppercase', marginBottom:8 }}>
-                                  JW Cost Allocation
-                                </div>
-                                <div style={{ background:'#fff', border:`1px solid ${T.border}`, borderRadius:8, padding:'10px' }}>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Party Challan No:</span><strong>{r.party_challan_no||'—'}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Recon Status:</span>
-                                    <span style={{
-                                      padding:'2px 6px', borderRadius:4, fontSize:10, fontWeight:800,
-                                      background: r.recon_status==='matched'?T.greenLight:r.recon_status==='mismatch'?T.redLight:T.orangeLight,
-                                      color: r.recon_status==='matched'?T.green:r.recon_status==='mismatch'?T.red:T.orange
-                                    }}>
-                                      {r.recon_status ? r.recon_status.toUpperCase() : 'PENDING'}
-                                    </span>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Job Amount (UDF):</span><strong>{fmt(r.job_amount)}</strong>
-                                  </div>
-                                  <div style={{display:'flex',justifyContent:'space-between',borderTop:`1px solid ${T.border}`,paddingTop:6,marginTop:6,fontSize:12}}>
-                                    <span style={{color:T.muted}}>Final Cost / mtr:</span><strong style={{color:T.teal,fontSize:14}}>
-                                      {r.cumulative_cost_per_mtr?`₹${Number(r.cumulative_cost_per_mtr).toFixed(1)}`:'—'}
-                                    </strong>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                {/* Design No */}
+                <div>
+                  <div style={{fontFamily:"'DM Mono',monospace",fontSize:12.5,fontWeight:700,
+                    color:isPrimary?T.textMuted:T.blue}}>{design}</div>
+                  {isPrimary && <div style={{fontSize:9,color:T.red}}>No design yet</div>}
+                </div>
+
+                {/* Lot → Mill */}
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:T.text,overflow:'hidden',
+                    textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{mill}</div>
+                  <div style={{fontSize:11,color:T.textMuted,marginTop:1,
+                    fontFamily:"'DM Mono',monospace"}}>
+                    {r.grey_lot_no||'—'}
+                    {r.party_challan_no ? ` · Ch ${r.party_challan_no}` : ''}
+                  </div>
+                </div>
+
+                {/* Finish m */}
+                <div style={{textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12.5}}>
+                  {fmtMtr(r.finish_qty_mtrs)}
+                </div>
+
+                {/* Shortage % */}
+                <div style={{textAlign:'right'}}>
+                  {highShort
+                    ? <Badge label={`${shortage.toFixed(1)}%`} color={T.red} bg={T.redLight}/>
+                    : <span style={{fontSize:12,color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>
+                        {shortage > 0 ? `${shortage.toFixed(1)}%` : '—'}
+                      </span>
+                  }
+                </div>
+
+                {/* Job Amt — Math.abs() */}
+                <div style={{textAlign:'right',fontFamily:"'DM Mono',monospace",
+                  fontSize:12,color:T.textMuted}}>
+                  {r.job_amount != null ? fmt(r.job_amount) : '—'}
+                </div>
+
+                {/* JW Alloc — Math.abs() */}
+                <div style={{textAlign:'right',fontFamily:"'DM Mono',monospace",
+                  fontSize:12,color:T.textMuted}}>
+                  {r.jw_allocated_cost != null ? fmt(r.jw_allocated_cost) : '—'}
+                </div>
+
+                {/* Cost/m — teal, most important field */}
+                <div style={{textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:13,
+                  fontWeight:800,color:r.cumulative_cost_per_mtr ? T.teal : T.textFaint}}>
+                  {r.cumulative_cost_per_mtr
+                    ? `₹${Math.abs(Number(r.cumulative_cost_per_mtr)).toFixed(2)}`
+                    : '—'}
+                </div>
+
+                {/* Recon status */}
+                <div><ReconBadge status={r.recon_status}/></div>
+
+                {/* Expand chevron */}
+                <div style={{textAlign:'right',fontSize:14,
+                  color:isExp?T.teal:T.textFaint}}>{isExp?'▲':'▼'}</div>
+              </div>
+
+              {/* Expanded detail */}
+              {isExp && (
+                <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,
+                  padding:'16px 18px 20px'}}>
+
+                  {/* Detail grid */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,
+                    marginBottom:16,padding:'12px 14px',background:'#fff',
+                    borderRadius:8,border:`1px solid ${T.border}`}}>
+                    {[
+                      ['Tally Voucher',       r.tally_voucher_no],
+                      ['Voucher Date',        fmtDate(r.voucher_date)],
+                      ['Design No (raw)',     r.design_no||'—'],
+                      ['Grey Lot No',         r.grey_lot_no||'—'],
+                      ['Party Challan No',    r.party_challan_no||'—'],
+                      ['Job Godown',          r.job_godown||'—'],
+                      ['Mill Name',           r.mill_name||'—'],
+                      ['Process Type',        r.process_type||'—'],
+                      ['Stage No',            r.stage_no||'—'],
+                      ['Grey Item',           r.grey_item_name||'—'],
+                      ['Finish Item',         r.finish_item_name||'—'],
+                      ['Grey Issued (m)',      r.grey_issued_qty_mtrs ? fmtMtr(r.grey_issued_qty_mtrs) : '—'],
+                      ['Finish Qty (m)',       fmtMtr(r.finish_qty_mtrs)],
+                      ['Shortage (m)',         r.shortage_mtrs ? fmtMtr(r.shortage_mtrs) : '—'],
+                      ['Shortage %',          shortage > 0 ? `${shortage.toFixed(2)}%` : '—'],
+                      ['Grey Purchase Rate',  r.grey_purchase_rate != null ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}` : '—'],
+                      ['Job Rate',            r.job_rate != null ? `₹${Math.abs(Number(r.job_rate)).toFixed(2)}` : '—'],
+                      ['Job Amount',          r.job_amount != null ? fmt(r.job_amount) : '—'],
+                      ['JW Alloc Cost',       r.jw_allocated_cost != null ? fmt(r.jw_allocated_cost) : '—'],
+                      ['JW Alloc %',          r.jw_allocation_pct != null ? `${Number(r.jw_allocation_pct).toFixed(2)}%` : '—'],
+                      ['Cum. Cost/m',         r.cumulative_cost_per_mtr != null ? `₹${Math.abs(Number(r.cumulative_cost_per_mtr)).toFixed(2)}` : '—'],
+                      ['Recon Status',        r.recon_status||'pending'],
+                      ['JW Voucher No',       r.jw_voucher_number||'—'],
+                      ['Narration',           r.narration||'—'],
+                    ].map(([k,v]) => (
+                      <div key={k}>
+                        <div style={{fontSize:9,color:T.textMuted,fontWeight:700,
+                          textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                        <div style={{fontSize:12,wordBreak:'break-word',
+                          color:k==='Cum. Cost/m'?T.teal:T.text,
+                          fontWeight:k==='Cum. Cost/m'?800:500}}>{v||'—'}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Origin Panel */}
+                  {!isPrimary && r.design_no ? (
+                    <div style={{marginBottom:12}}>
+                      <OriginPanel designNo={r.design_no}/>
+                    </div>
+                  ) : r.grey_lot_no ? (
+                    <div style={{marginBottom:12}}>
+                      <OriginPanel lotNo={r.grey_lot_no}/>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+            padding:'12px 20px',borderTop:`1px solid ${T.border}`,background:T.bg}}>
+            <span style={{fontSize:12,color:T.textMuted}}>
+              {totalCount.toLocaleString()} total · Page {page+1} of {totalPages}
+            </span>
+            <div style={{display:'flex',gap:6}}>
+              {page > 0 && (
+                <button onClick={() => fetchRows(page-1)}
+                  style={{padding:'6px 14px',border:`1px solid ${T.border}`,borderRadius:6,
+                    fontSize:12,cursor:'pointer',background:'#fff',color:T.text}}>
+                  ← Prev
+                </button>
+              )}
+              {page < totalPages-1 && (
+                <button onClick={() => fetchRows(page+1)}
+                  style={{padding:'6px 14px',background:T.teal,border:'none',borderRadius:6,
+                    fontSize:12,cursor:'pointer',color:'#fff',fontWeight:700}}>
+                  Next →
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

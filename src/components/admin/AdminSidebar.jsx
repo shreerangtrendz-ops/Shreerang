@@ -72,6 +72,7 @@ const ALL_GROUPS = [
       { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable-v2',   roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
       { icon: '💹', label: 'Design Costing',     to: '/admin/accounting/design-costing',roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
       { icon: '📈', label: 'Design P&L',        to: '/admin/accounting/design-pnl',      roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
+      { icon: '🏭', label: 'REC from Mill',     to: '/admin/accounting/rec-from-mill',   roles: ['admin','manager','accounts'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '❓', label: 'Missing REC',        to: '/admin/accounting/missing-rec',     roles: ['admin','manager','accounts'], badge: 'ACTION', badgeClass: 'warn' },
       { icon: '💼', label: 'Broker Analytics',   to: '/admin/broker-analytics',     roles: ['admin','manager','accounts'] },
     ]

@@ -138,16 +138,15 @@ S1: tally_sync_log (last date)
 → S_AV: accounting_vouchers
 → S_AV_LINES: receipt_payment_lines
 ```
-Conflict keys: `sales_bills=tally_voucher_no`, `grey_purchase=tally_voucher_no`, `process_issues=challan_no`, `issue_to_mill=lot_no`, `rec_from_mill=tally_voucher_no`
+Conflict keys: `sales_bills=tally_voucher_no`, `grey_purchase=(tally_voucher_no,lot_no)`, `process_issues=challan_no`, `issue_to_mill=(lot_no,voucher_date)`, `rec_from_mill=tally_voucher_no`
 
-### n8n v28 fix (MUST apply before next resync)
-In `buildRecFromMillRow` (~line 591):
-```js
-// WRONG:
-party_challan_no: v.reference || v.vnum
-// CORRECT:
-party_challan_no: v.partyChNo || v.reference || v.vnum
-```
+### n8n v33 fix — ALREADY APPLIED
+`partyChNo` fix in `buildRecFromMillRow`: `party_challan_no: v.partyChNo || v.reference || v.vnum` ✅
+
+### n8n v34 fix — NOT YET APPLIED TO n8n (09-Apr-2026)
+`buildGreyPurchaseRow` must flatMap over ALL `batchallocations`, not just `batches[0]`.
+Conflict key must change from `tally_voucher_no` → `(tally_voucher_no, lot_no)`.
+Patch reference: `src/n8n/N8N_CODE_v34_patch.md`
 
 ### DO NOT delete and resync — preserve these
 - `rec_from_mill` computed columns: `grey_purchase_rate`, `cumulative_cost_per_mtr`, `jw_allocated_cost`, `jw_allocation_pct`
@@ -178,6 +177,25 @@ Ageing buckets: >90d, 61–90d, 31–60d, 0–30d
 ### Security fixes applied (08-Apr-2026)
 RLS + service_role policy added to: `accounting_vouchers`, `receipt_payment_lines`, `receipt_payments`.
 These 3 tables had `account_number` column exposed via API — now blocked.
+
+### Database constraints fixed (09-Apr-2026)
+- `grey_purchase`: `UNIQUE(tally_voucher_no)` → `UNIQUE(tally_voucher_no, lot_no)` — one bill can have multiple lots to different mills
+- `issue_to_mill`: `UNIQUE(lot_no)` → `UNIQUE(lot_no, voucher_date)` + `source_godown` column added
+- `sales_bills`: `all_design_nos jsonb` column added
+- `receipt_payment_lines`: constraint recreated cleanly
+- `credit_note_items`: old UNIQUE constraint removed (n8n uses DELETE+INSERT pattern)
+
+### Table purpose clarification (09-Apr-2026)
+- `purchase_bills` = finished fabric bought for direct resale (S4 in n8n)
+- `grey_purchase` = raw grey fabric bought for own mill processing (S4b in n8n) — one bill = multiple lots (batchallocations)
+- `process_issues` = taka/roll level challan data, powers `missing_rec_from_mill` view
+- `issue_to_mill` = voucher header level, one row per Issue to Mill voucher
+
+### Sync errors fixed (09-Apr-2026) — all 3 were blocking data
+- S3 sales 400: `all_design_nos` column was missing — fixed (column added)
+- S5b issue_to_mill 400: wrong constraint + missing `source_godown` — fixed
+- S_AV_LINES 500: constraint issue — fixed
+- S_CN_items 409: old UNIQUE constraint blocking DELETE+INSERT — fixed
 
 ### Open questions (answer before building Design P&L page)
 1. Outstanding cutoff: bills before Jul-2024 — show as unpaid or exclude?
@@ -234,9 +252,14 @@ Profit per design = (selling_rate - cumulative_cost_per_mtr) × quantity_mtrs - 
 ## SRTPL — n8n Workflow Status
 
 - Current file: `N8N_CODE_v33.js` (08-Apr-2026) — uploaded to n8n workflow `CU6dMm7DCtSP6rMQ`
-- `partyChNo` fix: ALREADY APPLIED in v33
-- `issue_to_mill` conflict key: `lot_no,voucher_date` (composite)
+- `partyChNo` fix: ALREADY APPLIED in v33 ✅
+- `issue_to_mill` conflict key: `(lot_no, voucher_date)` composite — DB constraint updated 09-Apr-2026 ✅
+- `issue_to_mill` `source_godown` column: ADDED 09-Apr-2026 ✅
+- `sales_bills` `all_design_nos` jsonb column: ADDED 09-Apr-2026 ✅
+- `grey_purchase` conflict key: `(tally_voucher_no, lot_no)` — DB constraint updated 09-Apr-2026 ✅
 - `buildSalesRow` design extraction: still broken for Primary Batch bills (1,067 affected) — fix in `buildSalesBillRow` to read `INVENTORYENTRIESOUT` sub-screen
+- **v34 patch needed:** `buildGreyPurchaseRow` flatMap over all batchallocations — see `src/n8n/N8N_CODE_v34_patch.md`
+- **Auto-sync:** Schedule Trigger to add in n8n workflow `CU6dMm7DCtSP6rMQ` — every 30 min — see `src/n8n/SCHEDULE_SETUP.md`
 
 ## SRTPL — Data Quality (as of 06-Apr-2026 master reference)
 

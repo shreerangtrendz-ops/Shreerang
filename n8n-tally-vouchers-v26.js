@@ -279,6 +279,43 @@ function parseVoucher(vxml) {
 
 // ─── ROW BUILDERS ────────────────────────────────────────────────────────────
 
+function extractLineItems(v) {
+  const outEntries = getBlocks(v._vxml, 'INVENTORYENTRIESOUT\\.LIST');
+  const invEntries = outEntries.length > 0 ? outEntries : getBlocks(v._vxml, 'ALLINVENTORYENTRIES\\.LIST');
+  const allItems = invEntries.map(parseInvEntry);
+  const lines = [];
+  for (const item of allItems) {
+    if (item.batches && item.batches.length > 0) {
+      for (const b of item.batches) {
+        lines.push({
+          design_no: cleanDesignNo(b.batch_name),
+          batch_name: b.batch_name,
+          item_name: item.stock_item,
+          hsn_code: item.hsn,
+          godown: b.godown || item.godown,
+          qty_mtrs: b.qty,
+          rate: b.rate || item.rate,
+          discount_pct: item.discount || 0,
+          item_amount: Math.abs(b.amount)
+        });
+      }
+    } else {
+      lines.push({
+        design_no: cleanDesignNo(item.stock_item),
+        batch_name: null,
+        item_name: item.stock_item,
+        hsn_code: item.hsn,
+        godown: item.godown,
+        qty_mtrs: item.qty,
+        rate: item.rate,
+        discount_pct: item.discount || 0,
+        item_amount: Math.abs(item.amount)
+      });
+    }
+  }
+  return lines.length > 0 ? JSON.stringify(lines) : null;
+}
+
 function extractAllDesignNos(v) {
   const outEntries = getBlocks(v._vxml, 'INVENTORYENTRIESOUT\\.LIST');
   const allItems = outEntries.length > 0 ? outEntries.map(parseInvEntry) : getInventoryEntries(v._vxml).map(parseInvEntry);
@@ -319,6 +356,7 @@ function buildSalesRow(v) {
     hsn_code:         first.hsn        || null,
     design_no:        cleanDesignNo(best.designNo) || null,
     all_design_nos:   extractAllDesignNos(v) || null,
+    line_items:       extractLineItems(v) || null,
     batch_name:       (first.batches&&first.batches[0]?.batch_name) || null,
     godown:           best.godown      || null,
     igst_amount:      v.igstAmount     || null,

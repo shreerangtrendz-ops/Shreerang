@@ -333,7 +333,7 @@ function extractAllDesignNos(v) {
       if (dNo && !designs.includes(dNo)) designs.push(dNo);
     }
   }
-  return designs.length > 0 ? JSON.stringify(designs) : null;
+  return designs.length > 0 ? designs : null;
 }
 
 function buildSalesRow(v) {

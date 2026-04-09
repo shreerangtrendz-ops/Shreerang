@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
+import OriginPanel from '@/components/accounting/OriginPanel';
 
 // ═══════════════════════════════════════════════════════════════════
 // DESIGN P&L PAGE — with Tally-Style Batch Vouchers Drill-Down
@@ -59,8 +60,8 @@ function BatchVouchersModal({ design, onClose }) {
       // 2. Outwards — Sales Bills
       const { data: sales } = await supabase
         .from('sales_bills')
-        .select('bill_date, tally_voucher_no, customer_name, quantity_mtrs, taxable_value, total_amount')
-        .eq('design_no', design.design_no)
+        .select('bill_date, tally_voucher_no, customer_name, quantity_mtrs, taxable_value, total_amount, line_items, design_no')
+        .or(`design_no.eq.${design.design_no},all_design_nos.cs.["${design.design_no}"]`)
         .order('bill_date');
 
       // 3. Returns — Credit Note Items (joined via tally_voucher_no)
@@ -87,14 +88,33 @@ function BatchVouchersModal({ design, onClose }) {
       });
 
       (sales || []).forEach(r => {
+        let matchQty = 0; let matchVal = 0;
+        if (Array.isArray(r.line_items) && r.line_items.length > 0) {
+          const matchLines = r.line_items.filter(li => li.design_no?.toUpperCase() === design.design_no?.toUpperCase());
+          if (matchLines.length > 0) {
+            matchQty = matchLines.reduce((acc, li) => acc + (Number(li.qty_mtrs||li.quantity_mtrs)||0), 0);
+            matchVal = matchLines.reduce((acc, li) => acc + (Number(li.item_amount||li.amount)||0), 0);
+          }
+        }
+        
+        if (matchQty === 0) {
+          // fallback to primary if line_items didn't match or wasn't parsed
+          if (r.design_no?.toUpperCase() === design.design_no?.toUpperCase()) {
+            matchQty = Number(r.quantity_mtrs || 0);
+            matchVal = Number(r.taxable_value || r.total_amount || 0);
+          } else {
+            return; // skip if doesn't match
+          }
+        }
+        
         rows.push({
           date:      r.bill_date,
           particulars: r.customer_name,
           vch_type:  'Sales',
           vch_no:    r.tally_voucher_no,
           in_qty:    0, in_value: 0,
-          out_qty:   Number(r.quantity_mtrs || 0),
-          out_value: Number(r.taxable_value || r.total_amount || 0),
+          out_qty:   matchQty,
+          out_value: matchVal,
           note:      null,
         });
       });
@@ -176,6 +196,11 @@ function BatchVouchersModal({ design, onClose }) {
               border:'none', color:'#fff', fontSize:18, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
             ×
           </button>
+        </div>
+
+        {/* Origin Traceability Panel */}
+        <div style={{ background: '#F8FFFE', padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
+          <OriginPanel designNo={design.design_no} />
         </div>
 
         {/* Summary strip */}
@@ -301,7 +326,7 @@ export default function DesignPnLPage() {
 
     const [{ data: recData }, { data: salesData }, { data: returnData }] = await Promise.all([
       supabase.from('rec_from_mill').select('design_no, finish_qty_mtrs, cumulative_cost_per_mtr').not('design_no', 'is', null),
-      supabase.from('sales_bills').select('design_no, quantity_mtrs, rate_per_mtr').not('design_no', 'is', null),
+      supabase.from('sales_bills').select('design_no, quantity_mtrs, rate_per_mtr, line_items, all_design_nos'),
       supabase.from('credit_note_items').select('design_no, qty_mtrs').not('design_no', 'is', null),
     ]);
 
@@ -319,9 +344,19 @@ export default function DesignPnLPage() {
       g.produced_qty += qty; g.cost_value += qty * cost;
     });
     (salesData||[]).forEach(r => {
-      const g = getG(r.design_no); if(!g) return;
-      const qty = Number(r.quantity_mtrs)||0, rate = Number(r.rate_per_mtr)||0;
-      g.sold_qty += qty; g.sales_value += qty * rate;
+      // Prioritize line_items for multi-design traceability
+      if (Array.isArray(r.line_items) && r.line_items.length > 0) {
+        for (const li of r.line_items) {
+          const g = getG(li.design_no); if(!g) continue;
+          const qty = Number(li.qty_mtrs || li.quantity_mtrs) || 0;
+          const amt = Number(li.item_amount || li.amount) || ((Number(li.rate || li.rate_per_mtr) || 0) * qty);
+          g.sold_qty += qty; g.sales_value += amt;
+        }
+      } else {
+        const g = getG(r.design_no); if(!g) return;
+        const qty = Number(r.quantity_mtrs)||0, rate = Number(r.rate_per_mtr)||0;
+        g.sold_qty += qty; g.sales_value += qty * rate;
+      }
     });
     (returnData||[]).forEach(r => {
       const g = getG(r.design_no); if(!g) return;

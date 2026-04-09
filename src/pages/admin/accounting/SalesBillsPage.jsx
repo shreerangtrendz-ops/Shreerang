@@ -271,6 +271,121 @@ export default function SalesBillsPage() {
                     </div>
                   )}
 
+                  {/* ── Line Items (multi-design JSONB) ── */}
+                  {Array.isArray(b.line_items) && b.line_items.length > 0 && (
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontSize:11,fontWeight:700,color:T.text,
+                        textTransform:'uppercase',letterSpacing:.5,marginBottom:8,
+                        display:'flex',alignItems:'center',gap:8}}>
+                        Line Items
+                        <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,
+                          fontWeight:700,background:T.teal+'22',color:T.teal}}>
+                          {b.line_items.length} design{b.line_items.length!==1?'s':''}
+                        </span>
+                      </div>
+                      <div style={{overflowX:'auto',borderRadius:8,
+                        border:`1px solid ${T.border}`}}>
+                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,
+                          background:T.surface}}>
+                          <thead>
+                            <tr style={{background:T.bg,borderBottom:`1px solid ${T.border}`}}>
+                              {['Design No','Batch / Fabric','Item Name','HSN',
+                                'Godown','Qty (m)','Rate/m','Discount','Amount'].map(h=>(
+                                <th key={h} style={{padding:'7px 10px',textAlign:'left',
+                                  fontWeight:700,fontSize:10,color:T.textMuted,
+                                  textTransform:'uppercase',letterSpacing:.4,
+                                  whiteSpace:'nowrap'}}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {b.line_items.map((li, idx) => (
+                              <tr key={idx} style={{
+                                borderBottom:`1px solid ${T.border}`,
+                                background:idx%2===0?T.surface:T.bg}}>
+                                <td style={{padding:'7px 10px',fontWeight:700,
+                                  color:T.purple,fontFamily:"'DM Mono',monospace",
+                                  fontSize:12}}>
+                                  {li.design_no||'—'}
+                                </td>
+                                <td style={{padding:'7px 10px'}}>
+                                  <div style={{fontWeight:600,fontSize:12,color:T.text}}>
+                                    {li.batch_name||li.design_no||'—'}
+                                  </div>
+                                  {li.fabric_name && (
+                                    <div style={{fontSize:10,color:T.textMuted,marginTop:1}}>
+                                      {li.fabric_name}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,
+                                  maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',
+                                  whiteSpace:'nowrap'}}>
+                                  {li.item_name||li.name||'—'}
+                                </td>
+                                <td style={{padding:'7px 10px',fontFamily:"'DM Mono',monospace",
+                                  color:T.textMuted,fontSize:11}}>
+                                  {li.hsn_code||'—'}
+                                </td>
+                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,
+                                  whiteSpace:'nowrap'}}>
+                                  {li.godown||li.godown_name||'—'}
+                                </td>
+                                <td style={{padding:'7px 10px',textAlign:'right',
+                                  fontFamily:"'DM Mono',monospace",fontWeight:600}}>
+                                  {li.qty_mtrs||li.quantity_mtrs
+                                    ? Number(li.qty_mtrs||li.quantity_mtrs||0)
+                                        .toLocaleString('en-IN',{maximumFractionDigits:2})+'m'
+                                    : '—'}
+                                </td>
+                                <td style={{padding:'7px 10px',textAlign:'right',
+                                  color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>
+                                  {li.rate||li.rate_per_mtr
+                                    ? `₹${Number(li.rate||li.rate_per_mtr||0).toFixed(2)}`
+                                    : '—'}
+                                </td>
+                                <td style={{padding:'7px 10px',textAlign:'right',
+                                  color:T.textMuted}}>
+                                  {li.discount_pct>0 ? `${li.discount_pct}%` : '—'}
+                                </td>
+                                <td style={{padding:'7px 10px',textAlign:'right',
+                                  fontWeight:700,color:T.green,
+                                  fontFamily:"'DM Mono',monospace"}}>
+                                  {li.item_amount||li.amount
+                                    ? '₹'+Number(li.item_amount||li.amount||0)
+                                        .toLocaleString('en-IN',{maximumFractionDigits:0})
+                                    : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{background:T.bg,borderTop:`2px solid ${T.border}`}}>
+                              <td colSpan={5} style={{padding:'7px 10px',fontWeight:700,
+                                fontSize:11,color:T.textMuted}}>
+                                TOTAL ({b.line_items.length} lines)
+                              </td>
+                              <td style={{padding:'7px 10px',textAlign:'right',
+                                fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
+                                {b.quantity_mtrs
+                                  ? Number(b.quantity_mtrs).toLocaleString('en-IN',
+                                      {maximumFractionDigits:2})+'m'
+                                  : '—'}
+                              </td>
+                              <td colSpan={2}/>
+                              <td style={{padding:'7px 10px',textAlign:'right',
+                                fontWeight:700,color:T.green,
+                                fontFamily:"'DM Mono',monospace"}}>
+                                ₹{Number(b.total_amount||0).toLocaleString('en-IN',
+                                    {maximumFractionDigits:0})}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {b.broker_name && (
                     <div style={{padding:'10px 12px',background:T.goldLight,borderRadius:8,border:`1px solid ${T.gold}22`,fontSize:12}}>
                       <span style={{fontWeight:700,color:T.gold}}>Broker: </span>

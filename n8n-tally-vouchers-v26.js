@@ -1102,10 +1102,10 @@ else {
 }
 const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.flatMap(buildGreyPurchaseRow),      'tally_voucher_no,lot_no',               'S4b');
 // S5: process_issues — dedupe by challan_no then chunk
-const processAllRows = processV.map(buildProcessRow).map(sanitizeRow);
+const processAllRows = processV.flatMap(buildProcessRow).map(sanitizeRow);
 const processSeen = new Map();
 for (const r of processAllRows) {
-  if (r.challan_no && !processSeen.has(r.challan_no)) processSeen.set(r.challan_no, r);
+  let k = r.challan_no+(r.lot_no||''); if(r.challan_no && !processSeen.has(k)) processSeen.set(k,r);
 }
 const processRows = Array.from(processSeen.values());
 log.push(`S5:deduped ${processAllRows.length}→${processRows.length}`);
@@ -1153,7 +1153,7 @@ if (allTakaRows.length) {
     if (s5e) log.push(`S5e:ok rows=${allTakaRows.length}`);
   } catch(e) { log.push(`S5e:ERR ${e.message}`); s5e=false; }
 }
-const s5c  =await upsert.call(this,'rec_from_mill',      recFromMillV.map(buildRecFromMillRow),    'tally_voucher_no',               'S5c');
+const s5c  =await upsert.call(this,'rec_from_mill', recFromMillV.flatMap(buildRecFromMillRow).map(sanitizeRow), 'tally_voucher_no,lot_no', 'S5c');
 const s5d  =await upsert.call(this,'stock_journal',      stockJournalV.map(buildStockJournalRow),  'tally_voucher_no',               'S5d');
 const s_cn =await upsertCreditNotes.call(this, creditNoteV);
 const s_dn =await upsert.call(this,'debit_note',         debitNoteV.map(buildDebitNoteRow),        'tally_voucher_no',               'S_DN');

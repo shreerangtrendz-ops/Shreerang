@@ -25,6 +25,17 @@ const fmtMtr = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigi
 const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—';
 const fmtRate = n => n != null ? '₹' + Number(n).toFixed(2) + '/m' : '—';
 
+// Decode HTML entities from Tally XML (&#10; &#13; &amp; &quot; numeric codes)
+const decodeHtml = str => str
+  ? str
+      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#10;/g, ' ')
+      .replace(/&#13;/g, '')
+      .trim()
+  : str;
+
 function KV({ label, value, mono, color }) {
   return (
     <div style={{ marginBottom: 6 }}>
@@ -123,7 +134,7 @@ export default function OriginPanel({ designNo, lotNo }) {
   }
   const shortagePctNum = parseFloat(shortagePct);
 
-  const millName = row.mill_name || row.issue_mill_name || '—';
+  const millName = decodeHtml(row.mill_name || row.issue_mill_name) || '—';
 
   return (
     <div style={{ fontFamily: "'DM Sans',sans-serif" }}>
@@ -139,11 +150,11 @@ export default function OriginPanel({ designNo, lotNo }) {
         }}
       >
         <div style={{ fontSize: 12, color: T.tealDark, display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700 }}>{row.supplier_name || '—'}</span>
+          <span style={{ fontWeight: 700 }}>{decodeHtml(row.supplier_name) || '—'}</span>
           {row.supplier_bill_no && (
             <>
               <span style={{ color: T.faint }}>·</span>
-              <span style={{ color: T.muted, fontFamily: "'DM Mono',monospace", fontSize: 11 }}>{row.supplier_bill_no}</span>
+              <span style={{ color: T.muted, fontFamily: "'DM Mono',monospace", fontSize: 11 }}>{decodeHtml(row.supplier_bill_no)}</span>
             </>
           )}
           <span style={{ color: T.faint }}>→</span>
@@ -174,22 +185,22 @@ export default function OriginPanel({ designNo, lotNo }) {
 
           {/* V-01 Grey Purchase */}
           <StageCard title="Grey Purchase (V-01)" color={T.amber} step="1">
-            <KV label="Supplier"      value={row.supplier_name} />
-            <KV label="Bill No"       value={row.supplier_bill_no} mono />
+            <KV label="Supplier"      value={decodeHtml(row.supplier_name)} />
+            <KV label="Bill No"       value={decodeHtml(row.supplier_bill_no)} mono />
             <KV label="Purchase Date" value={fmtDate(row.purchase_date)} />
             <KV label="Rate"          value={fmtRate(row.grey_purchase_rate_from_gp)} mono />
             <KV label="Purchased"     value={row.purchased_mtrs ? fmtMtr(row.purchased_mtrs) : null} mono />
-            {row.grey_broker && <KV label="Broker" value={row.grey_broker} />}
+            {row.grey_broker && <KV label="Broker" value={decodeHtml(row.grey_broker)} />}
           </StageCard>
 
           {/* V-02 Issue to Mill */}
           <StageCard title="Issue to Mill (V-02)" color={T.blue} step="2">
             {row.issue_challan_no ? (
               <>
-                <KV label="Challan No"  value={row.issue_challan_no} mono />
+                <KV label="Challan No"  value={decodeHtml(row.issue_challan_no)} mono />
                 <KV label="Issue Date"  value={fmtDate(row.issue_date)} />
-                <KV label="Mill"        value={row.issue_mill_name} />
-                <KV label="Godown"      value={row.destination_godown} />
+                <KV label="Mill"        value={decodeHtml(row.issue_mill_name)} />
+                <KV label="Godown"      value={decodeHtml(row.destination_godown)} />
                 <KV label="Issued Qty"  value={row.issued_qty_mtrs ? fmtMtr(row.issued_qty_mtrs) : null} mono />
               </>
             ) : (
@@ -200,11 +211,11 @@ export default function OriginPanel({ designNo, lotNo }) {
           {/* V-04 REC from Mill */}
           <StageCard title="REC from Mill (V-04)" color={T.teal} step="4">
             <KV label="Rec Date"      value={fmtDate(row.rec_date)} />
-            <KV label="Mill"          value={row.mill_name} />
-            <KV label="Party Challan" value={row.party_challan_no} mono />
+            <KV label="Mill"          value={decodeHtml(row.mill_name)} />
+            <KV label="Party Challan" value={decodeHtml(row.party_challan_no)} mono />
             <KV label="Finish Qty"    value={row.finish_qty_mtrs ? fmtMtr(row.finish_qty_mtrs) : null} mono />
             <KV label="Shortage"      value={shortagePct} color={!isNaN(shortagePctNum) && shortagePctNum > 5 ? T.red : undefined} />
-            {row.process_type && <KV label="Process" value={row.process_type} />}
+            {row.process_type && <KV label="Process" value={decodeHtml(row.process_type)} />}
             <KV label="Cost/m"        value={fmtRate(row.cost_per_mtr)} color={T.teal} />
             {row.jw_allocated_cost != null && (
               <KV label="JW Alloc" value={fmt(row.jw_allocated_cost)} mono />
@@ -220,7 +231,7 @@ export default function OriginPanel({ designNo, lotNo }) {
           <StageCard title="Jobwork Bill (V-03)" color={T.purple} step="3">
             {row.jw_party_name ? (
               <>
-                <KV label="JW Party"    value={row.jw_party_name} />
+                <KV label="JW Party"    value={decodeHtml(row.jw_party_name)} />
                 <KV label="Bill Date"   value={fmtDate(row.jw_bill_date)} />
                 <KV label="Bill Amt"    value={fmt(row.jw_bill_amount)} mono />
                 <KV label="Net Payable" value={fmt(row.jw_net_payable)} mono />

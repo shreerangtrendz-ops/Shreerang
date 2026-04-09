@@ -23,6 +23,9 @@ const fmtL    = n  => { const v=Math.abs(Number(n||0)); return v>=10000000?`₹$
 const fmtMtr  = n  => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
 const fmtRate = n  => n != null ? `₹${Math.abs(Number(n)).toFixed(2)}` : '—';
 const fmtDate = d  => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+// Detect lot_no format e.g. "1355/22-23" — design_no wasn't extracted if it looks like this
+const isLotFormat = v => v && /\/\d{2}-\d{2}$/.test(v);
 const PAGE    = 50;
 const FY_YEARS = [2022,2023,2024,2025,2026];
 
@@ -89,7 +92,7 @@ export default function RecFromMillPage() {
   const [highShortOnly,  setHighShortOnly]  = useState(false);
   const [search,         setSearch]         = useState('');
 
-  const [summary,        setSummary]        = useState({count:0,totalMtrs:0,avgShortage:0,totalJwCost:0});
+  const [summary,        setSummary]        = useState({count:0,totalMtrs:0,avgShortage:0,totalJwCost:0,avgGreyRate:0});
   const [godownOptions,  setGodownOptions]  = useState([]);
 
   // Load godown options once
@@ -140,11 +143,12 @@ export default function RecFromMillPage() {
 
   const fetchSummary = useCallback(async () => {
     let q = supabase.from('rec_from_mill')
-      .select('finish_qty_mtrs,shortage_pct,jw_allocated_cost');
+      .select('finish_qty_mtrs,shortage_pct,jw_allocated_cost,grey_purchase_rate');
     q = applyFilters(q);
     const {data} = await q;
     if (data) {
-      const withShort = data.filter(r => r.shortage_pct != null);
+      const withShort   = data.filter(r => r.shortage_pct != null);
+      const withGreyRate = data.filter(r => r.grey_purchase_rate != null && Number(r.grey_purchase_rate) > 0);
       setSummary({
         count:       data.length,
         totalMtrs:   data.reduce((s,r) => s + Math.abs(Number(r.finish_qty_mtrs||0)), 0),
@@ -152,6 +156,9 @@ export default function RecFromMillPage() {
           ? withShort.reduce((s,r) => s + Number(r.shortage_pct||0), 0) / withShort.length
           : 0,
         totalJwCost: data.reduce((s,r) => s + Math.abs(Number(r.jw_allocated_cost||0)), 0),
+        avgGreyRate: withGreyRate.length
+          ? withGreyRate.reduce((s,r) => s + Math.abs(Number(r.grey_purchase_rate||0)), 0) / withGreyRate.length
+          : 0,
       });
     }
   }, [applyFilters]);
@@ -199,7 +206,7 @@ export default function RecFromMillPage() {
       </div>
 
       {/* ── Summary Cards ── */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
         <SummaryCard
           label="Total Records"
           value={summary.count.toLocaleString('en-IN')}
@@ -215,7 +222,7 @@ export default function RecFromMillPage() {
         <SummaryCard
           label="Avg Shortage"
           value={summary.avgShortage ? `${summary.avgShortage.toFixed(1)}%` : '—'}
-          sub="avg shortage across batches"
+          sub="avg across batches with data"
           color={T.orange}
         />
         <SummaryCard
@@ -223,6 +230,12 @@ export default function RecFromMillPage() {
           value={fmtL(summary.totalJwCost)}
           sub="allocated jobwork cost"
           color={T.gold}
+        />
+        <SummaryCard
+          label="Avg Grey Rate"
+          value={summary.avgGreyRate ? `₹${summary.avgGreyRate.toFixed(2)}/m` : '—'}
+          sub="(₹0 = lot not yet linked)"
+          color={T.navy}
         />
       </div>
 
@@ -330,9 +343,12 @@ export default function RecFromMillPage() {
             const isExp      = expanded === r.id;
             const shortage   = Number(r.shortage_pct || 0);
             const highShort  = shortage > 15;
-            // COALESCE(mill_name, job_godown)
+            // COALESCE(mill_name, job_godown) — spec order
             const mill       = r.mill_name || r.job_godown || '—';
             const isPrimary  = !r.design_no || r.design_no === 'Primary Batch';
+            const lotFmtDesign = !isPrimary && isLotFormat(r.design_no);
+            // Only show party_challan_no if it differs from tally_voucher_no
+            const showChallan = r.party_challan_no && r.party_challan_no !== r.tally_voucher_no;
 
             return (
               <div key={r.id} style={{borderBottom:`1px solid ${T.border}`}}>
@@ -360,13 +376,17 @@ export default function RecFromMillPage() {
                   <div style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                     <div style={{fontSize:12,fontWeight:600,color:T.text,overflow:'hidden',
                       textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={mill}>{mill}</div>
-                    {r.design_no && !isPrimary && (
+                    {isPrimary ? (
+                      <div style={{fontSize:9,color:T.red,marginTop:1}}>No design yet</div>
+                    ) : lotFmtDesign ? (
+                      <div style={{fontSize:10,color:T.orange,fontFamily:"'DM Mono',monospace",
+                        marginTop:1,fontWeight:700}} title="Lot format — design not extracted">
+                        ⚠ {r.design_no}
+                      </div>
+                    ) : r.design_no ? (
                       <div style={{fontSize:10,color:T.blue,fontFamily:"'DM Mono',monospace",
                         marginTop:1,fontWeight:700}}>D{r.design_no}</div>
-                    )}
-                    {isPrimary && (
-                      <div style={{fontSize:9,color:T.red,marginTop:1}}>No design yet</div>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Lot / Challan */}
@@ -374,9 +394,11 @@ export default function RecFromMillPage() {
                     <div style={{fontSize:11,fontFamily:"'DM Mono',monospace",
                       color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
                       title={r.grey_lot_no}>{r.grey_lot_no||'—'}</div>
-                    {r.party_challan_no && (
+                    {showChallan ? (
                       <div style={{fontSize:10,color:T.textMuted,marginTop:1,
                         fontFamily:"'DM Mono',monospace"}}>Ch {r.party_challan_no}</div>
+                    ) : (
+                      <div style={{fontSize:10,color:T.textFaint,marginTop:1}}>Ch —</div>
                     )}
                   </div>
 
@@ -462,9 +484,8 @@ export default function RecFromMillPage() {
                         ['Design No',           r.design_no||'—'],
                         ['Grey Lot No',         r.grey_lot_no||'—'],
                         ['Party Challan No',    r.party_challan_no||'—'],
-                        ['Mill Name',           r.mill_name||'—'],
+                        ['Mill Name',           r.mill_name || r.job_godown || '—'],
                         ['Job Godown',          r.job_godown||'—'],
-                        ['Mill (resolved)',     r.mill_name || r.job_godown || '—'],
                         ['Process Type',        r.process_type||'—'],
                         ['Stage No',            r.stage_no||'—'],
                         ['Grey Item',           r.grey_item_name||'—'],
@@ -487,17 +508,27 @@ export default function RecFromMillPage() {
                         ['Quality Name',       r.quality_name||'—'],
                         ['Our Godown',         r.our_godown||'—'],
                         ['Narration',          r.narration||'—'],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,
-                            textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
-                          <div style={{fontSize:12,wordBreak:'break-word',
-                            color: k==='Cum. Cost / m' ? T.teal : T.text,
-                            fontWeight: k==='Cum. Cost / m' ? 800 : 500}}>
-                            {v||'—'}
+                      ].map(([k, v]) => {
+                        const isCost   = k === 'Cum. Cost / m';
+                        const isDesign = k === 'Design No';
+                        const designIsLot = isDesign && isLotFormat(r.design_no);
+                        return (
+                          <div key={k}>
+                            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,
+                              textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                            <div style={{fontSize:12,wordBreak:'break-word',
+                              color: isCost ? T.teal : designIsLot ? T.orange : T.text,
+                              fontWeight: isCost ? 800 : 500}}>
+                              {v||'—'}
+                              {designIsLot && (
+                                <span style={{marginLeft:6,fontSize:10,color:T.orange}}>
+                                  ⚠ lot format — design not extracted
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* OriginPanel — prefer designNo, fall back to grey_lot_no */}

@@ -313,7 +313,7 @@ function extractLineItems(v) {
       });
     }
   }
-  return lines.length > 0 ? JSON.stringify(lines) : null;
+  return lines.length > 0 ? lines : null;
 }
 
 function extractAllDesignNos(v) {
@@ -615,61 +615,74 @@ function buildProcessRow(v) {
 function buildRecFromMillRow(v) {
   const outEntries = getBlocks(v._vxml, 'INVENTORYENTRIESOUT\\.LIST');
   const inEntries  = getBlocks(v._vxml, 'INVENTORYENTRIESIN\\.LIST');
+
+  // Build shared grey item info from OUT entries (consumption side)
   let greyItem = {};
   if (outEntries.length > 0) {
     const g = parseInvEntry(outEntries[0]);
     const gb = g.batches?.[0] || {};
+    const jobRate   = parseNum(getUdfVal(outEntries[0],'JOBRATE')||getXmlVal(outEntries[0],'JOBRATE'))||0;
+    const jobAmt    = parseNum(getUdfVal(outEntries[0],'JOBAMOUNT')||getXmlVal(outEntries[0],'JOBAMOUNT'))||0;
+    let grossAmt    = parseNum(getUdfVal(outEntries[0],'GROSSAMT')||getXmlVal(outEntries[0],'GROSSAMT'))||0;
+    const greyAmt   = Math.abs(g.amount)||0;
+    if (!grossAmt && greyAmt && jobAmt) grossAmt = greyAmt + jobAmt;
     greyItem = {
       grey_item_name: g.stock_item||null, source_godown: gb.godown||g.godown||null,
       grey_lot_no: gb.batch_name||null, grey_issued_qty_mtrs: g.qty||0,
-      grey_rate: g.rate||0, grey_amount: Math.abs(g.amount)||0,
-      job_rate:     parseNum(getUdfVal(outEntries[0],'JOBRATE')||getXmlVal(outEntries[0],'JOBRATE'))||0,
-      job_amount:   parseNum(getUdfVal(outEntries[0],'JOBAMOUNT')||getXmlVal(outEntries[0],'JOBAMOUNT'))||0,
-      gross_amount: parseNum(getUdfVal(outEntries[0],'GROSSAMT')||getXmlVal(outEntries[0],'GROSSAMT'))||0,
-      // grey_recd_qty_mtrs = finished fabric received back (IN entry qty), NOT out entry billed qty
-      // This is set after finishItem is parsed below; set placeholder here
-      grey_recd_qty_mtrs: 0,
+      grey_rate: g.rate||0, grey_amount: greyAmt,
+      job_rate: jobRate, job_amount: jobAmt, gross_amount: grossAmt,
       short_qty_mtrs: parseNum(getUdfVal(outEntries[0],'SHORTQTY')||'0'),
     };
-    if (!greyItem.gross_amount && greyItem.grey_amount && greyItem.job_amount)
-      greyItem.gross_amount = greyItem.grey_amount + greyItem.job_amount;
   }
-  let finishItem = {};
-  if (inEntries.length > 0) {
-    const f = parseInvEntry(inEntries[0]);
-    const fb = f.batches?.[0] || {};
-    const rawDN = getUdfVal(inEntries[0],'DESIGNNO')||getXmlVal(inEntries[0],'DESIGNNO')||fb.batch_name||'';
-    finishItem = {
-      finish_item_name: f.stock_item||null,
-      dest_godown: fb.godown||fb.dest_godown||f.godown||'Main Location',
-      design_no: cleanDesignNo(rawDN)||null,
-      finish_qty_mtrs: f.qty||0, finish_rate: f.rate||0,
-      finish_amount: Math.abs(f.amount)||0,
-      issue_qty_mtrs: parseNum(getUdfVal(inEntries[0],'ISSUEDQTY')||'0')||greyItem.grey_issued_qty_mtrs||0,
+
+  // Shared voucher-level UDF fields
+  const shortageMtrsVch  = parseNum(getUdfVal(v._vxml,'SHORTMTR')||getXmlVal(v._vxml,'SHORTMTR')||'0');
+  const shortagePctVch   = parseNum(getUdfVal(v._vxml,'SHORTPERC')||getXmlVal(v._vxml,'SHORTPERC')||'0');
+  const issueChNo        = getUdfVal(v._vxml,'ISSUECHALLANNO')||getXmlVal(v._vxml,'ISSUECHALLANNO')||null;
+  const jobGodown        = getUdfVal(v._vxml,'JOBGODOWN')||getXmlVal(v._vxml,'JOBGODOWN')||greyItem.source_godown||null;
+  const weaverName       = getUdfVal(v._vxml,'WEAVERNAME')||getXmlVal(v._vxml,'WEAVERNAME')||null;
+  const qualityName      = getUdfVal(v._vxml,'QUALITYNAME')||getXmlVal(v._vxml,'QUALITYNAME')||null;
+  const vchLotNo         = cleanDesignNo(getUdfVal(v._vxml,'LOTNO')||getXmlVal(v._vxml,'BATCHNAME')||greyItem.grey_lot_no||'')||greyItem.grey_lot_no||null;
+
+  // One row per IN entry (each IN entry = one design/lot received back from mill)
+  const entries = inEntries.length > 0 ? inEntries : [null];
+  return entries.map((inEntry, idx) => {
+    let finishItem = {};
+    let lotNo = vchLotNo;
+    if (inEntry) {
+      const f  = parseInvEntry(inEntry);
+      const fb = f.batches?.[0] || {};
+      const rawDN = getUdfVal(inEntry,'DESIGNNO')||getXmlVal(inEntry,'DESIGNNO')||fb.batch_name||'';
+      // lot_no: prefer batch name from IN entry (= the design/run lot), fall back to voucher-level
+      lotNo = cleanDesignNo(fb.batch_name||rawDN||'')||vchLotNo||(v.vnum + '_' + idx);
+      finishItem = {
+        finish_item_name: f.stock_item||null,
+        dest_godown: fb.godown||fb.dest_godown||f.godown||'Main Location',
+        design_no: cleanDesignNo(rawDN)||null,
+        finish_qty_mtrs: f.qty||0, finish_rate: f.rate||0,
+        finish_amount: Math.abs(f.amount)||0,
+        issue_qty_mtrs: parseNum(getUdfVal(inEntry,'ISSUEDQTY')||'0')||greyItem.grey_issued_qty_mtrs||0,
+      };
+    }
+    const shortageMtrs = shortageMtrsVch
+      ||(greyItem.grey_issued_qty_mtrs&&finishItem.finish_qty_mtrs?Math.max(0,greyItem.grey_issued_qty_mtrs-finishItem.finish_qty_mtrs):0);
+    const shortagePct  = shortagePctVch
+      ||(shortageMtrs&&greyItem.grey_issued_qty_mtrs?parseFloat(((shortageMtrs/greyItem.grey_issued_qty_mtrs)*100).toFixed(2)):0);
+    return {
+      party_challan_no: v.reference || v.vnum,
+      tally_voucher_no: v.vnum||null, voucher_date: v.date,
+      mill_name: v.party || greyItem.grey_item_name?.match(/^(.+?)\s+\d/)?.[1] || null,
+      lot_no: lotNo,
+      issue_challan_no: issueChNo,
+      job_godown: jobGodown, our_godown: v.destGodown||'Main Location',
+      weaver_name: weaverName, quality_name: qualityName,
+      shortage_mtrs: shortageMtrs, shortage_pct: shortagePct,
+      narration: v.narration||null,
+      ...greyItem, ...finishItem,
+      grey_recd_qty_mtrs: finishItem.finish_qty_mtrs || greyItem.grey_issued_qty_mtrs || 0,
+      tally_synced_at: new Date().toISOString()
     };
-  }
-  const shortageMtrs = parseNum(getUdfVal(v._vxml,'SHORTMTR')||getXmlVal(v._vxml,'SHORTMTR')||'0')
-    ||(greyItem.grey_issued_qty_mtrs&&finishItem.finish_qty_mtrs?Math.max(0,greyItem.grey_issued_qty_mtrs-finishItem.finish_qty_mtrs):0);
-  const shortagePct  = parseNum(getUdfVal(v._vxml,'SHORTPERC')||getXmlVal(v._vxml,'SHORTPERC')||'0')
-    ||(shortageMtrs&&greyItem.grey_issued_qty_mtrs?parseFloat(((shortageMtrs/greyItem.grey_issued_qty_mtrs)*100).toFixed(2)):0);
-  return {
-    party_challan_no: v.reference || v.vnum,   // reference = jobworker GP number (already cleanRef'd)
-    tally_voucher_no: v.vnum||null, voucher_date: v.date,
-    mill_name: v.party || greyItem.grey_item_name?.match(/^(.+?)\s+\d/)?.[1] || null,
-    lot_no: cleanDesignNo(getUdfVal(v._vxml,'LOTNO')||getXmlVal(v._vxml,'BATCHNAME')||greyItem.grey_lot_no||'')||greyItem.grey_lot_no||null,
-    issue_challan_no: getUdfVal(v._vxml,'ISSUECHALLANNO')||getXmlVal(v._vxml,'ISSUECHALLANNO')||null,
-    job_godown: getUdfVal(v._vxml,'JOBGODOWN')||getXmlVal(v._vxml,'JOBGODOWN')||greyItem.source_godown||null,
-    our_godown: v.destGodown||'Main Location',
-    weaver_name: getUdfVal(v._vxml,'WEAVERNAME')||getXmlVal(v._vxml,'WEAVERNAME')||null,
-    quality_name: getUdfVal(v._vxml,'QUALITYNAME')||getXmlVal(v._vxml,'QUALITYNAME')||null,
-    shortage_mtrs: shortageMtrs, shortage_pct: shortagePct,
-    narration: v.narration||null,
-    ...greyItem, ...finishItem,
-    // Correct mapping: grey_recd_qty_mtrs = finished fabric RECEIVED back (IN entry qty)
-    // NOT the grey issued qty (OUT entry). finish_qty_mtrs and grey_recd_qty_mtrs both = IN qty
-    grey_recd_qty_mtrs: finishItem.finish_qty_mtrs || greyItem.grey_issued_qty_mtrs || 0,
-    tally_synced_at: new Date().toISOString()
-  };
+  });
 }
 
 function buildCreditNoteRow(v) {
@@ -1119,7 +1132,7 @@ else {
     const chunk = processRows.slice(_i, _i+S5_CHUNK);
     try {
       const r = await this.helpers.httpRequest({
-        method:'POST', url:`${SUPABASE_URL}/rest/v1/process_issues?on_conflict=challan_no`,
+        method:'POST', url:`${SUPABASE_URL}/rest/v1/process_issues?on_conflict=challan_no,lot_no`,
         headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
         body:JSON.stringify(chunk), returnFullResponse:true
       });

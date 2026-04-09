@@ -279,6 +279,26 @@ function parseVoucher(vxml) {
 
 // ─── ROW BUILDERS ────────────────────────────────────────────────────────────
 
+function extractAllDesignNos(v) {
+  const outEntries = getBlocks(v._vxml, 'INVENTORYENTRIESOUT\\.LIST');
+  const allItems = outEntries.length > 0 ? outEntries.map(parseInvEntry) : getInventoryEntries(v._vxml).map(parseInvEntry);
+  const designs = [];
+  for (const item of allItems) {
+    if (item.batches && item.batches.length > 0) {
+      for (const b of item.batches) {
+        const dNo = cleanDesignNo(b.batch_name);
+        if (dNo && dNo !== 'Primary Batch' && !designs.includes(dNo)) {
+          designs.push(dNo);
+        }
+      }
+    } else {
+      const dNo = cleanDesignNo(item.stock_item);
+      if (dNo && !designs.includes(dNo)) designs.push(dNo);
+    }
+  }
+  return designs.length > 0 ? JSON.stringify(designs) : null;
+}
+
 function buildSalesRow(v) {
   const invEntries = getInventoryEntries(v._vxml);
   const allItems   = invEntries.map(parseInvEntry);
@@ -298,6 +318,7 @@ function buildSalesRow(v) {
     quantity_mtrs:    first.qty        || null,
     hsn_code:         first.hsn        || null,
     design_no:        cleanDesignNo(best.designNo) || null,
+    all_design_nos:   extractAllDesignNos(v) || null,
     batch_name:       (first.batches&&first.batches[0]?.batch_name) || null,
     godown:           best.godown      || null,
     igst_amount:      v.igstAmount     || null,
@@ -371,8 +392,8 @@ function buildPurchaseRow(v) {
 function buildGreyPurchaseRow(v) {
   const invEntries = getInventoryEntries(v._vxml);
   const entry = invEntries[0] ? parseInvEntry(invEntries[0]) : {};
-  const fb = (entry.batches && entry.batches[0]) || {};
-  return {
+  const batches = (entry.batches && entry.batches.length > 0) ? entry.batches : [{}];
+  return batches.map(fb => ({
     supplier_invoice_no:   v.reference || v.vnum,
     tally_voucher_no:      v.vnum || null,
     voucher_date:          v.date,
@@ -409,7 +430,7 @@ function buildGreyPurchaseRow(v) {
     round_off:             v.roundOff        || 0,
     total_amount:          v.totalAmount     || 0,
     tally_synced_at:       new Date().toISOString()
-  };
+  }));
 }
 
 function buildIssueToMillRow(v) {
@@ -1041,7 +1062,7 @@ else {
   }
   if (s4) log.push(`S4:ok status=201`);
 }
-const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.map(buildGreyPurchaseRow),      'tally_voucher_no',               'S4b');
+const s4b  =await upsert.call(this,'grey_purchase',      purchaseV.flatMap(buildGreyPurchaseRow),      'tally_voucher_no,lot_no',               'S4b');
 // S5: process_issues — dedupe by challan_no then chunk
 const processAllRows = processV.map(buildProcessRow).map(sanitizeRow);
 const processSeen = new Map();

@@ -425,3 +425,11 @@ Tally JSON field → Supabase column:
 - **Query:** `design_origin` view
 - **Shows:** `supplier_name → supplier_bill_no → lot_no → mill_name → rec_date → cost_per_mtr`
 - **Use on:** every accounting page (REC from Mill, Sales Bills, Design Costing, Credit Note, Issue to Mill)
+
+## AntiGravity Updates (09-Apr-2026)
+
+- **multi-design tracking (ll_design_nos, line_items)**: Added extractLineItems logic to uildSalesRow inside 
+8n-tally-vouchers-v26.js returning native array structure to accurately map and parse sales_bills multi-design margin traceability natively on Supabase.
+- **multi-lot jobwork decoupling**: Applied latMap() iteration across uildProcessRow and uildRecFromMillRow to successfully map Jobwork Journals / Multiple entries into parallel DB rows rather than strictly capping at index \[0]\.
+- **Primary Upsert Keys adjusted**: Updated ec_from_mill upside constraints to \	ally_voucher_no,lot_no\ and process_issues to \challan_no,lot_no\ inside n8n to resolve multidimensional voucher payloads.
+- **DesignPnLPage.jsx Analytics upgrade**: Removed static .not('design_no') fallback limitations and utilized line_items to directly parse and visualize accurate margins. Embedded OriginPanel traceability natively.

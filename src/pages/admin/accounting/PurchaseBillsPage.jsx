@@ -40,14 +40,6 @@ function SummaryCard({label, value, sub, color=T.teal}) {
   );
 }
 
-const emptyForm = {
-  bill_number:'', bill_date:'', supplier_name:'', gst_number:'',
-  hsn_code:'', fabric_type:'', notes:'',
-  transporter_name:'', lr_no:'', lr_date:'', destination:'',
-  igst_amount:'', cgst_amount:'', sgst_amount:'', round_off:'', total_amount:'',
-  line_items: [{item_name:'', quantity:'', rate:'', amount:''}],
-};
-
 export default function PurchaseBillsPage() {
   const fy = getCurrentFY();
   const [bills, setBills]           = useState([]);
@@ -61,14 +53,8 @@ export default function PurchaseBillsPage() {
   const [dateFrom, setDateFrom]     = useState(fy.from);
   const [dateTo, setDateTo]         = useState(fy.to);
   const [supplier, setSupplier]     = useState('');
-  const [source, setSource]         = useState('');   // '' | 'Tally' | 'Manual'
 
-  const [summary, setSummary] = useState({total:0, count:0, totalMtrs:0, tallyCount:0, manualCount:0});
-
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState(emptyForm);
-  const [saving, setSaving]     = useState(false);
-  const [syncing, setSyncing]   = useState(false);
+  const [summary, setSummary] = useState({total:0, count:0, totalMtrs:0, tallyCount:0});
 
   const setFY = yr => {
     setActiveFY(yr);
@@ -79,14 +65,12 @@ export default function PurchaseBillsPage() {
 
   const buildQuery = useCallback(() => {
     let q = supabase.from('purchase_bills').order('bill_date',{ascending:false});
-    if (dateFrom)               q = q.gte('bill_date', dateFrom);
-    if (dateTo)                 q = q.lte('bill_date', dateTo);
-    if (supplier)               q = q.ilike('supplier_name', `%${supplier}%`);
-    if (source === 'Tally')     q = q.eq('tally_sync_status', 'synced');
-    if (source === 'Manual')    q = q.neq('tally_sync_status', 'synced');
-    if (search)                 q = q.or(`supplier_name.ilike.%${search}%,bill_number.ilike.%${search}%,item_name.ilike.%${search}%`);
+    if (dateFrom)  q = q.gte('bill_date', dateFrom);
+    if (dateTo)    q = q.lte('bill_date', dateTo);
+    if (supplier)  q = q.ilike('supplier_name', `%${supplier}%`);
+    if (search)    q = q.or(`supplier_name.ilike.%${search}%,bill_number.ilike.%${search}%,item_name.ilike.%${search}%`);
     return q;
-  }, [dateFrom, dateTo, supplier, source, search]);
+  }, [dateFrom, dateTo, supplier, search]);
 
   const fetchBills = useCallback(async (pg=0) => {
     setLoading(true);
@@ -104,11 +88,10 @@ export default function PurchaseBillsPage() {
       .select('total_amount,quantity_mtrs,tally_sync_status');
     if (data) {
       setSummary({
-        total:       data.reduce((s,b) => s + Math.abs(Number(b.total_amount||0)), 0),
-        count:       data.length,
-        totalMtrs:   data.reduce((s,b) => s + Math.abs(Number(b.quantity_mtrs||0)), 0),
-        tallyCount:  data.filter(b => b.tally_sync_status === 'synced').length,
-        manualCount: data.filter(b => b.tally_sync_status !== 'synced').length,
+        total:      data.reduce((s,b) => s + Math.abs(Number(b.total_amount||0)), 0),
+        count:      data.length,
+        totalMtrs:  data.reduce((s,b) => s + Math.abs(Number(b.quantity_mtrs||0)), 0),
+        tallyCount: data.filter(b => b.tally_sync_status === 'synced').length,
       });
     }
   }, [buildQuery]);
@@ -117,54 +100,10 @@ export default function PurchaseBillsPage() {
 
   function applyFilters() { fetchBills(0); fetchSummary(); }
   function resetFilters() {
-    setSearch(''); setSupplier(''); setSource('');
+    setSearch(''); setSupplier('');
     const f = getCurrentFY();
     setActiveFY(f.yr); setDateFrom(f.from); setDateTo(f.to);
     setTimeout(() => { fetchBills(0); fetchSummary(); }, 0);
-  }
-
-  async function syncFromTally() {
-    setSyncing(true);
-    try {
-      const r = await fetch('/api/tally-sync', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
-      const j = await r.json();
-      if (j.success || j.synced?.purchase > 0) {
-        fetchBills(0); fetchSummary();
-      }
-    } catch { /* tunnel offline — silent */ }
-    finally { setSyncing(false); }
-  }
-
-  async function saveBill() {
-    if (!form.bill_number || !form.bill_date || !form.supplier_name) return;
-    if (form.line_items.some(l => !l.item_name || !l.amount)) return;
-    setSaving(true);
-    const cleanItems = form.line_items.map(l => ({
-      item_name: l.item_name,
-      quantity:  parseFloat(l.quantity)||0,
-      rate:      parseFloat(l.rate)||0,
-      amount:    parseFloat(l.amount)||0,
-    }));
-    const itemsTotal = cleanItems.reduce((s,a) => s+a.amount, 0);
-    const taxTotal   = (parseFloat(form.igst_amount)||0)+(parseFloat(form.cgst_amount)||0)+(parseFloat(form.sgst_amount)||0);
-    const roundOff   = parseFloat(form.round_off)||0;
-    const finalTotal = parseFloat(form.total_amount)||(itemsTotal+taxTotal+roundOff);
-    const row = {
-      bill_number: form.bill_number, bill_date: form.bill_date,
-      supplier_name: form.supplier_name, gst_number: form.gst_number||null,
-      transporter_name: form.transporter_name||null, lr_no: form.lr_no||null,
-      lr_date: form.lr_date||null, destination: form.destination||null,
-      hsn_code: form.hsn_code||null, fabric_type: form.fabric_type||null,
-      notes: form.notes||null, line_items: cleanItems,
-      igst_amount: parseFloat(form.igst_amount)||0,
-      cgst_amount: parseFloat(form.cgst_amount)||0,
-      sgst_amount: parseFloat(form.sgst_amount)||0,
-      round_off: parseFloat(form.round_off)||0,
-      total_amount: finalTotal, status:'pending_push', tally_sync_status:'pending',
-    };
-    const {error} = await supabase.from('purchase_bills').upsert(row, {onConflict:'bill_number'});
-    if (!error) { setShowForm(false); setForm(emptyForm); fetchBills(0); fetchSummary(); }
-    setSaving(false);
   }
 
   const totalPages = Math.ceil(totalCount/PAGE);
@@ -178,17 +117,7 @@ export default function PurchaseBillsPage() {
           <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,color:T.text,margin:0}}>Purchase Bills</h1>
           <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>Tally purchase vouchers · Supabase synced</div>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
-          <button onClick={() => setShowForm(true)}
-            style={{padding:'7px 14px',background:T.gold,color:'#fff',border:'none',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer'}}>
-            + Manual Bill
-          </button>
-          <button onClick={syncFromTally} disabled={syncing}
-            style={{padding:'7px 14px',background:T.teal,color:'#fff',border:'none',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer',opacity:syncing?0.6:1}}>
-            {syncing ? 'Syncing…' : '↻ Sync Tally'}
-          </button>
-        </div>
+        <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
       </div>
 
       {/* FY Tabs */}
@@ -204,11 +133,11 @@ export default function PurchaseBillsPage() {
 
       {/* Summary Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
-        <SummaryCard label="Total Purchase"  value={fmtL(summary.total)}      sub={`${summary.count} bills`}                        color={T.teal}/>
-        <SummaryCard label="Total Metres"    value={fmtMtr(summary.totalMtrs)} sub="billed quantity"                                 color={T.blue}/>
-        <SummaryCard label="From Tally"      value={summary.tallyCount}        sub="auto-synced vouchers"                            color={T.green}/>
-        <SummaryCard label="Manual Entry"    value={summary.manualCount}       sub="pending Tally push"                              color={T.orange}/>
-        <SummaryCard label="Avg Per Bill"    value={summary.count ? fmtL(summary.total/summary.count) : '—'} sub="per bill avg"     color={T.navy}/>
+        <SummaryCard label="Total Purchase"  value={fmtL(summary.total)}       sub={`${summary.count} bills`}        color={T.teal}/>
+        <SummaryCard label="Total Metres"    value={fmtMtr(summary.totalMtrs)} sub="billed quantity"                  color={T.blue}/>
+        <SummaryCard label="From Tally"      value={summary.tallyCount}        sub="auto-synced vouchers"             color={T.green}/>
+        <SummaryCard label="Not Yet Synced"  value={summary.count - summary.tallyCount} sub="pre-sync or manual"     color={T.orange}/>
+        <SummaryCard label="Avg Per Bill"    value={summary.count ? fmtL(summary.total/summary.count) : '—'} sub="per bill avg" color={T.navy}/>
       </div>
 
       {/* Filters */}
@@ -222,15 +151,6 @@ export default function PurchaseBillsPage() {
           <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Supplier</div>
           <input value={supplier} onChange={e=>setSupplier(e.target.value)} placeholder="Supplier name"
             style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none',boxSizing:'border-box'}}/>
-        </div>
-        <div style={{flex:'0 1 130px'}}>
-          <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Source</div>
-          <select value={source} onChange={e=>setSource(e.target.value)}
-            style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,color:T.text,background:'#fff',outline:'none'}}>
-            <option value="">All Sources</option>
-            <option value="Tally">Tally Only</option>
-            <option value="Manual">Manual Only</option>
-          </select>
         </div>
         <div>
           <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>From</div>
@@ -419,108 +339,6 @@ export default function PurchaseBillsPage() {
         )}
       </div>
 
-      {/* Manual Bill Form */}
-      {showForm && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20}}>
-          <div style={{background:'#fff',borderRadius:14,padding:24,width:'100%',maxWidth:820,maxHeight:'90vh',overflowY:'auto'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-              <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:20,color:T.text}}>Create Purchase Bill</div>
-              <button onClick={()=>setShowForm(false)} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:T.textMuted}}>×</button>
-            </div>
-
-            {/* Primary Details */}
-            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px',marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>1. Primary Details</div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
-                {[['bill_number','Bill No *'],['bill_date','Date *','date'],['supplier_name','Supplier *'],
-                  ['gst_number','Supplier GSTIN'],['hsn_code','Default HSN'],['fabric_type','Fabric Type']].map(([k,l,t])=>(
-                  <div key={k}>
-                    <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
-                    <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
-                      style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Line Items */}
-            <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px',marginBottom:14}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5}}>2. Line Items</div>
-                <button
-                  onClick={()=>setForm(p=>({...p,line_items:[...p.line_items,{item_name:'',quantity:'',rate:'',amount:''}]}))}
-                  style={{padding:'4px 10px',background:T.surface,border:`1px solid ${T.border}`,borderRadius:6,fontSize:11,cursor:'pointer',color:T.text}}>
-                  + Add Row
-                </button>
-              </div>
-              {form.line_items.map((li,idx) => (
-                <div key={idx} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 36px',gap:8,alignItems:'center',marginBottom:8}}>
-                  <input placeholder="Fabric / Item Name *" value={li.item_name}
-                    onChange={e=>{const nl=[...form.line_items]; nl[idx].item_name=e.target.value; setForm(p=>({...p,line_items:nl}))}}
-                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
-                  <input type="number" placeholder="Qty (m)" value={li.quantity}
-                    onChange={e=>{const nl=[...form.line_items]; nl[idx].quantity=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}}
-                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
-                  <input type="number" placeholder="Rate (₹)" value={li.rate}
-                    onChange={e=>{const nl=[...form.line_items]; nl[idx].rate=e.target.value; nl[idx].amount=(parseFloat(nl[idx].quantity||0)*parseFloat(nl[idx].rate||0)).toFixed(2); setForm(p=>({...p,line_items:nl}))}}
-                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none'}}/>
-                  <input type="number" placeholder="Total *" value={li.amount}
-                    onChange={e=>{const nl=[...form.line_items]; nl[idx].amount=e.target.value; setForm(p=>({...p,line_items:nl}))}}
-                    style={{padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,outline:'none',fontWeight:600}}/>
-                  <button onClick={()=>setForm(p=>({...p,line_items:p.line_items.filter((_,i)=>i!==idx)}))}
-                    style={{background:'none',border:'none',color:T.red,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
-                </div>
-              ))}
-            </div>
-
-            {/* Logistics + Taxes */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:14}}>
-              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:'14px 16px'}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>3. Logistics</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                  {[['transporter_name','Transporter'],['lr_no','LR / E-Way No'],['lr_date','LR Date','date'],['destination','Origin City']].map(([k,l,t])=>(
-                    <div key={k}>
-                      <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
-                      <input type={t||'text'} value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
-                        style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{background:T.greenLight,border:`1px solid ${T.green}33`,borderRadius:8,padding:'14px 16px'}}>
-                <div style={{fontSize:10,fontWeight:700,color:T.green,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}}>4. Taxes &amp; Total</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                  {[['igst_amount','IGST'],['cgst_amount','CGST'],['sgst_amount','SGST'],['round_off','Round Off'],['total_amount','Grand Total *']].map(([k,l])=>(
-                    <div key={k}>
-                      <div style={{fontSize:10,color:T.green,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>{l}</div>
-                      <input type="number" value={form[k]||''} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}
-                        style={{width:'100%',padding:'7px 10px',border:`1px solid ${T.green}44`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box',
-                          background:k==='total_amount'?T.greenLight:'#fff',fontWeight:k==='total_amount'?700:400}}/>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.3}}>Notes</div>
-              <textarea value={form.notes||''} onChange={e=>setForm(p=>({...p,notes:e.target.value}))}
-                style={{width:'100%',padding:'8px 10px',border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,outline:'none',boxSizing:'border-box',minHeight:60,resize:'vertical'}}/>
-            </div>
-
-            <div style={{display:'flex',gap:10}}>
-              <button onClick={saveBill} disabled={saving}
-                style={{flex:1,padding:'11px',background:T.teal,color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:700,cursor:'pointer',opacity:saving?0.6:1}}>
-                {saving ? 'Saving…' : 'Save Bill'}
-              </button>
-              <button onClick={()=>setShowForm(false)}
-                style={{padding:'11px 24px',background:'transparent',color:T.textMuted,border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,cursor:'pointer'}}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

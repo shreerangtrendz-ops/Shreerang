@@ -74,23 +74,21 @@ TailwindCSS with HSL CSS variables for theming, dark mode via class strategy. Cu
 ### Critical rules (never break these)
 - Never commit via GitHub Desktop — use Git CLI only (branch: master)
 - Always apply `Math.abs()` to ALL cost display fields across accounting pages
-- Use correct relative Supabase import path (not absolute)
+- Supabase import: always use `import { supabase } from '@/lib/supabase'` (re-exports from `@/lib/customSupabaseClient`) — never use absolute URL strings in components
 - Monday morning: run `sed -i 's/9006/9005/' /etc/nginx/conf.d/tally-internal.conf && nginx -t && systemctl reload nginx` before opening Tally
 
 ### Voucher pipeline (V-01 → V-05)
-- V-01: `grey_purchase` (785 rows)
-- V-02: `issue_to_mill` (0 rows — n8n sync BLOCKED, fix: `v.reference` → `v.partyChNo`)
-- V-03: `jobwork_expenses` (1,527 rows)
-- V-04: `rec_from_mill` (3,387 rows)
-- V-05: `sales_bills` (973 rows)
+See Data Quality table below for current row counts and sync status. Quick reference:
+- V-01: `grey_purchase` | V-02: `issue_to_mill` | V-03: `jobwork_expenses`
+- V-04: `rec_from_mill` | V-05: `sales_bills`
 
 ### Gold standard page
 `SalesBillsPage.jsx` — teal color theme, FY tabs, SummaryCard components, `Math.abs()` on costs, 50-row pagination. All new pages must match this pattern.
 
 ### Pages pending
-- `MissingRecFromMillPage` — route + sidebar wiring
-- `PurchaseBillsPage`, `ProcessIssuesPage`, `JobWorkBillsPage` — upgrade to gold standard
+- `ProcessIssuesPage`, `JobWorkBillsPage` — upgrade to gold standard
 - SQL: `jw_allocated_cost` + `jw_allocation_pct` via `compute_jw_allocation()`
+- `TallyAccountingHub.jsx.bak` — delete (stale backup file)
 
 ### Infrastructure
 - Supabase project: `zdekydcscwhuusliwqaz`
@@ -160,8 +158,8 @@ party_challan_no: v.partyChNo || v.reference || v.vnum
 `customers=1162`, `agents=213`, `suppliers=79`, `tally_sync_log=966`, `process_issues=14409`, `mill_challan_takas=30`, `mill_godown_map=40`
 
 ### Pages status
-- **LIVE:** `GreyPurchasePage`, `SalesBillsPage` (gold std), `ProcessIssuesPage`, `JobWorkBillsPage`, `MissingRecFromMillPage`, `OutstandingReportPage`, `DesignCostingPage`
-- **NEEDED:** `RecFromMillPage` (dedicated), Design P&L Page, PurchaseBills (finished fabric)
+- **LIVE:** `GreyPurchasePage`, `SalesBillsPage` (gold std), `ProcessIssuesPage` (gold std ✓), `JobWorkBillsPage` (gold std ✓ 4 tabs), `MissingRecFromMillPage`, `OutstandingReportPage`, `DesignCostingPage`, `RecFromMillPage`, `DesignPnLPage`, `PurchaseBillsPage` (gold std ✓ manual entry removed 09-Apr-2026), `TallyAccountingHub` (v26 — all 11 voucher types)
+- **COMPONENT:** `src/components/accounting/OriginPanel.jsx` — collapsible origin trail (09-Apr-2026) · wired into SalesBillsPage + DesignCostingPage · queries `design_origin` view
 - **REMOVE** (old manual-entry pages): `JobWorkBillDashboard`, `JobWorkBillForm`, `PurchaseBillDashboard`, `PurchaseBillForm`, `SalesBillDashboard`, `SalesBillForm`, `CommissionBrokerageDashboard`, `CommissionBrokerageForm`
 
 ### MissingRecFromMillPage — key detail
@@ -254,6 +252,54 @@ Profit per design = (selling_rate - cumulative_cost_per_mtr) × quantity_mtrs - 
 Missing REC from Mill: **2,102 lots OVERDUE** + 375 SYNC_LAG = ₹2.05 Cr, 3,82,684 metres at risk
 `design_no` NULL: 1,067 `sales_bills` have Primary Batch (no design) | 1,391 `credit_note_items` NULL
 
+## File Locations — Exact Paths
+
+### Codebase root
+`I:\My Drive\Automation\Shreerang 2026\Horizon Code\`
+
+### Key source folders
+```
+src/pages/admin/            — all admin panel pages
+src/pages/admin/accounting/ — all voucher/accounting pages
+src/pages/                  — all page components
+src/components/             — shared UI components
+src/lib/supabase.js         — Supabase client (use this import, never recreate)
+src/hooks/                  — custom hooks
+src/App.jsx                 — router — add new routes here
+src/lib/rbac.js             — role-based access control helpers
+```
+
+Sidebar nav: search for `"accounting"` in `src/components/` to find the nav file.
+
+### Code Review Page
+- File: `src/pages/admin/CodeReviewPage.jsx`
+- Route: `/admin/code-review`
+- Queries live from: `tally_sync_log`, uses hardcoded schema stats
+- Auto-refreshes every 30 seconds via `useEffect` interval
+
+### Schema location (Supabase)
+- Project: `zdekydcscwhuusliwqaz` — all tables in schema `public`
+- SQL Editor: `https://supabase.com/dashboard/project/zdekydcscwhuusliwqaz/sql`
+
+### How to find things
+- Page → `src/pages/admin/` or `src/pages/`
+- Routes → `src/App.jsx`
+- Supabase queries in a page → search `.from('` in the file
+- Table columns → query `information_schema` in SQL editor
+- Sync status → `SELECT * FROM tally_sync_log ORDER BY synced_at DESC LIMIT 5`
+- Refresh JW costs after resync → `SELECT * FROM compute_jw_allocation()`
+
+### GitHub
+Repo: `shreerangtrendz-ops/Shreerang` · Branch: `master`
+Commit: `git add -A && git commit -m "message" && git push origin master`
+
+### Supabase diagnostic queries (run at session start if relevant)
+```sql
+SELECT synced_at, records_synced, status FROM tally_sync_log ORDER BY synced_at DESC LIMIT 3;
+SELECT COUNT(*) AS unmatched FROM rec_from_mill WHERE jw_voucher_number IS NULL;
+SELECT urgency, COUNT(*) FROM missing_rec_from_mill GROUP BY urgency;
+```
+
 ## SRTPL — Page Routes (complete)
 
 | Route | Component |
@@ -267,8 +313,92 @@ Missing REC from Mill: **2,102 lots OVERDUE** + 375 SYNC_LAG = ₹2.05 Cr, 3,82,
 | `/admin/accounting/missing-rec` | `MissingRecFromMillPage.jsx` |
 | `/admin/accounting/outstanding` | `OutstandingReportPage.jsx` (5 tabs: Party/City/Area/Broker/Ageing) |
 | `/admin/accounting/design-costing` | `DesignCostingPage.jsx` |
+| `/admin/accounting/rec-from-mill` | `RecFromMillPage.jsx` |
+| `/admin/accounting/purchase-bills` | `PurchaseBillsPage.jsx` |
+| `/admin/accounting/design-pnl` | `DesignPnLPage.jsx` |
+| `/admin/code-review` | `CodeReviewPage.jsx` |
 
 ## SRTPL — Files to delete (old manual-entry, conflicts with Tally sync)
 
 `JobWorkBillDashboard.jsx`, `JobWorkBillForm.jsx`, `PurchaseBillDashboard.jsx`, `PurchaseBillForm.jsx`,
-`SalesBillDashboard.jsx`, `SalesBillForm.jsx`, `CommissionBrokerageDashboard.jsx`, `CommissionBrokerageForm.jsx`
+`SalesBillDashboard.jsx`, `SalesBillForm.jsx`, `CommissionBrokerageDashboard.jsx`, `CommissionBrokerageForm.jsx`,
+`TallyAccountingHub.jsx.bak`
+
+## Tally JSON field mapping — confirmed from actual JSON files
+
+### V-01 grey_purchase (Purchase voucher)
+Tally JSON field → Supabase column:
+- `vouchernumber` → `tally_voucher_no` (e.g. `"1068"`)
+- `reference` → `supplier_invoice_no` (e.g. `"19/24-25"`) ← supplier bill number
+- `partymailingname` / `partyledgername` → `supplier_name` (e.g. `"B K TEXTILE"`)
+- `partygstin` → `supplier_gstin`
+- `date` → `voucher_date`
+- `allinventoryentries[0].stockitemname` → `item_name`
+- `allinventoryentries[0].rate` → `rate` (e.g. `"39.00/mtrs"`)
+- `allinventoryentries[0].actualqty` → `actual_qty_mtrs`
+- `allinventoryentries[0].billedqty` → `billed_qty_mtrs`
+- `allinventoryentries[0].amount` → `item_amount` (negative in JSON, store positive)
+- `allinventoryentries[0].batchallocations[0].batchname` → `lot_no` (e.g. `"1030/24-25"`) ← **KEY 1**
+- `allinventoryentries[0].batchallocations[0].godownname` → `godown_name` (= mill godown, same as `destination_godown` in V-02)
+- `allinventoryentries[0].batchallocations[0].udf:trackrefno[1].value` → `track_ref_no`
+- `allinventoryentries[0].batchallocations[0].udf:trackrefdate[1].value` → `track_date`
+- `allinventoryentries[0].batchallocations[0].udf:trackrefparty[1].value` → `track_party` (e.g. `"Govindji Textile"`)
+- `allinventoryentries[0].batchallocations[0].udf:batchitmtaka[1].value` → `taka_pcs` count
+- `allinventoryentries[0].batchallocations[0].udf:batchitmtakano[1].value` → `taka_no`
+- `ledgerentries[0].billallocations[0].name` → `supplier_invoice_no` CONFIRMED (same as `reference`)
+- `ledgerentries[0].billallocations[0].udf:erpbrokername[1].value` → `broker_name`
+- `ledgerentries[0].billallocations[0].udf:erpcommrate[1].value` → `comm_rate` (e.g. `0.95%`)
+- `ledgerentries[0].billallocations[0].udf:erpcommamount[1].value` → `comm_amount` (e.g. `-735.00`)
+- `ledgerentries[0].billallocations[0].udf:erpcommassvalue[1].value` → `assessable_value`
+- `ledgerentries[0].billallocations[0].udf:erpcommnetrate[1].value` → `net_rate`
+- `ledgerentries` where `ledgername="Purchase CGST"` → `cgst_amount`
+- `ledgerentries` where `ledgername="Purchase SGST"` → `sgst_amount`
+
+**KEY INSIGHT from V-01 JSON:**
+- `batchname` in grey_purchase = `lot_no` = issue_to_mill challan number
+- `godownname` in batchallocations = mill destination godown (links V-01 → V-02 godown)
+- V-01 already knows which mill the fabric is going to (via `godownname`)
+- `V-01.lot_no` = `V-02.vouchernumber` = `V-02.batchname` = `"1030/24-25"`
+- ONE grey_purchase can have MULTIPLE `batchallocations` (multiple lots to different mills)
+
+### V-02 issue_to_mill (Issue to Mill voucher)
+Tally JSON field → Supabase column:
+- `vouchernumber` → `tally_voucher_no` AND `lot_no` (e.g. `"1030/24-25"`) ← **KEY 1**
+- `reference` → lot_no short (e.g. `"1030"`)
+- `partyledgername` → `mill_name` (FULL registered name e.g. `"VEEKAY PRINTS PVT. LTD."`) ← no `mill_godown_map` needed
+- `destinationgodown` → `destination_godown` (e.g. `"Veekay Prints Mill"`)
+- `vouchersourcegodown` → `godown_name` (our source godown)
+- `date` → `voucher_date`
+- `inventoryentriesin[0].stockitemname` → `item_name`
+- `inventoryentriesin[0].rate` → `rate`
+- `inventoryentriesin[0].actualqty` → `qty_mtrs`
+- `inventoryentriesin[0].batchallocations[0].batchname` → `lot_no` (same as `vouchernumber`)
+- `inventoryentriesin[0].batchallocations[0].godownname` → `destination_godown` (mill's godown)
+
+**KEY INSIGHT from V-02 JSON:**
+- V-02 has NO `supplier_name` or `supplier_invoice_no` fields — fetch via `JOIN grey_purchase ON lot_no`
+- `V-02.partyledgername` = full mill name = same as `jobwork_expenses.party_name`
+- `V-02.destinationgodown` ≈ `rec_from_mill.job_godown` (short name variant)
+
+### Critical V-01 ↔ V-02 link (CONFIRMED from actual JSON files — 09-Apr-2026)
+- `V-01.batchallocations[0].batchname` = `"1030/24-25"` = `V-02.vouchernumber` ← **KEY 1 confirmed**
+- `V-01.batchallocations[0].godownname` = `"Veekay Prints Mill"` = `V-02.destinationgodown`
+- Therefore: `grey_purchase.lot_no` = `issue_to_mill.tally_voucher_no` = `issue_to_mill.lot_no` (all same value)
+
+## design_origin view — live in Supabase (confirmed 09-Apr-2026)
+
+- **View name:** `design_origin` — **LIVE**, verified 7,234 rows
+- **Keyed by:** `design_no` (plus `lot_no` for multi-lot designs)
+- **Joins:** `rec_from_mill` + `grey_purchase` (KEY 1) + `issue_to_mill` (KEY 1) + `mill_godown_map` + `jobwork_expenses` (KEY 2)
+- **Coverage:** 7,234 rows | 91% clean `design_no` | 76% JW matched | 41% supplier linked (will grow after v33 resync)
+- **React usage:** `supabase.from('design_origin').select('*').eq('design_no', x)`
+- **For issue_to_mill screen:** `.eq('lot_no', x)` to get supplier origin
+- **First consumer:** `src/components/accounting/OriginPanel.jsx` (09-Apr-2026)
+
+## OriginPanel React component — TO BUILD
+
+- **File:** `src/components/accounting/OriginPanel.jsx`
+- **Props:** `designNo` OR `lotNo`
+- **Query:** `design_origin` view
+- **Shows:** `supplier_name → supplier_bill_no → lot_no → mill_name → rec_date → cost_per_mtr`
+- **Use on:** every accounting page (REC from Mill, Sales Bills, Design Costing, Credit Note, Issue to Mill)

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
+import OriginPanel from '../../../components/accounting/OriginPanel';
 
 /* ══════════════════════════════════════════════════════════════════
    DESIGN COSTING PAGE
@@ -176,6 +177,11 @@ function DesignLedgerViewer({ rowData }) {
   return (
     <div style={{padding:'0 14px 14px',background:'#FAFFFE'}}>
       <div style={{paddingTop:14}}>
+        {/* Origin trail */}
+        <div style={{marginBottom:12}}>
+          <OriginPanel designNo={designNo} />
+        </div>
+
         {/* Cost waterfall (from parent) */}
         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:12,flexWrap:'wrap',background:T.bg,borderRadius:8,padding:'10px 14px',border:`1px solid ${T.border}`}}>
           <span style={{fontSize:11,fontWeight:700,color:T.navy}}>Cost Flow:</span>

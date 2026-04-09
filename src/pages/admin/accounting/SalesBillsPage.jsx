@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
+import OriginPanel from '../../../components/accounting/OriginPanel';
 
 const T = {
   teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6', teal100:'#9FE1CB',
@@ -264,30 +265,9 @@ export default function SalesBillsPage() {
                     ))}
                   </div>
 
-                  {(b.design_no || b.batch_name) && (
-                    <div style={{background:'#fff',borderRadius:8,border:`1px solid ${T.border}`,padding:'12px 14px',marginBottom:12}}>
-                      <div style={{fontSize:11,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:8}}>Design Chain Linkage</div>
-                      <div style={{display:'flex',gap:8,flexWrap:'wrap',fontSize:12}}>
-                        {b.design_no && (
-                          <div style={{padding:'6px 12px',background:T.tealLight,borderRadius:6,border:`1px solid ${T.teal}44`}}>
-                            <span style={{color:T.textMuted}}>Design No: </span>
-                            <span style={{fontWeight:700,color:T.teal,fontFamily:'monospace'}}>{b.design_no}</span>
-                            <span style={{fontSize:10,color:T.textMuted}}> → Links to REC FROM MILL production</span>
-                          </div>
-                        )}
-                        {b.batch_name && b.batch_name !== b.design_no && (
-                          <div style={{padding:'6px 12px',background:T.goldLight,borderRadius:6,border:`1px solid ${T.gold}44`}}>
-                            <span style={{color:T.textMuted}}>Batch: </span>
-                            <span style={{fontWeight:700,color:T.gold,fontFamily:'monospace'}}>{b.batch_name}</span>
-                          </div>
-                        )}
-                        {b.bill_ref_number && (
-                          <div style={{padding:'6px 12px',background:'#F3F0FF',borderRadius:6,border:'1px solid #7C3AED44'}}>
-                            <span style={{color:T.textMuted}}>Against Ref: </span>
-                            <span style={{fontWeight:700,color:'#7C3AED',fontFamily:'monospace'}}>{b.bill_ref_number}</span>
-                          </div>
-                        )}
-                      </div>
+                  {b.design_no && (
+                    <div style={{marginBottom:12}}>
+                      <OriginPanel designNo={b.design_no} />
                     </div>
                   )}
 

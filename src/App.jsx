@@ -137,6 +137,7 @@ import OutstandingReportPage from '@/pages/admin/accounting/OutstandingReportPag
 
 import RecFromMillPage from '@/pages/admin/accounting/RecFromMillPage';
 import DesignPnLPage from '@/pages/admin/accounting/DesignPnLPage';
+import DesignLifecycleDetailPage from '@/pages/admin/accounting/DesignLifecyclePage';
 
 const App = () => {
   useEffect(() => {
@@ -301,6 +302,8 @@ const App = () => {
                      <Route path="accounting/rec-from-mill" element={<RecFromMillPage />} />
                      <Route path="accounting/outstanding" element={<OutstandingReportPage />} />
                      <Route path="accounting/design-pnl" element={<DesignPnLPage />} />
+                     <Route path="accounting/design-lifecycle/:designNo" element={<DesignLifecycleDetailPage />} />
+                     <Route path="accounting/design-lifecycle" element={<DesignLifecycleDetailPage />} />
 
                     {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />

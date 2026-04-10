@@ -86,15 +86,15 @@ See Data Quality table below for current row counts and sync status. Quick refer
 `SalesBillsPage.jsx` — teal color theme, FY tabs, SummaryCard components, `Math.abs()` on costs, 50-row pagination. All new pages must match this pattern.
 
 ### Pages pending
-- `ProcessIssuesPage`, `JobWorkBillsPage` — upgrade to gold standard
-- SQL: `jw_allocated_cost` + `jw_allocation_pct` via `compute_jw_allocation()`
+- SQL: `jw_allocated_cost` + `jw_allocation_pct` via `compute_jw_allocation()` — run after sync catches up
 - `TallyAccountingHub.jsx.bak` — delete (stale backup file)
+- Design P&L page: pending answers to 6 open questions (see Open questions section)
 
 ### Infrastructure
 - Supabase project: `zdekydcscwhuusliwqaz`
 - VPS: `72.61.249.86` | n8n: `n8n.shreerangtrendz.com`
 - Office network blocked — use mobile hotspot if VPS unreachable
-- FRP auth token: `ShreerangFRP2026` | Tally port: `9000`
+- FRP auth token: `ShreerangFRP2026` | Tally port: `9005`
 
 ## SRTPL Horizon — Deep Reference
 
@@ -143,10 +143,10 @@ Conflict keys: `sales_bills=tally_voucher_no`, `grey_purchase=(tally_voucher_no,
 ### n8n v33 fix — ALREADY APPLIED
 `partyChNo` fix in `buildRecFromMillRow`: `party_challan_no: v.partyChNo || v.reference || v.vnum` ✅
 
-### n8n v34 fix — NOT YET APPLIED TO n8n (09-Apr-2026)
-`buildGreyPurchaseRow` must flatMap over ALL `batchallocations`, not just `batches[0]`.
-Conflict key must change from `tally_voucher_no` → `(tally_voucher_no, lot_no)`.
-Patch reference: `src/n8n/N8N_CODE_v34_patch.md`
+### n8n v34 — APPLIED (10-Apr-2026) ✅
+`buildGreyPurchaseRow` flatMap over ALL `batchallocations` ✅
+Conflict key `(tally_voucher_no, lot_no)` ✅
+Workflow file: `src/n8n/n8n-tally-sync-v34.json`
 
 ### DO NOT delete and resync — preserve these
 - `rec_from_mill` computed columns: `grey_purchase_rate`, `cumulative_cost_per_mtr`, `jw_allocated_cost`, `jw_allocation_pct`
@@ -157,8 +157,9 @@ Patch reference: `src/n8n/N8N_CODE_v34_patch.md`
 `customers=1162`, `agents=213`, `suppliers=79`, `tally_sync_log=966`, `process_issues=14409`, `mill_challan_takas=30`, `mill_godown_map=40`
 
 ### Pages status
-- **LIVE:** `GreyPurchasePage`, `SalesBillsPage` (gold std), `ProcessIssuesPage` (gold std ✓), `JobWorkBillsPage` (gold std ✓ 4 tabs), `MissingRecFromMillPage`, `OutstandingReportPage`, `DesignCostingPage`, `RecFromMillPage`, `DesignPnLPage`, `PurchaseBillsPage` (gold std ✓ manual entry removed 09-Apr-2026), `TallyAccountingHub` (v26 — all 11 voucher types)
-- **COMPONENT:** `src/components/accounting/OriginPanel.jsx` — collapsible origin trail (09-Apr-2026) · wired into SalesBillsPage + DesignCostingPage · queries `design_origin` view
+- **LIVE:** `GreyPurchasePage`, `SalesBillsPage` (gold std), `ProcessIssuesPage` (gold std ✓), `JobWorkBillsPage` (gold std ✓ 4 tabs), `MissingRecFromMillPage`, `OutstandingReportPage`, `DesignCostingPage`, `RecFromMillPage`, `DesignPnLPage`, `PurchaseBillsPage` (gold std ✓), `TallyAccountingHub` (v26 — all 11 voucher types)
+- **LIVE (10-Apr-2026):** `DesignLifecyclePage.jsx` — route: `/admin/accounting/design-lifecycle/:designNo` and `/admin/accounting/design-lifecycle?lot=<lotNo>` · Grey → Mill → REC → Sale full journey · imported as `DesignLifecycleDetailPage` in App.jsx
+- **COMPONENT:** `src/components/accounting/OriginPanel.jsx` — collapsible origin trail · wired into SalesBillsPage + DesignCostingPage · queries `design_origin` view
 - **REMOVE** (old manual-entry pages): `JobWorkBillDashboard`, `JobWorkBillForm`, `PurchaseBillDashboard`, `PurchaseBillForm`, `SalesBillDashboard`, `SalesBillForm`, `CommissionBrokerageDashboard`, `CommissionBrokerageForm`
 
 ### MissingRecFromMillPage — key detail
@@ -251,15 +252,16 @@ Profit per design = (selling_rate - cumulative_cost_per_mtr) × quantity_mtrs - 
 
 ## SRTPL — n8n Workflow Status
 
-- Current file: `N8N_CODE_v33.js` (08-Apr-2026) — uploaded to n8n workflow `CU6dMm7DCtSP6rMQ`
-- `partyChNo` fix: ALREADY APPLIED in v33 ✅
-- `issue_to_mill` conflict key: `(lot_no, voucher_date)` composite — DB constraint updated 09-Apr-2026 ✅
-- `issue_to_mill` `source_godown` column: ADDED 09-Apr-2026 ✅
-- `sales_bills` `all_design_nos` jsonb column: ADDED 09-Apr-2026 ✅
-- `grey_purchase` conflict key: `(tally_voucher_no, lot_no)` — DB constraint updated 09-Apr-2026 ✅
-- `buildSalesRow` design extraction: still broken for Primary Batch bills (1,067 affected) — fix in `buildSalesBillRow` to read `INVENTORYENTRIESOUT` sub-screen
-- **v34 patch needed:** `buildGreyPurchaseRow` flatMap over all batchallocations — see `src/n8n/N8N_CODE_v34_patch.md`
-- **Auto-sync:** Schedule Trigger to add in n8n workflow `CU6dMm7DCtSP6rMQ` — every 30 min — see `src/n8n/SCHEDULE_SETUP.md`
+- Current file: `n8n-tally-sync-v34.json` (10-Apr-2026) — upload to n8n workflow `CU6dMm7DCtSP6rMQ`
+- `partyChNo` fix: APPLIED in v33 ✅
+- `issue_to_mill` conflict key `(lot_no, voucher_date)` ✅ | `source_godown` column ✅
+- `sales_bills` `all_design_nos` jsonb ✅ | `line_items` jsonb (multi-design) ✅
+- `grey_purchase` conflict key `(tally_voucher_no, lot_no)` ✅ | flatMap over all batches ✅
+- `issue_to_mill` inventory fix: uses `INVENTORYENTRIESOUT.LIST` (not `ALLINVENTORYENTRIES`) ✅
+- `credit_note_items`: multi-design loop + `batch_name` + `dest_godown` populated ✅
+- **Schedule:** Every-30-min trigger node added + existing 3x daily retained ✅
+- **Batch size:** `CHUNK_DAYS=7`, `MAX_CHUNKS_PER_RUN=1` — prevents 300s timeout ✅
+- `buildSalesRow` Primary Batch (1,067 bills): still null design_no — open issue
 
 ## SRTPL — Data Quality (as of 06-Apr-2026 master reference)
 
@@ -339,6 +341,7 @@ SELECT urgency, COUNT(*) FROM missing_rec_from_mill GROUP BY urgency;
 | `/admin/accounting/rec-from-mill` | `RecFromMillPage.jsx` |
 | `/admin/accounting/purchase-bills` | `PurchaseBillsPage.jsx` |
 | `/admin/accounting/design-pnl` | `DesignPnLPage.jsx` |
+| `/admin/accounting/design-lifecycle/:designNo` | `DesignLifecyclePage.jsx` (also `?lot=<lotNo>`) |
 | `/admin/code-review` | `CodeReviewPage.jsx` |
 
 ## SRTPL — Files to delete (old manual-entry, conflicts with Tally sync)
@@ -418,13 +421,35 @@ Tally JSON field → Supabase column:
 - **For issue_to_mill screen:** `.eq('lot_no', x)` to get supplier origin
 - **First consumer:** `src/components/accounting/OriginPanel.jsx` (09-Apr-2026)
 
-## OriginPanel React component — TO BUILD
+## OriginPanel React component — BUILT (09-Apr-2026) ✅
 
 - **File:** `src/components/accounting/OriginPanel.jsx`
 - **Props:** `designNo` OR `lotNo`
 - **Query:** `design_origin` view
 - **Shows:** `supplier_name → supplier_bill_no → lot_no → mill_name → rec_date → cost_per_mtr`
+- **Wired into:** SalesBillsPage, DesignCostingPage
+- **Note:** includes `decodeHtml` helper for Tally XML entities (&#10; &#13; &amp; &quot;)
 - **Use on:** every accounting page (REC from Mill, Sales Bills, Design Costing, Credit Note, Issue to Mill)
+
+## Session 10-Apr-2026 — changes made
+
+### n8n v34 workflow
+- `buildGreyPurchaseRow`: rewrote to return array via `batches.map()` — one row per lot (flatMap in S4b)
+- `buildIssueToMillRow` + `buildMillChallanTakaRows`: fixed to use `INVENTORYENTRIESOUT.LIST` (was returning empty for stock journals)
+- `buildCreditNoteRow`: now iterates all batch allocations per item (multi-design), populates `batch_name` and `dest_godown` on every CN item row
+- `buildSalesRow`: multi-design `line_items` JSONB + aggregate totals across all designs
+- Batch tuning: `CHUNK_DAYS=7`, `MAX_CHUNKS_PER_RUN=1` — fixes 300s timeout
+- Schedule: every-30-min trigger node added alongside existing 3x daily
+- File saved: `src/n8n/n8n-tally-sync-v34.json`
+
+### App.jsx routes added
+- `/admin/accounting/design-lifecycle/:designNo` → `DesignLifecycleDetailPage`
+- `/admin/accounting/design-lifecycle` → `DesignLifecycleDetailPage` (query-string fallback)
+
+### DesignLifecyclePage.jsx
+- Built by Claude Code (874 lines): Grey → Mill → REC → Sale full journey page
+- Route: `/admin/accounting/design-lifecycle/:designNo` and `?lot=<lotNo>`
+- File: `src/pages/admin/accounting/DesignLifecyclePage.jsx`
 
 ## AntiGravity Updates (09-Apr-2026)
 

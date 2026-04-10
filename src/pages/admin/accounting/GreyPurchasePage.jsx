@@ -159,6 +159,25 @@ export default function GreyPurchasePage() {
     });
   }, [dateFrom,dateTo]);
 
+  // ─── mill_godown_map cache: short godown name → full registered name ──────
+  const [millNameMap, setMillNameMap] = useState({});
+  useEffect(() => {
+    supabase.from('mill_godown_map').select('godown_name,party_name').then(({data}) => {
+      if (data) {
+        const m = {};
+        data.forEach(r => { if (r.godown_name) m[r.godown_name] = r.party_name; });
+        setMillNameMap(m);
+      }
+    });
+  }, []);
+
+  const resolveMillName = (rec) => {
+    // Prefer mill_name (full), fall back to map lookup via job_godown, then job_godown itself
+    if (rec.mill_name) return rec.mill_name;
+    if (rec.job_godown && millNameMap[rec.job_godown]) return millNameMap[rec.job_godown];
+    return rec.job_godown || '—';
+  };
+
   // ─── Fetch REC FROM MILL for a specific lot ────────────────
   const fetchLinkedRecs = async (lotNo, lotId) => {
     if (linkedRecs[lotId] !== undefined) return; // already fetched
@@ -534,7 +553,7 @@ export default function GreyPurchasePage() {
                                               fontSize:11,background:T.surface}}>
                                               <thead>
                                                 <tr style={{background:T.tealLight}}>
-                                                  {['Design No','Mill / Challan','Date',
+                                                  {['Design No','Mill Name / Mill Challan No','Date',
                                                     'Received','Shortage%','Job Rate',
                                                     'Grey Cost','Job Cost','Cost/Mtr','Stage'].map(h=>(
                                                     <th key={h} style={{padding:'7px 10px',
@@ -557,9 +576,34 @@ export default function GreyPurchasePage() {
                                                         color:T.purple,fontFamily:'monospace'}}>
                                                         {rec.design_no||'—'}
                                                       </td>
-                                                      <td style={{padding:'6px 10px',color:T.textMuted,
-                                                        whiteSpace:'nowrap'}}>
-                                                        {rec.mill_name||rec.job_godown||'—'} / {rec.party_challan_no||'—'}
+                                                      <td style={{padding:'6px 10px',whiteSpace:'nowrap'}}>
+                                                        {/* Mill full name */}
+                                                        <div style={{fontWeight:600,color:T.text,fontSize:11}}>
+                                                          {resolveMillName(rec)}
+                                                        </div>
+                                                        {/* Mill's own challan no (KEY 2) — what the mill gives when returning fabric
+                                                            This is NOT the lot_no / issue challan. It matches jobwork_expenses.supplier_invoice_no */}
+                                                        <div style={{fontSize:10,marginTop:2,display:'flex',alignItems:'center',gap:4}}>
+                                                          <span style={{color:T.textFaint,fontSize:9}}>Mill challan:</span>
+                                                          <span style={{
+                                                            fontFamily:'monospace',fontWeight:700,
+                                                            color: rec.party_challan_no && !/^\d{3,4}\//.test(rec.party_challan_no)
+                                                              ? T.purple   // real mill challan (e.g. "698", "1021/22-23")
+                                                              : T.orange,  // still showing lot_no fallback — data not yet backfilled
+                                                          }}>
+                                                            {rec.party_challan_no || '—'}
+                                                          </span>
+                                                          {rec.party_challan_no && /^\d{3,4}\//.test(rec.party_challan_no) && (
+                                                            <span style={{fontSize:9,color:T.orange,fontStyle:'italic'}}>(= lot no fallback)</span>
+
+                                                          )}
+                                                        </div>
+                                                        {/* Short godown name — only if it differs from resolved full name */}
+                                                        {rec.job_godown && rec.job_godown !== resolveMillName(rec) && (
+                                                          <div style={{fontSize:9,color:T.textFaint,marginTop:1}}>
+                                                            {rec.job_godown}
+                                                          </div>
+                                                        )}
                                                       </td>
                                                       <td style={{padding:'6px 10px',whiteSpace:'nowrap'}}>
                                                         {fmtDate(rec.voucher_date)}

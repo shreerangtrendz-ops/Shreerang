@@ -212,6 +212,28 @@ If `extractAllDesignNos` is not yet implemented — leave as `null` for now; col
 
 ---
 
+## Change 5 — buildRecFromMillRow: split party_challan_no and issue_challan_ref (10-Apr-2026)
+
+**Why:** Tally "Party Ch. No" = mill's own JW bill number. Tally "Reference No" = our Issue Challan number (V-02 lot_no).
+v33 used `v.partyChNo || v.reference || v.vnum` for `party_challan_no` — this polluted it with the Issue Challan No when partyChNo was missing.
+
+**Find this line in `buildRecFromMillRow`:**
+
+### BEFORE (v33)
+```js
+party_challan_no: v.partyChNo || v.reference || v.vnum,
+```
+
+### AFTER (v34)
+```js
+party_challan_no:  v.partyChNo || v.vnum,    // "Party Ch. No" = mill's own JW bill number
+issue_challan_ref: v.reference || null,        // "Reference No" = our Issue Challan (V-02 lot_no)
+```
+
+> Column `issue_challan_ref text` was added to `rec_from_mill` on 10-Apr-2026. ✅
+
+---
+
 ## Database changes already applied (09-Apr-2026)
 
 All of the following were run in Supabase SQL editor on project `zdekydcscwhuusliwqaz`:
@@ -224,6 +246,7 @@ All of the following were run in Supabase SQL editor on project `zdekydcscwhuusl
 | `sales_bills` | `all_design_nos jsonb` column added |
 | `receipt_payment_lines` | constraint recreated cleanly (was blocking S_AV_LINES) |
 | `credit_note_items` | old UNIQUE constraint dropped (n8n uses DELETE+INSERT) |
+| `rec_from_mill` | `issue_challan_ref text` column added (10-Apr-2026) |
 
 These are live. Do NOT re-run these migrations.
 
@@ -238,7 +261,8 @@ These are live. Do NOT re-run these migrations.
 5. Apply Change 2: update S4b upsert — `.flatMap()` + `onConflict: 'tally_voucher_no,lot_no'`
 6. Apply Change 3: verify S5b `onConflict: 'lot_no,voucher_date'` and `source_godown` field
 7. Apply Change 4: verify S3 `all_design_nos` field present (null ok)
-8. Save the node and **Save** the workflow
+8. Apply Change 5: in `buildRecFromMillRow`, split `party_challan_no` and add `issue_challan_ref`
+9. Save the node and **Save** the workflow
 9. Name the saved version `N8N_CODE_v34.js` in this folder
 
 > After applying: trigger a full resync via the manual Fetch button (or Schedule Trigger once set up).

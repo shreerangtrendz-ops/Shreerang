@@ -215,9 +215,23 @@ Format: `"151/22-23"` | One lot = one grey fabric batch | Status: FULLY WIRED
 - **NOT a direct field match** — `supplier_invoice_no` (V-03) is the mill's OWN invoice number (e.g. `"10521/24-25"`); `party_challan_no` (V-04) is our original issue challan number (e.g. `"1210"`). These are **different numbers** and must NOT be equated.
 - The correct link is resolved by `compute_jw_allocation()` which writes the matched jobwork voucher number into `rec_from_mill.jw_voucher_number`.
 - **Always JOIN via:** `jobwork_expenses.voucher_number = rec_from_mill.jw_voucher_number`
-- `party_challan_no` in rec_from_mill = mill's own receipt/challan no (from `v.partyChNo`) — used only for display, not for JW join
-- Status: FIXED in v33 (`party_challan_no: v.partyChNo || v.reference || v.vnum`) | JW link resolved by `compute_jw_allocation()`
 - Alternative (fallback) match: `job_godown` → `mill_godown_map` → `party_name` AND same `voucher_date`
+
+### V-04 Tally field mapping — confirmed from voucher screenshot (10-Apr-2026)
+```
+Tally "Party Ch. No"  → party_challan_no   — mill's OWN JW bill number (e.g. "10521/24-25")
+                         Potentially matches jobwork_expenses.supplier_invoice_no (mill's own invoice)
+Tally "Reference No"  → issue_challan_ref  — our Issue Challan No (V-02 lot_no, e.g. "1210")
+                         Links back to issue_to_mill.lot_no / tally_voucher_no
+Tally "Lot No"        → grey_lot_no        — same as Issue Challan No in most cases
+```
+- `issue_challan_ref` column added to `rec_from_mill` (10-Apr-2026) — stores Tally "Reference No"
+- n8n v34 `buildRecFromMillRow` must split `v.partyChNo` and `v.reference` into two separate fields:
+  ```js
+  party_challan_no:  v.partyChNo || v.vnum,   // "Party Ch. No" = mill's own bill no
+  issue_challan_ref: v.reference || null,       // "Reference No" = our Issue Challan (V-02 key)
+  ```
+- Previously v33 had: `party_challan_no: v.partyChNo || v.reference || v.vnum` — this was polluting party_challan_no with the Issue Challan No when partyChNo was missing
 
 **KEY 3 — `design_no`:** `rec_from_mill.design_no` = `sales_bills.design_no` = `credit_note_items.design_no`
 Born in REC FROM MILL destination batch | Status: FULLY WIRED

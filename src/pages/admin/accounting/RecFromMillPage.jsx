@@ -394,11 +394,15 @@ export default function RecFromMillPage() {
                     <div style={{fontSize:11,fontFamily:"'DM Mono',monospace",
                       color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}
                       title={r.grey_lot_no}>{r.grey_lot_no||'—'}</div>
+                    {/* party_challan_no = KEY 2 — maps to jobwork_expenses.supplier_invoice_no */}
                     {showChallan ? (
-                      <div style={{fontSize:10,color:T.textMuted,marginTop:1,
-                        fontFamily:"'DM Mono',monospace"}}>Ch {r.party_challan_no}</div>
+                      <div style={{fontSize:10,marginTop:2,display:'flex',alignItems:'center',gap:4}}>
+                        <span style={{color:T.amber,fontWeight:800,fontSize:9}}>JW Ch:</span>
+                        <span style={{fontFamily:"'DM Mono',monospace",fontWeight:700,
+                          color:T.text,fontSize:11}}>{r.party_challan_no}</span>
+                      </div>
                     ) : (
-                      <div style={{fontSize:10,color:T.textFaint,marginTop:1}}>Ch —</div>
+                      <div style={{fontSize:10,color:T.textFaint,marginTop:1}}>JW Ch —</div>
                     )}
                   </div>
 
@@ -483,7 +487,9 @@ export default function RecFromMillPage() {
                         ['Voucher Date',        fmtDate(r.voucher_date)],
                         ['Design No',           r.design_no||'—'],
                         ['Grey Lot No',         r.grey_lot_no||'—'],
-                        ['Party Challan No',    r.party_challan_no||'—'],
+                        // KEY 2: party_challan_no = jobwork_expenses.supplier_invoice_no (jobworker's own bill number)
+                        ['Party Challan No (KEY 2)', r.party_challan_no||
+                          <span style={{color:'#E67E22',fontSize:10}}>missing — JW cost won’t allocate</span>],
                         ['Mill Name',           r.mill_name || r.job_godown || '—'],
                         ['Job Godown',          r.job_godown||'—'],
                         ['Process Type',        r.process_type||'—'],

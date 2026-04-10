@@ -212,8 +212,13 @@ These 3 tables had `account_number` column exposed via API — now blocked.
 Format: `"151/22-23"` | One lot = one grey fabric batch | Status: FULLY WIRED
 
 **KEY 2 — `party_challan_no`:** `rec_from_mill.party_challan_no` = `jobwork_expenses.supplier_invoice_no`
-= mill's own challan no (e.g. `"442"`) | Status: FIXED in v33 (`v.partyChNo || v.reference || v.vnum`)
-Alternative match: `job_godown` → `mill_godown_map` → `party_name` AND same `voucher_date`
+- `supplier_invoice_no` in jobwork_expenses = the **jobworker's own bill number** on the invoice they send us for processing charges
+- `party_challan_no` in rec_from_mill = that **same jobworker bill number** — the mill writes their bill no on the REC challan
+- ALL REC from Mill entries that share the same `party_challan_no` belong to ONE jobwork bill
+- JW bill `expense_amount` = SUM of all `rec_from_mill.job_amount` WHERE `party_challan_no` = same value
+- V-01 batch_name = lot_no = V-02 batch_name (KEY 1) — also visible in V-04 lot/batch field
+- V-04 output batch = Primary Batch OR design_no OR color number (born here)
+- Status: FIXED in v33 (`party_challan_no: v.partyChNo || v.reference || v.vnum`)
 
 **KEY 3 — `design_no`:** `rec_from_mill.design_no` = `sales_bills.design_no` = `credit_note_items.design_no`
 Born in REC FROM MILL destination batch | Status: FULLY WIRED
@@ -450,6 +455,24 @@ Tally JSON field → Supabase column:
 - Built by Claude Code (874 lines): Grey → Mill → REC → Sale full journey page
 - Route: `/admin/accounting/design-lifecycle/:designNo` and `?lot=<lotNo>`
 - File: `src/pages/admin/accounting/DesignLifecyclePage.jsx`
+
+### DesignLifecyclePage.jsx V-03 JobworkBlock fix (10-Apr-2026 evening)
+- `JobworkBlock` now receives `recRow` (the paired V-04 REC row) as a prop
+- **KEY 2 mapping confirmed correct:** `V-03.supplier_invoice_no` = `V-04.party_challan_no`
+  - `jobwork_expenses.supplier_invoice_no` = the **jobworker’s own bill number** on the invoice they send us for processing
+  - `rec_from_mill.party_challan_no` = that **same jobworker bill number**, written on the REC challan when fabric is returned
+  - ALL REC entries with the same `party_challan_no` belong to ONE jobwork bill
+  - JW `expense_amount` = SUM of all `rec_from_mill.job_amount` WHERE `party_challan_no` = same value
+  - V-01 batch_name (lot_no) = V-02 batch_name = also visible in V-04 lot/batch field (KEY 1 chain)
+  - V-04 output batch = Primary Batch OR design_no OR color number (born here)
+- Matching box shows `V-03.supplier_invoice_no` = `V-04.party_challan_no` with green ✓ matched / amber ⚠ mismatch
+- “✓ Same date as V-04” green badge — V-03 and V-04 always share voucher_date
+- When JW bill not yet matched: shows the bill no from `party_challan_no` and says which field to look in
+- Caller site: `<JobworkBlock row={jwRow} recRow={rec} />`
+
+### RecFromMillPage.jsx KEY 2 display fix (10-Apr-2026 evening)
+- Table row: `party_challan_no` now labelled **JW Ch:** in amber to distinguish from lot_no
+- Expanded detail: `party_challan_no` renamed to **Party Challan No (KEY 2)** with orange warning if missing
 
 ## AntiGravity Updates (09-Apr-2026)
 

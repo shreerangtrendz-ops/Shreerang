@@ -211,14 +211,13 @@ These 3 tables had `account_number` column exposed via API — now blocked.
 **KEY 1 — `lot_no`:** `grey_purchase.lot_no` = `issue_to_mill.lot_no` = `rec_from_mill.grey_lot_no`
 Format: `"151/22-23"` | One lot = one grey fabric batch | Status: FULLY WIRED
 
-**KEY 2 — `party_challan_no`:** `rec_from_mill.party_challan_no` = `jobwork_expenses.supplier_invoice_no`
-- `supplier_invoice_no` in jobwork_expenses = the **jobworker's own bill number** on the invoice they send us for processing charges
-- `party_challan_no` in rec_from_mill = that **same jobworker bill number** — the mill writes their bill no on the REC challan
-- ALL REC from Mill entries that share the same `party_challan_no` belong to ONE jobwork bill
-- JW bill `expense_amount` = SUM of all `rec_from_mill.job_amount` WHERE `party_challan_no` = same value
-- V-01 batch_name = lot_no = V-02 batch_name (KEY 1) — also visible in V-04 lot/batch field
-- V-04 output batch = Primary Batch OR design_no OR color number (born here)
-- Status: FIXED in v33 (`party_challan_no: v.partyChNo || v.reference || v.vnum`)
+**KEY 2 — `jw_voucher_number` (V-03 ↔ V-04):** `jobwork_expenses.voucher_number` = `rec_from_mill.jw_voucher_number`
+- **NOT a direct field match** — `supplier_invoice_no` (V-03) is the mill's OWN invoice number (e.g. `"10521/24-25"`); `party_challan_no` (V-04) is our original issue challan number (e.g. `"1210"`). These are **different numbers** and must NOT be equated.
+- The correct link is resolved by `compute_jw_allocation()` which writes the matched jobwork voucher number into `rec_from_mill.jw_voucher_number`.
+- **Always JOIN via:** `jobwork_expenses.voucher_number = rec_from_mill.jw_voucher_number`
+- `party_challan_no` in rec_from_mill = mill's own receipt/challan no (from `v.partyChNo`) — used only for display, not for JW join
+- Status: FIXED in v33 (`party_challan_no: v.partyChNo || v.reference || v.vnum`) | JW link resolved by `compute_jw_allocation()`
+- Alternative (fallback) match: `job_godown` → `mill_godown_map` → `party_name` AND same `voucher_date`
 
 **KEY 3 — `design_no`:** `rec_from_mill.design_no` = `sales_bills.design_no` = `credit_note_items.design_no`
 Born in REC FROM MILL destination batch | Status: FULLY WIRED

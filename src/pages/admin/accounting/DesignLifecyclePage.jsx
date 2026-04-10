@@ -173,38 +173,15 @@ function IssueToMillBlock({ rows }) {
 }
 
 // ── V-03 Jobwork Bill ─────────────────────────────────────────────────────────
-// KEY 2 link:
-//   jobwork_expenses.supplier_invoice_no = the jobworker\'s OWN bill number on the invoice they send us
-//   rec_from_mill.party_challan_no       = that same jobworker bill number written on the REC challan
-//   ALL REC entries with the same party_challan_no belong to ONE jobwork bill
-//   JW expense_amount = SUM of all rec_from_mill.job_amount WHERE party_challan_no = same value
-//   V-03 and V-04 share the same voucher_date (mill returns fabric + issues bill same day)
+// V-03 ↔ V-04 link: rec_from_mill.jw_voucher_number = jobwork_expenses.voucher_number
+// This is resolved by compute_jw_allocation() — NOT a direct field match.
+// (supplier_invoice_no is the mill’s own invoice number; party_challan_no is our issue challan — different numbers)
 
-function JobworkBlock({ row, recRow }) {
-  // KEY 2: rec_from_mill.party_challan_no = jobwork_expenses.supplier_invoice_no
-  const millBillNo  = recRow?.party_challan_no || null;   // from V-04
-  const jwInvoiceNo = row?.supplier_invoice_no || null;   // from V-03
-  const matched     = millBillNo && jwInvoiceNo && millBillNo === jwInvoiceNo;
-  const mismatch    = millBillNo && jwInvoiceNo && millBillNo !== jwInvoiceNo;
-  const sameDate    = row && recRow && row.voucher_date === recRow.voucher_date;
-
+function JobworkBlock({ row }) {
   if (!row) {
     return (
       <VBlock title="V-03 · Jobwork Bill" borderColor={T.amber}>
-        <GhostNote msg="Jobwork bill not yet matched — looking for: jobwork_expenses.supplier_invoice_no = rec_from_mill.party_challan_no" />
-        {millBillNo && (
-          <div style={{marginTop:8,padding:'8px 12px',background:T.amber+'10',
-            border:`1px solid ${T.amber}40`,borderRadius:6}}>
-            <div style={{fontSize:9,color:T.amber,fontWeight:800,textTransform:'uppercase',
-              letterSpacing:.5,marginBottom:4}}>Jobworker bill no to match (KEY 2)</div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:800,color:T.text}}>
-              {millBillNo}
-            </div>
-            <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>
-              Find in jobwork_expenses where supplier_invoice_no = <strong>{millBillNo}</strong>
-            </div>
-          </div>
-        )}
+        <GhostNote msg="Jobwork bill not yet matched — jw_voucher_number not set. Run SELECT * FROM compute_jw_allocation() to resolve." />
       </VBlock>
     );
   }
@@ -212,72 +189,33 @@ function JobworkBlock({ row, recRow }) {
   return (
     <VBlock title="V-03 · Jobwork Bill" subtitle={decodeHtml(row.voucher_number)} borderColor={T.amber}>
 
-      {/* Header row: voucher no + date + same-date badge */}
-      <div style={{display:'flex',gap:16,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
+      {/* Header row: voucher no + date */}
+      <div style={{display:’flex’,gap:16,flexWrap:’wrap’,alignItems:’center’,marginBottom:10}}>
         <div>
-          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
+          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
             letterSpacing:.5,marginBottom:2}}>JW Voucher No</div>
-          <div style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:800,color:T.amber}}>
-            {decodeHtml(row.voucher_number)||'—'}
+          <div style={{fontFamily:"’DM Mono’,monospace",fontSize:13,fontWeight:800,color:T.amber}}>
+            {decodeHtml(row.voucher_number)||’—‘}
           </div>
         </div>
         <div>
-          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
+          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
             letterSpacing:.5,marginBottom:2}}>Date</div>
           <div style={{fontSize:12,color:T.text}}>{fmtDate(row.voucher_date)}</div>
         </div>
-        {sameDate && (
-          <span style={{fontSize:10,padding:'2px 8px',borderRadius:4,fontWeight:700,
-            background:T.green+'20',color:T.green}}>✓ Same date as V-04</span>
+        {row.supplier_invoice_no && (
+          <div>
+            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
+              letterSpacing:.5,marginBottom:2}}>Mill’s Invoice No</div>
+            <div style={{fontFamily:"’DM Mono’,monospace",fontSize:12,color:T.text}}>
+              {decodeHtml(row.supplier_invoice_no)}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* KEY 2 box: jobworker bill number match */}
-      <div style={{margin:'4px 0 12px',padding:'10px 14px',
-        background:matched ? T.green+'10' : mismatch ? '#FFF3E8' : T.amber+'08',
-        border:`1.5px solid ${matched ? T.green : mismatch ? T.amber : T.amber}50`,
-        borderRadius:8}}>
-        <div style={{fontSize:9,fontWeight:800,textTransform:'uppercase',letterSpacing:.5,
-          marginBottom:8,color:matched ? T.green : T.amber}}>
-          Jobworker Bill No — KEY 2 link (V-03 ↔ V-04)
-        </div>
-        <div style={{display:'flex',alignItems:'flex-start',gap:20,flexWrap:'wrap'}}>
-          {/* V-03 side */}
-          <div>
-            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
-              letterSpacing:.4,marginBottom:3}}>
-              V-03 supplier_invoice_no
-              <div style={{fontStyle:'italic',fontWeight:400,textTransform:'none',marginTop:1}}>
-                jobworker’s bill no on their invoice
-              </div>
-            </div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:800,
-              color:matched ? T.green : T.text}}>
-              {jwInvoiceNo || <span style={{color:T.textFaint,fontSize:12}}>not captured</span>}
-            </div>
-          </div>
-          <div style={{fontSize:20,color:T.textFaint,paddingTop:14}}>=</div>
-          {/* V-04 side */}
-          <div>
-            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
-              letterSpacing:.4,marginBottom:3}}>
-              V-04 party_challan_no
-              <div style={{fontStyle:'italic',fontWeight:400,textTransform:'none',marginTop:1}}>
-                same bill no written on REC challan
-              </div>
-            </div>
-            <div style={{fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:800,
-              color:matched ? T.green : mismatch ? T.amber : T.text}}>
-              {millBillNo || <span style={{color:T.textFaint,fontSize:12}}>not captured</span>}
-              {matched  && <span style={{fontSize:10,marginLeft:8,color:T.green}}>✓ matched</span>}
-              {mismatch && <span style={{fontSize:10,marginLeft:8,color:T.amber}}>⚠ mismatch — JW cost won’t allocate</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bill amounts */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px 16px'}}>
+      {/* Bill amounts — keeping only correct fields */}
+      <div style={{display:’grid’,gridTemplateColumns:’repeat(3,1fr)’,gap:’8px 16px’}}>
         <KV label="Mill / Jobworker" value={decodeHtml(row.party_name)} />
         <KV label="Bill Amount" value={fmt(row.expense_amount)} mono />
         <KV label="Net Payable" value={fmt(row.party_amount)} mono />
@@ -942,7 +880,7 @@ export default function DesignLifecyclePage() {
                       </span>
                     </div>
                   )}
-                  <JobworkBlock row={jwRow} recRow={rec} />
+                  <JobworkBlock row={jwRow} />
                   <RecFromMillBlock rec={rec} isFirstStage={isFirstStage} jobworkRow={jwRow} />
                 </div>
               );

@@ -433,3 +433,49 @@ Tally JSON field → Supabase column:
 - **multi-lot jobwork decoupling**: Applied latMap() iteration across uildProcessRow and uildRecFromMillRow to successfully map Jobwork Journals / Multiple entries into parallel DB rows rather than strictly capping at index \[0]\.
 - **Primary Upsert Keys adjusted**: Updated ec_from_mill upside constraints to \	ally_voucher_no,lot_no\ and process_issues to \challan_no,lot_no\ inside n8n to resolve multidimensional voucher payloads.
 - **DesignPnLPage.jsx Analytics upgrade**: Removed static .not('design_no') fallback limitations and utilized line_items to directly parse and visualize accurate margins. Embedded OriginPanel traceability natively.
+
+## Session 09-Apr-2026 — complete
+
+### Pages built/fixed
+- AccountingHub: pipeline redesign (V-01→V-05 flow), sync health bar, authenticated read policies
+- RecFromMillPage: gold standard, all cost columns, shortage flag, OriginPanel on expand
+- MissingRecFromMillPage: wired to /admin/accounting/missing-rec + sidebar
+- OriginPanel: HTML entity decoder added (decodeHtml helper), mill_name falls back to job_godown
+- PurchaseBillsPage: gold standard complete
+
+### Supabase fixes applied
+- sales_bills: all_design_nos jsonb column added (was causing S3 400 error)
+- issue_to_mill: UNIQUE(lot_no) → UNIQUE(lot_no, voucher_date) + source_godown column
+- grey_purchase: UNIQUE(tally_voucher_no) → UNIQUE(tally_voucher_no, lot_no)
+- credit_note_items: old UNIQUE constraint removed (DELETE+INSERT pattern)
+- receipt_payment_lines: WITH CHECK added to RLS policy + bill_ref nullable
+- 6 sync tables: authenticated SELECT policies added (grey_purchase, issue_to_mill, rec_from_mill, jobwork_expenses, process_issues, receipt_payment_lines)
+- design_origin view: created joining all 5 voucher types
+
+### n8n v34 status
+- buildGreyPurchaseRow: flatMap over all batches ✅
+- partyChNo fix: applied manually in n8n editor ✅
+- issue_to_mill source_godown + UDF fields: added manually ✅
+- Schedule triggers: Every 30 min + 3x daily (6AM/2PM/9:30PM IST) ✅
+- Tally health check before sync ✅
+
+### Live sync status (19:00 IST)
+- sales_bills: 3,142 | grey_purchase: 1,622 | issue_to_mill: 1,339
+- rec_from_mill: 3,421 | jw_expenses: 2,947 | rpl: 11,095
+- All synced to: 25 Jan 2025 (439 days behind — catching up overnight)
+
+### rec_from_mill cost health
+- JW matched: 1,779/3,421 (52%) — will reach ~85% after full sync
+- has grey_purchase_rate: 1,164 (34%) — will improve as grey_purchase syncs
+- avg cost/mtr: ₹43.07 | avg shortage: 10.41% | high shortage >15%: 502 batches
+
+### Tomorrow morning tasks
+1. Run SELECT * FROM compute_jw_allocation() — refresh JW costs after sync catches up
+2. Check if issue_to_mill > 3,000 rows (should be fully populated)
+3. Build Design P&L Page using design_costing_v1 view
+4. Check S_AV_LINES — should be ok after WITH CHECK policy fix
+
+### Known data quirks
+- design_no shows lot_no format (1355/22-23) for old FY22-23 entries — partyChNo not captured in old sync
+- grey_purchase_rate = 0 for many REC rows — grey_purchase data not yet synced for those lots
+- OriginPanel decodeHtml helper: decodes &#10; &#13; &amp; &quot; from Tally XML entities

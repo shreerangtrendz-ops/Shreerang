@@ -3,7 +3,7 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   DESIGN LIFECYCLE PAGE â€” Complete journey: Grey â†’ Mill â†’ REC â†’ Sale
+   DESIGN LIFECYCLE PAGE â€" Complete journey: Grey â†' Mill â†' REC â†' Sale
    Route: /admin/accounting/design-lifecycle/:designNo
    Also:  /admin/accounting/design-lifecycle?lot=<lotNo>
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
@@ -21,10 +21,10 @@ const T = {
 };
 
 const fmt     = n => 'â‚¹' + Math.abs(Number(n||0)).toLocaleString('en-IN',{maximumFractionDigits:0});
-const fmtRate = n => n != null && n !== '' ? `â‚¹${Math.abs(Number(n)).toFixed(2)}/m` : 'â€”';
+const fmtRate = n => n != null && n !== '' ? `â‚¹${Math.abs(Number(n)).toFixed(2)}/m` : 'â€"';
 const fmtMtr  = n => Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2}) + ' m';
-const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : 'â€”';
-const fmtPct  = n => n != null ? `${Math.abs(Number(n)).toFixed(1)}%` : 'â€”';
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : 'â€"';
+const fmtPct  = n => n != null ? `${Math.abs(Number(n)).toFixed(1)}%` : 'â€"';
 const fmtL    = n => { const v=Math.abs(Number(n||0)); return v>=10000000?`â‚¹${(v/10000000).toFixed(2)}Cr`:v>=100000?`â‚¹${(v/100000).toFixed(1)}L`:fmt(n); };
 
 const decodeHtml = str => str
@@ -44,7 +44,7 @@ function groupByKey(arr, key) {
   return m;
 }
 
-// â”€â”€ Small UI atoms â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Small UI atoms â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function Pill({ label, value, color=T.teal, bg }) {
   return (
@@ -100,7 +100,7 @@ function DesignBornBadge() {
   );
 }
 
-// â”€â”€ V-block wrappers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ V-block wrappers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function VBlock({ title, subtitle, borderColor, children }) {
   return (
@@ -108,7 +108,7 @@ function VBlock({ title, subtitle, borderColor, children }) {
       <div style={{fontSize:10,fontWeight:800,color:borderColor,textTransform:'uppercase',
         letterSpacing:.7,marginBottom:6,display:'flex',alignItems:'center',gap:6}}>
         {title}
-        {subtitle && <span style={{fontWeight:500,color:T.textMuted,textTransform:'none',letterSpacing:0,fontSize:10}}>â€” {subtitle}</span>}
+        {subtitle && <span style={{fontWeight:500,color:T.textMuted,textTransform:'none',letterSpacing:0,fontSize:10}}>â€" {subtitle}</span>}
       </div>
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:'12px 14px'}}>
         {children}
@@ -117,7 +117,7 @@ function VBlock({ title, subtitle, borderColor, children }) {
   );
 }
 
-// â”€â”€ V-01 Grey Purchase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ V-01 Grey Purchase â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function GreyPurchaseBlock({ rows }) {
   if (!rows || rows.length === 0) {
@@ -146,13 +146,13 @@ function GreyPurchaseBlock({ rows }) {
   );
 }
 
-// â”€â”€ V-02 Issue to Mill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ V-02 Issue to Mill â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function IssueToMillBlock({ rows }) {
   if (!rows || rows.length === 0) {
     return (
       <VBlock title="V-02 Â· Issue to Mill" borderColor={T.teal}>
-        <GhostNote msg="Issue challan not synced â€” check n8n issue_to_mill table" />
+        <GhostNote msg="Issue challan not synced â€" check n8n issue_to_mill table" />
       </VBlock>
     );
   }
@@ -172,16 +172,16 @@ function IssueToMillBlock({ rows }) {
   );
 }
 
-// â”€â”€ V-03 Jobwork Bill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// V-03 â†” V-04 link: rec_from_mill.jw_voucher_number = jobwork_expenses.voucher_number
-// This is resolved by compute_jw_allocation() â€” NOT a direct field match.
-// (supplier_invoice_no is the millâ€™s own invoice number; party_challan_no is our issue challan â€” different numbers)
+// â"€â"€ V-03 Jobwork Bill â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// V-03 â†" V-04 link: rec_from_mill.jw_voucher_number = jobwork_expenses.voucher_number
+// This is resolved by compute_jw_allocation() â€" NOT a direct field match.
+// (supplier_invoice_no is the millâ€™s own invoice number; party_challan_no is our issue challan â€" different numbers)
 
 function JobworkBlock({ row }) {
   if (!row) {
     return (
       <VBlock title="V-03 Â· Jobwork Bill" borderColor={T.amber}>
-        <GhostNote msg="Jobwork bill not yet matched â€” jw_voucher_number not set. Run SELECT * FROM compute_jw_allocation() to resolve." />
+        <GhostNote msg="Jobwork bill not yet matched â€" jw_voucher_number not set. Run SELECT * FROM compute_jw_allocation() to resolve." />
       </VBlock>
     );
   }
@@ -195,7 +195,7 @@ function JobworkBlock({ row }) {
           <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:â€™uppercaseâ€™,
             letterSpacing:.5,marginBottom:2}}>JW Voucher No</div>
           <div style={{fontFamily:"â€™DM Monoâ€™,monospace",fontSize:13,fontWeight:800,color:T.amber}}>
-            {decodeHtml(row.voucher_number)||â€™â€”â€˜}
+            {decodeHtml(row.voucher_number)||â€™â€"â€˜}
           </div>
         </div>
         <div>
@@ -214,7 +214,7 @@ function JobworkBlock({ row }) {
         )}
       </div>
 
-      {/* Bill amounts â€” keeping only correct fields */}
+      {/* Bill amounts â€" keeping only correct fields */}
       <div style={{display:â€™gridâ€™,gridTemplateColumns:â€™repeat(3,1fr)â€™,gap:â€™8px 16pxâ€™}}>
         <KV label="Mill / Jobworker" value={decodeHtml(row.party_name)} />
         <KV label="Bill Amount" value={fmt(row.expense_amount)} mono />
@@ -226,10 +226,10 @@ function JobworkBlock({ row }) {
   );
 }
 
-// â”€â”€ V-04 REC from Mill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ V-04 REC from Mill â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function RecFromMillBlock({ rec, isFirstStage, jobworkRow }) {
-  const mill      = decodeHtml(rec.mill_name || rec.job_godown) || 'â€”';
+  const mill      = decodeHtml(rec.mill_name || rec.job_godown) || 'â€"';
   const shortage  = Number(rec.shortage_pct||0);
   const highShort = shortage > 15;
   const greyItem  = decodeHtml(rec.grey_item_name);
@@ -241,7 +241,7 @@ function RecFromMillBlock({ rec, isFirstStage, jobworkRow }) {
       <div style={{display:'flex',gap:16,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
         <div>
           <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.5,marginBottom:2}}>REC Voucher No</div>
-          <div style={{fontSize:13,fontWeight:800,color:T.green,fontFamily:"'DM Mono',monospace"}}>{rec.tally_voucher_no||'â€”'}</div>
+          <div style={{fontSize:13,fontWeight:800,color:T.green,fontFamily:"'DM Mono',monospace"}}>{rec.tally_voucher_no||'â€"'}</div>
         </div>
         {rec.party_challan_no && rec.party_challan_no !== rec.tally_voucher_no && (
           <div>
@@ -262,18 +262,18 @@ function RecFromMillBlock({ rec, isFirstStage, jobworkRow }) {
         <span style={{fontSize:12,fontWeight:600,color:T.text}}>{mill}</span>
       </div>
 
-      {/* Row 3: Grey â†’ Finish item */}
+      {/* Row 3: Grey â†' Finish item */}
       {(greyItem || finishItem) && (
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10,
           padding:'8px 12px',background:T.bg,borderRadius:6,flexWrap:'wrap'}}>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Grey Item</div>
-            <div style={{fontSize:12,fontWeight:600,color:T.text}}>{greyItem||'â€”'}</div>
+            <div style={{fontSize:12,fontWeight:600,color:T.text}}>{greyItem||'â€"'}</div>
           </div>
-          <div style={{fontSize:20,color:T.textFaint,padding:'0 4px'}}>â†’</div>
+          <div style={{fontSize:20,color:T.textFaint,padding:'0 4px'}}>â†'</div>
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:9,color:T.green,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Finish Item</div>
-            <div style={{fontSize:12,fontWeight:700,color:T.tealDark}}>{finishItem||'â€”'}</div>
+            <div style={{fontSize:12,fontWeight:700,color:T.tealDark}}>{finishItem||'â€"'}</div>
           </div>
         </div>
       )}
@@ -283,25 +283,25 @@ function RecFromMillBlock({ rec, isFirstStage, jobworkRow }) {
         <div style={{padding:'8px 10px',background:T.blueLight,borderRadius:6,textAlign:'center'}}>
           <div style={{fontSize:9,color:T.blue,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Issued</div>
           <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:"'DM Mono',monospace"}}>
-            {rec.grey_issued_qty_mtrs ? fmtMtr(rec.grey_issued_qty_mtrs) : 'â€”'}
+            {rec.grey_issued_qty_mtrs ? fmtMtr(rec.grey_issued_qty_mtrs) : 'â€"'}
           </div>
         </div>
         <div style={{padding:'8px 10px',background:T.greenLight,borderRadius:6,textAlign:'center'}}>
           <div style={{fontSize:9,color:T.green,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Received</div>
           <div style={{fontSize:13,fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>
-            {rec.finish_qty_mtrs ? fmtMtr(rec.finish_qty_mtrs) : 'â€”'}
+            {rec.finish_qty_mtrs ? fmtMtr(rec.finish_qty_mtrs) : 'â€"'}
           </div>
         </div>
         <div style={{padding:'8px 10px',background:highShort?T.redLight:'#F8FAFB',borderRadius:6,textAlign:'center'}}>
           <div style={{fontSize:9,color:highShort?T.red:T.textMuted,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Shortage</div>
           <div style={{fontSize:13,fontWeight:700,color:highShort?T.red:T.text,fontFamily:"'DM Mono',monospace"}}>
-            {rec.shortage_mtrs ? fmtMtr(rec.shortage_mtrs) : 'â€”'}
+            {rec.shortage_mtrs ? fmtMtr(rec.shortage_mtrs) : 'â€"'}
           </div>
         </div>
         <div style={{padding:'8px 10px',background:highShort?T.redLight:'#F8FAFB',borderRadius:6,textAlign:'center'}}>
           <div style={{fontSize:9,color:highShort?T.red:T.textMuted,fontWeight:700,textTransform:'uppercase',marginBottom:2}}>Short %</div>
           <div style={{fontSize:13,fontWeight:700,color:highShort?T.red:T.text}}>
-            {rec.shortage_pct != null ? fmtPct(rec.shortage_pct) : 'â€”'}
+            {rec.shortage_pct != null ? fmtPct(rec.shortage_pct) : 'â€"'}
           </div>
         </div>
       </div>
@@ -312,7 +312,7 @@ function RecFromMillBlock({ rec, isFirstStage, jobworkRow }) {
   );
 }
 
-// â”€â”€ Costing Summary box â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Costing Summary box â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function CostingSummaryBox({ recStages, gp, sales }) {
   const lastRec = recStages[recStages.length - 1];
@@ -420,7 +420,7 @@ function CostingSummaryBox({ recStages, gp, sales }) {
               </div>
               <div style={lineStyle}>
                 <span style={labelStyle}>Brokerage / m</span>
-                <span style={{...valStyle,color:T.amber}}>âˆ’{fmtRate(avgCommPerM)}</span>
+                <span style={{...valStyle,color:T.amber}}>âˆ'{fmtRate(avgCommPerM)}</span>
               </div>
               <div style={lineStyle}>
                 <span style={labelStyle}>Net realisation / m</span>
@@ -428,7 +428,7 @@ function CostingSummaryBox({ recStages, gp, sales }) {
               </div>
               <div style={lineStyle}>
                 <span style={labelStyle}>Factory cost / m</span>
-                <span style={{...valStyle,color:T.red}}>âˆ’{fmtRate(fullCost||factoryCostPerM)}</span>
+                <span style={{...valStyle,color:T.red}}>âˆ'{fmtRate(fullCost||factoryCostPerM)}</span>
               </div>
               {divider}
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0'}}>
@@ -453,7 +453,7 @@ function CostingSummaryBox({ recStages, gp, sales }) {
   );
 }
 
-// â”€â”€ Sales Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Sales Section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function SalesSection({ sales }) {
   const totalQty  = sales.reduce((s,b)=>s+Math.abs(Number(b.quantity_mtrs||0)),0);
@@ -471,7 +471,7 @@ function SalesSection({ sales }) {
         letterSpacing:.7,marginBottom:6}}>
         V-05 Â· Sales Bills
         <span style={{fontWeight:500,color:T.textMuted,textTransform:'none',letterSpacing:0,marginLeft:6}}>
-          â€” {sales.length} bill{sales.length!==1?'s':''}, {fmtMtr(totalQty)} total
+          â€" {sales.length} bill{sales.length!==1?'s':''}, {fmtMtr(totalQty)} total
         </span>
       </div>
 
@@ -499,19 +499,19 @@ function SalesSection({ sales }) {
                     onMouseEnter={e=>e.currentTarget.style.background=T.bg}
                     onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                     <td style={{...tdStyle,fontFamily:"'DM Mono',monospace",fontWeight:700,color:T.purple}}>
-                      {b.bill_number||'â€”'}
+                      {b.bill_number||'â€"'}
                     </td>
                     <td style={{...tdStyle,color:T.textMuted}}>{fmtDate(b.bill_date)}</td>
-                    <td style={{...tdStyle,fontWeight:600}}>{decodeHtml(b.customer_name)||'â€”'}</td>
-                    <td style={{...tdStyle,color:T.textMuted,fontSize:11}}>{b.customer_state||'â€”'}</td>
+                    <td style={{...tdStyle,fontWeight:600}}>{decodeHtml(b.customer_name)||'â€"'}</td>
+                    <td style={{...tdStyle,color:T.textMuted,fontSize:11}}>{b.customer_state||'â€"'}</td>
                     <td style={{...tdStyle,textAlign:'right',fontFamily:"'DM Mono',monospace"}}>
-                      {b.quantity_mtrs ? fmtMtr(b.quantity_mtrs) : 'â€”'}
+                      {b.quantity_mtrs ? fmtMtr(b.quantity_mtrs) : 'â€"'}
                     </td>
                     <td style={{...tdStyle,textAlign:'right',fontFamily:"'DM Mono',monospace"}}>
-                      {b.rate_per_mtr ? `â‚¹${Math.abs(Number(b.rate_per_mtr)).toFixed(2)}` : 'â€”'}
+                      {b.rate_per_mtr ? `â‚¹${Math.abs(Number(b.rate_per_mtr)).toFixed(2)}` : 'â€"'}
                     </td>
                     <td style={{...tdStyle,fontSize:11}}>
-                      {decodeHtml(b.broker_name)||<span style={{color:T.textFaint}}>â€”</span>}
+                      {decodeHtml(b.broker_name)||<span style={{color:T.textFaint}}>â€"</span>}
                     </td>
                     <td style={{...tdStyle,textAlign:'right'}}>
                       {b.comm_rate
@@ -519,7 +519,7 @@ function SalesSection({ sales }) {
                             color:T.gold,fontWeight:700,fontSize:10}}>
                             {Math.abs(Number(b.comm_rate)).toFixed(1)}%
                           </span>
-                        : <span style={{color:T.textFaint}}>â€”</span>}
+                        : <span style={{color:T.textFaint}}>â€"</span>}
                     </td>
                     <td style={{...tdStyle,textAlign:'right',fontWeight:700,color:T.green,
                       fontFamily:"'DM Mono',monospace"}}>
@@ -556,7 +556,7 @@ function SalesSection({ sales }) {
   );
 }
 
-// â”€â”€ Search / landing form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Search / landing form â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function SearchForm({ onSearch }) {
   const [input, setInput] = useState('');
@@ -573,12 +573,12 @@ function SearchForm({ onSearch }) {
   return (
     <div style={{maxWidth:560,margin:'80px auto 0',padding:'0 24px',fontFamily:"'DM Sans',sans-serif"}}>
       <div style={{textAlign:'center',marginBottom:32}}>
-        <div style={{fontSize:36,marginBottom:12}}>ğŸ”—</div>
+        <div style={{fontSize:36,marginBottom:12}}>ğŸ"—</div>
         <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:28,color:T.tealDark,margin:'0 0 8px'}}>
           Design Lifecycle
         </h1>
         <p style={{fontSize:13,color:T.textMuted,margin:0}}>
-          Trace any design from grey purchase â†’ mill â†’ REC â†’ sale with full costing
+          Trace any design from grey purchase â†' mill â†' REC â†' sale with full costing
         </p>
       </div>
 
@@ -610,7 +610,7 @@ function SearchForm({ onSearch }) {
           <button type="submit"
             style={{padding:'10px 20px',background:T.teal,color:'#fff',border:'none',
               borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer'}}>
-            View â†’
+            View â†'
           </button>
         </form>
       </div>
@@ -618,7 +618,7 @@ function SearchForm({ onSearch }) {
   );
 }
 
-// â”€â”€ Main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Main component â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function DesignLifecyclePage() {
   const { designNo: designNoParam } = useParams();
@@ -628,9 +628,9 @@ export default function DesignLifecyclePage() {
 
   const [resolvedDesignNo, setResolvedDesignNo] = useState(designNoParam || null);
   const [recRows,          setRecRows]           = useState([]);
-  const [gpMap,            setGpMap]             = useState({});   // lot_no â†’ [grey_purchase rows]
-  const [itmMap,           setItmMap]            = useState({});   // lot_no â†’ [issue_to_mill rows]
-  const [jweMap,           setJweMap]            = useState({});   // voucher_number â†’ [jobwork_expenses rows]
+  const [gpMap,            setGpMap]             = useState({});   // lot_no â†' [grey_purchase rows]
+  const [itmMap,           setItmMap]            = useState({});   // lot_no â†' [issue_to_mill rows]
+  const [jweMap,           setJweMap]            = useState({});   // voucher_number â†' [jobwork_expenses rows]
   const [sales,            setSales]             = useState([]);
   const [loading,          setLoading]           = useState(false);
   const [error,            setError]             = useState(null);
@@ -710,7 +710,7 @@ export default function DesignLifecyclePage() {
     }
   }
 
-  // â”€â”€ If no design/lot param, show search form â”€â”€
+  // â"€â"€ If no design/lot param, show search form â"€â"€
   if (!designNoParam && !lotNoParam) {
     return (
       <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh'}}>
@@ -719,14 +719,14 @@ export default function DesignLifecyclePage() {
     );
   }
 
-  // â”€â”€ Group REC rows by lot, then by stage â”€â”€
+  // â"€â"€ Group REC rows by lot, then by stage â"€â"€
   const recByLot = groupByKey(recRows, 'grey_lot_no');
   // Collect ordered lot list (preserve first-seen order)
   const lotOrder = [...new Set(recRows.map(r=>r.grey_lot_no).filter(Boolean))];
 
-  // â”€â”€ Derive header stats â”€â”€
+  // â"€â"€ Derive header stats â"€â"€
   const firstRec = recRows[0];
-  const finishItemName = decodeHtml(firstRec?.finish_item_name) || 'â€”';
+  const finishItemName = decodeHtml(firstRec?.finish_item_name) || 'â€"';
   const totalFinishQty = recRows.reduce((s,r)=>s+Math.abs(Number(r.finish_qty_mtrs||0)),0);
   // Factory cost: average of cumulative_cost_per_mtr across all final-stage recs
   const finalStages = lotOrder.map(lot => {
@@ -746,7 +746,7 @@ export default function DesignLifecyclePage() {
     <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',
       padding:'20px 24px',maxWidth:1100,margin:'0 auto'}}>
 
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* â"€â"€ Header â"€â"€ */}
       <div style={{marginBottom:24}}>
         <button onClick={()=>navigate('/admin/accounting/design-lifecycle')}
           style={{background:'none',border:'none',color:T.textMuted,cursor:'pointer',
@@ -787,18 +787,18 @@ export default function DesignLifecyclePage() {
             <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
               <Pill label="Total Finish Qty" value={fmtMtr(totalFinishQty)} color={T.blue} />
               <Pill label="Avg Factory Cost / m"
-                value={avgFactoryCost ? fmtRate(avgFactoryCost) : 'â€”'} color={T.teal} />
+                value={avgFactoryCost ? fmtRate(avgFactoryCost) : 'â€"'} color={T.teal} />
               <Pill label="Avg Selling Rate"
-                value={avgSellingRate ? fmtRate(avgSellingRate) : 'â€”'} color={T.green} />
+                value={avgSellingRate ? fmtRate(avgSellingRate) : 'â€"'} color={T.green} />
               <Pill label="Avg Margin"
-                value={avgMarginPct != null ? `${avgMarginPct >= 0 ? '+' : ''}${avgMarginPct.toFixed(1)}%` : 'â€”'}
+                value={avgMarginPct != null ? `${avgMarginPct >= 0 ? '+' : ''}${avgMarginPct.toFixed(1)}%` : 'â€"'}
                 color={avgMarginPct != null && avgMarginPct < 0 ? T.red : T.green} />
             </div>
           )}
         </div>
       </div>
 
-      {/* â”€â”€ Error state â”€â”€ */}
+      {/* â"€â"€ Error state â"€â"€ */}
       {error && (
         <div style={{padding:'16px 20px',background:T.redLight,border:`1px solid ${T.red}40`,
           borderRadius:10,color:T.red,fontSize:13,marginBottom:20}}>
@@ -806,18 +806,18 @@ export default function DesignLifecyclePage() {
         </div>
       )}
 
-      {/* â”€â”€ Loading state â”€â”€ */}
+      {/* â"€â"€ Loading state â"€â"€ */}
       {loading && (
         <div style={{padding:80,textAlign:'center',color:T.textMuted,fontSize:14}}>
           Loading lifecycle dataâ€¦
         </div>
       )}
 
-      {/* â”€â”€ Not found â”€â”€ */}
+      {/* â"€â"€ Not found â"€â"€ */}
       {!loading && !error && recRows.length === 0 && (
         <div style={{padding:60,textAlign:'center',background:T.surface,border:`1px solid ${T.border}`,
           borderRadius:14}}>
-          <div style={{fontSize:40,marginBottom:12}}>ğŸ”</div>
+          <div style={{fontSize:40,marginBottom:12}}>ğŸ"</div>
           <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:6}}>No REC data found</div>
           <div style={{fontSize:13,color:T.textMuted}}>
             No REC from Mill records for {designNoParam ? `design #${designNoParam}` : `lot ${lotNoParam}`}.
@@ -826,7 +826,7 @@ export default function DesignLifecyclePage() {
         </div>
       )}
 
-      {/* â”€â”€ Timeline: one section per lot â”€â”€ */}
+      {/* â"€â"€ Timeline: one section per lot â"€â"€ */}
       {!loading && lotOrder.map((lot, lotIndex) => {
         const stagesForLot = (recByLot[lot]||[]).sort((a,b)=>(a.stage_no||1)-(b.stage_no||1));
         const gpRows  = gpMap[lot]  || [];
@@ -876,7 +876,7 @@ export default function DesignLifecyclePage() {
                       padding:'8px 0',margin:'8px 0 12px 18px'}}>
                       <div style={{width:1,height:24,background:T.border}}/>
                       <span style={{fontSize:11,color:T.textMuted,fontStyle:'italic'}}>
-                        â†’ Sent for further processing (Stage {rec.stage_no||stageIdx+1})
+                        â†' Sent for further processing (Stage {rec.stage_no||stageIdx+1})
                       </span>
                     </div>
                   )}
@@ -892,7 +892,7 @@ export default function DesignLifecyclePage() {
         );
       })}
 
-      {/* â”€â”€ Sales section (global, across all lots for this design) â”€â”€ */}
+      {/* â"€â"€ Sales section (global, across all lots for this design) â"€â"€ */}
       {!loading && recRows.length > 0 && (
         <SalesSection sales={sales} />
       )}

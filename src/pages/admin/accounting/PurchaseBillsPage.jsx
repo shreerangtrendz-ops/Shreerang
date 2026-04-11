@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
+import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
 
 const T = {
   teal:'#2BA898', tealDark:'#0B2E2B', tealLight:'#EEF8F6', teal100:'#9FE1CB',
@@ -120,6 +121,9 @@ export default function PurchaseBillsPage() {
         <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
       </div>
 
+      {/* Sync Health Bar */}
+      <SyncHealthBar tableName="grey_purchase" recordCount={totalCount} />
+
       {/* FY Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
         {FY_YEARS.map(yr => (
@@ -166,8 +170,52 @@ export default function PurchaseBillsPage() {
         <button onClick={resetFilters} style={{padding:'8px 14px',background:'transparent',color:T.textMuted,border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,cursor:'pointer',height:34}}>Reset</button>
       </div>
 
-      {/* Table */}
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+      {/* Mobile Cards */}
+      <div className="acct-mobile-cards">
+        {loading ? (
+          <div style={{padding:40,textAlign:'center',color:T.textMuted,fontSize:13}}>Loading…</div>
+        ) : bills.length===0 ? (
+          <div style={{padding:40,textAlign:'center',color:T.textMuted,fontSize:13}}>No bills found</div>
+        ) : bills.map(b => (
+          <div key={b.id} className="acct-mobile-card"
+            onClick={()=>setExpanded(expanded===b.id?null:b.id)}>
+            <div className="amc-header">
+              <div>
+                <div className="amc-design-badge">{b.bill_number||'—'}</div>
+                <div className="amc-design-sub">{b.supplier_name||'—'}</div>
+              </div>
+              <div>
+                <div className="amc-cost">{fmt(b.total_amount)}</div>
+                <div className="amc-cost-label">total amt</div>
+              </div>
+            </div>
+            <div className="amc-row">
+              <span className="amc-row-label">Date</span>
+              <span className="amc-row-val">{fmtDate(b.bill_date)}</span>
+            </div>
+            <div className="amc-row">
+              <span className="amc-row-label">Metres</span>
+              <span className="amc-row-val">{b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'}</span>
+            </div>
+            <div className="amc-row">
+              <span className="amc-row-label">Rate / m</span>
+              <span className="amc-row-val cell-financial">{b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'}</span>
+            </div>
+            <div className="amc-row">
+              <span className="amc-row-label">Fabric</span>
+              <span className="amc-row-val" style={{fontSize:12}}>{b.fabric_name||b.item_name||'—'}</span>
+            </div>
+            <div className="amc-badges">
+              {b.design_no && <span className="badge bteal">D{b.design_no}</span>}
+              {b.tally_sync_status==='synced' && <span className="badge bgreen">Tally ✔</span>}
+              {b.process_lot_no && <span className="badge" style={{background:'rgba(43,168,152,0.08)',color:T.textMuted}}>Lot: {b.process_lot_no}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table (desktop) */}
+      <div className="acct-table-wrap" style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
         {/* Header row */}
         <div style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 140px 110px 90px 110px 90px 44px',background:T.bg,borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
           {['Bill No','Date','Supplier','Fabric / Item','Metres','Rate/m','Amount','Source',''].map((h,i)=>(
@@ -337,7 +385,7 @@ export default function PurchaseBillsPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>{/* end acct-table-wrap */}
 
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import OriginPanel from '../../../components/accounting/OriginPanel';
+import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
 
 /* ════════════════════════════════════════════════════════════════
    REC FROM MILL PAGE — gold standard (V-04 REC vouchers)
@@ -191,6 +192,9 @@ export default function RecFromMillPage() {
         <Badge label={`${totalCount.toLocaleString()} records`} color={T.teal} bg={T.tealLight}/>
       </div>
 
+      {/* ── Sync Health Bar ── */}
+      <SyncHealthBar tableName="rec_from_mill" recordCount={totalCount} />
+
       {/* ── FY Tabs ── */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,
         border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
@@ -315,8 +319,90 @@ export default function RecFromMillPage() {
         </button>
       </div>
 
-      {/* ── Table ── */}
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+      {/* ── Mobile Cards (<768px) ── */}
+      <div className="acct-mobile-cards">
+        {loading ? (
+          <div style={{padding:40,textAlign:'center',color:T.textMuted,fontSize:13}}>Loading…</div>
+        ) : rows.length === 0 ? (
+          <div style={{padding:40,textAlign:'center',color:T.textMuted,fontSize:13}}>No records found</div>
+        ) : rows.map(r => {
+          const shortage  = Number(r.shortage_pct || 0);
+          const highShort = shortage > 15;
+          const mill      = r.mill_name || r.job_godown || '—';
+          const isPrimary = !r.design_no || r.design_no === 'Primary Batch';
+          const costPerMtr = r.cumulative_cost_per_mtr
+            ? `₹${Math.abs(Number(r.cumulative_cost_per_mtr)).toFixed(2)}`
+            : '—';
+          return (
+            <div key={r.id} className="acct-mobile-card"
+              onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+
+              {/* Top row: design badge + cost/mtr */}
+              <div className="amc-header">
+                <div>
+                  <div className="amc-design-badge">
+                    {isPrimary ? 'Primary' : r.design_no ? `D${r.design_no}` : '—'}
+                  </div>
+                  <div className="amc-design-sub">{mill}</div>
+                </div>
+                <div>
+                  <div className="amc-cost">{costPerMtr}</div>
+                  <div className="amc-cost-label">cost / mtr</div>
+                </div>
+              </div>
+
+              {/* Data rows */}
+              <div className="amc-row">
+                <span className="amc-row-label">Voucher</span>
+                <span className="amc-row-val" style={{fontFamily:"'JetBrains Mono',monospace",color:T.teal,fontSize:12}}>
+                  {r.tally_voucher_no || '—'}
+                </span>
+              </div>
+              <div className="amc-row">
+                <span className="amc-row-label">Date</span>
+                <span className="amc-row-val">{fmtDate(r.voucher_date)}</span>
+              </div>
+              <div className="amc-row">
+                <span className="amc-row-label">Lot / Challan</span>
+                <span className="amc-row-val" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>
+                  {r.grey_lot_no || '—'}
+                </span>
+              </div>
+              <div className="amc-row">
+                <span className="amc-row-label">Issued</span>
+                <span className="amc-row-val">{r.grey_issued_qty_mtrs ? fmtMtr(r.grey_issued_qty_mtrs) : '—'}</span>
+              </div>
+              <div className="amc-row">
+                <span className="amc-row-label">Finish</span>
+                <span className="amc-row-val" style={{fontWeight:700}}>{fmtMtr(r.finish_qty_mtrs)}</span>
+              </div>
+              <div className="amc-row">
+                <span className="amc-row-label">Job Amt</span>
+                <span className="amc-row-val">{r.job_amount != null ? fmt(r.job_amount) : '—'}</span>
+              </div>
+
+              {/* Badges row */}
+              <div className="amc-badges">
+                {highShort && (
+                  <span className="badge bred">⚠ {shortage.toFixed(1)}% short</span>
+                )}
+                {!highShort && shortage > 0 && (
+                  <span className="badge" style={{background:'rgba(106,155,149,0.12)',color:T.textMuted}}>
+                    {shortage.toFixed(1)}% short
+                  </span>
+                )}
+                <ReconBadge status={r.recon_status} />
+                {r.party_challan_no && (
+                  <span className="badge bteal">Ch: {r.party_challan_no}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Table (desktop) ── */}
+      <div className="acct-table-wrap" style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
 
         {/* Scrollable wrapper */}
         <div style={{overflowX:'auto'}}>
@@ -579,7 +665,7 @@ export default function RecFromMillPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>{/* end acct-table-wrap */}
     </div>
   );
 }

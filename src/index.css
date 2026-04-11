@@ -9,6 +9,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Accounting pages shared design system */
+@import './styles/accounting.css';
+
 @layer base {
   :root {
     /* ── Tailwind / shadcn tokens (kept for UI components) ── */

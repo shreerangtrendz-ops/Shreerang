@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
+import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // JOB WORK BILLS PAGE — gold standard (4 tabs: Issue / REC / Jobwork / Expenses)
@@ -243,8 +244,46 @@ export default function JobWorkBillsPage() {
         <div style={{padding:50,textAlign:'center',color:T.textMuted}}>
           No Issue to Mill entries for this period. Sync reached {fmtDate(maxIssueDate)}.
         </div>
-      ) : (
-        <div style={{overflowX:'auto'}}>
+      ) : (<>
+        {/* Mobile Cards */}
+        <div className="acct-mobile-cards">
+          {pagedIssues.map(r => {
+            const displayQty = Math.abs(Number(r.qty_mtrs||0));
+            return (
+              <div key={r.id} className="acct-mobile-card"
+                onClick={()=>setExpandedId(expandedId==='ITM-'+r.id?null:'ITM-'+r.id)}>
+                <div className="amc-header">
+                  <div>
+                    <div className="amc-design-badge">{r.lot_no||r.tally_voucher_no||'—'}</div>
+                    <div className="amc-design-sub">{r.mill_name||r.destination_godown||'—'}</div>
+                  </div>
+                  <div>
+                    <div className="amc-cost">{displayQty===0?'0 m ⚠':`${fmtQty(displayQty)} m`}</div>
+                    <div className="amc-cost-label">issued qty</div>
+                  </div>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Date</span>
+                  <span className="amc-row-val">{fmtDate(r.voucher_date)}</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Item</span>
+                  <span className="amc-row-val" style={{fontSize:12}}>{r.item_name||'—'}</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Amount</span>
+                  <span className="amc-row-val cell-financial">{fmt(r.amount)}</span>
+                </div>
+                <div className="amc-badges">
+                  {r.process_type && <span className="badge bteal">{r.process_type}</span>}
+                  {displayQty===0 && <span className="badge bred">⚠ qty=0</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Table (desktop) */}
+        <div className="acct-table-wrap" style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
             <thead><tr>
               <TH label="Tally Voucher"/>
@@ -319,8 +358,8 @@ export default function JobWorkBillsPage() {
               </div>
             );
           })}
-        </div>
-      )}
+        </div>{/* end acct-table-wrap */}
+      </>)}
       <Pagination page={issPage} total={filteredIssues.length} onPage={p=>{setIssPage(p);setExpandedId(null);}}/>
     </div>
   );
@@ -347,8 +386,55 @@ export default function JobWorkBillsPage() {
           <div style={{padding:50,textAlign:'center',color:T.textMuted}}>
             No REC FROM MILL entries for this period. Sync reached {fmtDate(maxRecDate)}.
           </div>
-        ) : (
-          <div style={{overflowX:'auto'}}>
+        ) : (<>
+          {/* Mobile Cards */}
+          <div className="acct-mobile-cards">
+            {pagedRec.map(r => {
+              const shortPct   = Math.abs(Number(r.shortage_pct||0));
+              const costPerMtr = Math.abs(Number(r.cumulative_cost_per_mtr||0));
+              const mill       = r.job_godown||r.mill_name||'—';
+              return (
+                <div key={r.id} className="acct-mobile-card"
+                  onClick={()=>setExpandedId(expandedId==='REC-'+r.id?null:'REC-'+r.id)}>
+                  <div className="amc-header">
+                    <div>
+                      <div className="amc-design-badge">{r.design_no?`D${r.design_no}`:'Primary'}</div>
+                      <div className="amc-design-sub">{mill}</div>
+                    </div>
+                    <div>
+                      <div className="amc-cost">{costPerMtr>0?`₹${costPerMtr.toFixed(2)}`:'—'}</div>
+                      <div className="amc-cost-label">cost / mtr</div>
+                    </div>
+                  </div>
+                  <div className="amc-row">
+                    <span className="amc-row-label">Date</span>
+                    <span className="amc-row-val">{fmtDate(r.voucher_date)}</span>
+                  </div>
+                  <div className="amc-row">
+                    <span className="amc-row-label">Lot</span>
+                    <span className="amc-row-val" style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12}}>{r.grey_lot_no||'—'}</span>
+                  </div>
+                  <div className="amc-row">
+                    <span className="amc-row-label">Finish Qty</span>
+                    <span className="amc-row-val" style={{fontWeight:700}}>{fmtQty(r.finish_qty_mtrs)} m</span>
+                  </div>
+                  <div className="amc-row">
+                    <span className="amc-row-label">Job Amt</span>
+                    <span className="amc-row-val">{r.job_amount?fmt(r.job_amount):'—'}</span>
+                  </div>
+                  <div className="amc-badges">
+                    {shortPct>15 && <span className="badge bred">⚠ {shortPct.toFixed(1)}% short</span>}
+                    {shortPct>0&&shortPct<=15 && <span className="badge borg">{shortPct.toFixed(1)}% short</span>}
+                    {r.recon_status==='matched' && <span className="badge bgreen">✔ matched</span>}
+                    {r.recon_status==='pending' && <span className="badge bgold">pending</span>}
+                    {r.recon_status==='mismatch' && <span className="badge bred">mismatch</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Table (desktop) */}
+          <div className="acct-table-wrap" style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
               <thead><tr>
                 <TH label="Design No"/>
@@ -484,8 +570,8 @@ export default function JobWorkBillsPage() {
                 </div>
               );
             })}
-          </div>
-        )}
+          </div>{/* end acct-table-wrap */}
+        </>)}
         <Pagination page={recPage} total={filteredRec.length} onPage={p=>{setRecPage(p);setExpandedId(null);}}/>
       </div>
     );
@@ -500,8 +586,49 @@ export default function JobWorkBillsPage() {
       </div>
       {pagedRows.length === 0 ? (
         <div style={{padding:50,textAlign:'center',color:T.textMuted}}>{emptyLabel}</div>
-      ) : (
-        <div style={{overflowX:'auto'}}>
+      ) : (<>
+        {/* Mobile Cards */}
+        <div className="acct-mobile-cards">
+          {pagedRows.map(r => {
+            const gst = Math.abs(Number(r.cgst_amount||0))+Math.abs(Number(r.sgst_amount||0))+Math.abs(Number(r.igst_amount||0));
+            return (
+              <div key={r.id} className="acct-mobile-card"
+                onClick={()=>setExpandedId(expandedId==='JW-'+r.id?null:'JW-'+r.id)}>
+                <div className="amc-header">
+                  <div>
+                    <div className="amc-design-badge">{r.voucher_number||'—'}</div>
+                    <div className="amc-design-sub">{r.party_name||'—'}</div>
+                  </div>
+                  <div>
+                    <div className="amc-cost" style={{color:'#D4920A'}}>{fmt(r.total_amount)}</div>
+                    <div className="amc-cost-label">total</div>
+                  </div>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Date</span>
+                  <span className="amc-row-val">{fmtDate(r.voucher_date)}</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Expense Amt</span>
+                  <span className="amc-row-val cell-financial">{fmt(r.expense_amount)}</span>
+                </div>
+                {gst>0 && (
+                  <div className="amc-row">
+                    <span className="amc-row-label">GST</span>
+                    <span className="amc-row-val">{fmt(gst)}</span>
+                  </div>
+                )}
+                <div className="amc-badges">
+                  {r.voucher_type && <span className="badge bteal">{r.voucher_type}</span>}
+                  {r.gp_number && <span className="badge bblue">GP: {r.gp_number}</span>}
+                  {r.supplier_invoice_no && <span className="badge borg">Inv: {r.supplier_invoice_no}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Table (desktop) */}
+        <div className="acct-table-wrap" style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
             <thead><tr>
               <TH label="Voucher No"/>
@@ -579,8 +706,8 @@ export default function JobWorkBillsPage() {
               </div>
             );
           })}
-        </div>
-      )}
+        </div>{/* end acct-table-wrap */}
+      </>)}
       <Pagination page={currentPage} total={rows.length} onPage={p=>{pageSetter(p);setExpandedId(null);}}/>
     </div>
   );
@@ -612,6 +739,12 @@ export default function JobWorkBillsPage() {
           {loading ? 'Loading…' : '↻ Refresh'}
         </button>
       </div>
+
+      {/* Sync Health Bar */}
+      <SyncHealthBar
+        tableName="issue_to_mill"
+        recordCount={issues.length + recMill.length + jobwork.length + expenses.length}
+      />
 
       {/* FY Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>

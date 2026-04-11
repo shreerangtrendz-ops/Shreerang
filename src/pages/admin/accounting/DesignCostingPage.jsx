@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import OriginPanel from '../../../components/accounting/OriginPanel';
+import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
 
 /* ══════════════════════════════════════════════════════════════════
    DESIGN COSTING PAGE
@@ -340,6 +341,8 @@ export default function DesignCostingPage() {
         <p style={{fontSize:12,color:T.muted,margin:'4px 0 0'}}>Full P&amp;L per design · Grey → Mill → Sale · Margin visibility</p>
       </div>
 
+      <SyncHealthBar tableName="design_costing" recordCount={filtered.length} />
+
       <FormulaPanel />
 
       {/* KPIs */}
@@ -387,13 +390,74 @@ export default function DesignCostingPage() {
         <div style={{fontSize:11,color:T.muted,padding:'7px 0'}}>{filtered.length} designs</div>
       </div>
 
-      {/* Table */}
+      {/* Mobile Cards (<768px) */}
+      {!loading && filtered.length > 0 && (
+        <div className="acct-mobile-cards">
+          {filtered.map((r,i) => {
+            const costPerMtr = Math.abs(Number(r.factory_cost_per_mtr||0));
+            const margin     = Number(r.gross_margin_pct||0);
+            const profit     = Number(r.profit_per_mtr||0);
+            return (
+              <div key={String(r.design_no)+i} className="acct-mobile-card"
+                onClick={()=>setExpanded(expanded===i?null:i)}>
+                <div className="amc-header">
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    {r.primary_image_url
+                      ? <img src={r.primary_image_url} style={{width:40,height:40,objectFit:'cover',borderRadius:6,flexShrink:0}} />
+                      : <div style={{width:40,height:40,background:'#EEF8F6',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🎨</div>}
+                    <div>
+                      <div className="amc-design-badge">D No-{r.design_no}</div>
+                      <div className="amc-design-sub">{r.finish_item_name||'—'} · {r.mill_name||'—'}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="amc-cost">{costPerMtr>0?fmtR(costPerMtr):'—'}</div>
+                    <div className="amc-cost-label">cost / mtr</div>
+                  </div>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Sell / m</span>
+                  <span className="amc-row-val" style={{color:'#1E9E5A',fontWeight:700}}>{fmtR(r.avg_selling_rate||0)}</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Finish Qty</span>
+                  <span className="amc-row-val">{fmtQ(r.finish_qty_mtrs)} m</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Net Revenue</span>
+                  <span className="amc-row-val">{fmt(r.net_revenue||0)}</span>
+                </div>
+                <div className="amc-row">
+                  <span className="amc-row-label">Profit / m</span>
+                  <span className="amc-row-val" style={{color:profit>=0?'#1E9E5A':'#D93025',fontWeight:700}}>{fmtS(profit)}</span>
+                </div>
+                <div className="amc-badges">
+                  <MarginBadge value={r.gross_margin_pct} />
+                  {Number(r.unsold_qty_mtrs||0)>0 && (
+                    <span className="badge bgold">Unsold: {fmtQ(r.unsold_qty_mtrs)} m</span>
+                  )}
+                  {Number(r.grey_purchase_rate||0)===0 && (
+                    <span className="badge borg">partial cost</span>
+                  )}
+                </div>
+                {expanded===i && (
+                  <div style={{marginTop:12,borderTop:`1px solid ${T.border}`,paddingTop:12}}>
+                    <DesignLedgerViewer rowData={r} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Table (desktop) */}
       {loading ? (
         <div style={{textAlign:'center',padding:60,color:T.muted,fontSize:14}}>Loading design costing data…</div>
       ) : filtered.length === 0 ? (
         <div style={{textAlign:'center',padding:60,color:T.muted}}>No data found. Run a Tally sync first.</div>
       ) : (
-        <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'auto'}}>
+        <div className="acct-table-wrap" style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead>
               <tr style={{background:T.navy}}>
@@ -462,7 +526,7 @@ export default function DesignCostingPage() {
               })}
             </tbody>
           </table>
-        </div>
+        </div>{/* end acct-table-wrap */}
       )}
     </div>
   );

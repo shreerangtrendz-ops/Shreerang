@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import OriginPanel from '../../../components/accounting/OriginPanel';
 import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
@@ -575,7 +575,7 @@ export default function RecFromMillPage() {
                         ['Grey Lot No',         r.grey_lot_no||'—'],
                         // KEY 2: party_challan_no = jobwork_expenses.supplier_invoice_no (jobworker's own bill number)
                         ['Party Challan No (KEY 2)', r.party_challan_no||
-                          <span style={{color:'#E67E22',fontSize:10}}>missing — JW cost won't allocate</span>],
+                          <span style={{color:'#E67E22',fontSize:10}}>missing — JW cost won’t allocate</span>],
                         ['Mill Name',           r.mill_name || r.job_godown || '—'],
                         ['Job Godown',          r.job_godown||'—'],
                         ['Process Type',        r.process_type||'—'],

@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -92,10 +92,10 @@ import AccessControlPage from '@/pages/admin/AccessControlPage';
 import WhatsAppWidget from '@/components/common/WhatsAppWidget';
 import BackupControlPage from '@/pages/admin/BackupControlPage';
 import EcomControlPage from '@/pages/admin/EcomControlPage';
-// â"€â"€â"€ Admin: Sales Orders (new) â"€â"€â"€
+// â”€â”€â”€ Admin: Sales Orders (new) â”€â”€â”€
 import SalesOrderList from '@/pages/admin/sales/SalesOrderList';
 import SalesOrderForm from '@/pages/admin/sales/SalesOrderForm';
-// â"€â"€â"€ Admin: Reports (new) â"€â"€â"€â"€â"€â"€â"€â"€
+// â”€â”€â”€ Admin: Reports (new) â”€â”€â”€â”€â”€â”€â”€â”€
 import PartyLedger from '@/pages/reports/PartyLedger';
 import DayBook from '@/pages/reports/DayBook';
 import AgentCommissionPage from '@/pages/admin/AgentCommissionPage';
@@ -203,7 +203,7 @@ const App = () => {
                     <Route path="images/upload" element={<ImageUploadPage />} />
                     <Route path="design/upload" element={<DesignUploadPage />} />
                     <Route path="design-velocity" element={<DesignVelocityPage />} />
-                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="Ã°Å¸â€"â€š" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue Ã¢â€ â€™ Product Master" />} />
+                    <Route path="products" element={<ComingSoonPage title="Product Master" icon="Ã°Å¸â€”â€š" desc="Master catalogue of all finished products." breadcrumb="Design Catalogue Ã¢â€ â€™ Product Master" />} />
 
                     {/* Cost Engine */}
                     <Route path="cost/purchase-entry" element={<PurchaseEntryPage />} />
@@ -231,7 +231,7 @@ const App = () => {
                     <Route path="calendar" element={<CalendarVisitsPage />} />
                     <Route path="supplier-price-ai" element={<AIPriceSyncPage />} />
                     <Route path="ai-pricing" element={<AIPriceSyncPage />} />
-                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="Ã°Å¸Å'Â" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features Ã¢â€ â€™ Multilingual" />} />
+                    <Route path="multilingual" element={<ComingSoonPage title="Multilingual Comms" icon="Ã°Å¸Å’Â" desc="Send messages in Hindi, Gujarati, and other languages." breadcrumb="Smart Features Ã¢â€ â€™ Multilingual" />} />
                     <Route path="customer-360" element={<Customer360Page />} />
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
                     <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
@@ -305,7 +305,7 @@ const App = () => {
                      <Route path="accounting/design-lifecycle/:designNo" element={<DesignLifecycleDetailPage />} />
                      <Route path="accounting/design-lifecycle" element={<DesignLifecycleDetailPage />} />
 
-                    {/* New Pages â€" Analytics, Logs, Media, Job Workers */}
+                    {/* New Pages â€” Analytics, Logs, Media, Job Workers */}
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="mill-performance" element={<MillPerformancePage />} />
                     <Route path="broker-analytics" element={<BrokerAnalyticsPage />} />

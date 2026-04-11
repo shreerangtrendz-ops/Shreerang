@@ -79,7 +79,7 @@
     color: var(--text);
     min-height: 100vh;
     overflow-x: hidden;
-    font-size: 13px;
+    font-size: 15px;
     position: relative;
 }
 
@@ -442,13 +442,13 @@
 
 .page-title {
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     color: var(--text);
 }
 
 .breadcrumb {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-muted);
     margin-top: 1px;
 }
@@ -473,10 +473,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 7px 14px;
+    padding: 8px 16px;
     border-radius: var(--r-sm);
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     border: none;
@@ -507,8 +507,8 @@
 }
 
 .btn-sm {
-    padding: 5px 10px;
-    font-size: 11px;
+    padding: 6px 12px;
+    font-size: 13px;
 }
 
 .btn-icon {
@@ -588,7 +588,7 @@
 }
 
 .kpi-label {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -598,13 +598,13 @@
 
 .kpi-value {
     font-family: var(--serif);
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
     line-height: 1;
 }
 
 .kpi-sub {
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     margin-top: 4px;
 }
@@ -680,7 +680,7 @@
 
 .card-title {
     font-family: var(--serif);
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 700;
     color: var(--text);
 }
@@ -697,27 +697,28 @@
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 th {
     text-align: left;
-    padding: 10px 16px;
+    padding: 11px 16px;
     background: var(--surface2);
     border-bottom: 2px solid var(--border-teal);
     color: var(--teal);
     font-weight: 700;
     text-transform: uppercase;
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: 0.6px;
     white-space: nowrap;
 }
 
 td {
-    padding: 13px 16px;
+    padding: 14px 16px;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
     color: var(--text);
+    font-size: 14px;
 }
 
 tr:last-child td {
@@ -730,7 +731,7 @@ tr:hover td {
 
 .mono {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 13px;
 }
 
 /* ─── BADGE ─── */
@@ -739,9 +740,9 @@ tr:hover td {
     align-items: center;
     justify-content: center;
     min-height: 24px;
-    padding: 3px 8px;
+    padding: 3px 10px;
     border-radius: 99px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     letter-spacing: 0.02em;
 }
@@ -826,7 +827,7 @@ tr:hover td {
 }
 
 .fld label {
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -839,9 +840,9 @@ tr:hover td {
     background: var(--surface);
     border: 1px solid var(--border-teal);
     border-radius: var(--r-sm);
-    padding: 8px 10px;
+    padding: 9px 12px;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text);
     outline: none;
     transition: border-color 0.13s;
@@ -887,9 +888,9 @@ tr:hover td {
     display: flex;
     align-items: flex-start;
     gap: 9px;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: var(--r-sm);
-    font-size: 12px;
+    font-size: 14px;
     margin-bottom: 12px;
 }
 
@@ -928,8 +929,8 @@ tr:hover td {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 0;
-    font-size: 12px;
+    padding: 5px 0;
+    font-size: 14px;
 }
 
 .cl.total {
@@ -971,8 +972,8 @@ tr:hover td {
 }
 
 .tab {
-    padding: 9px 18px;
-    font-size: 12px;
+    padding: 10px 20px;
+    font-size: 14px;
     cursor: pointer;
     color: var(--text-muted);
     border-bottom: 2px solid transparent;
@@ -1006,7 +1007,7 @@ tr:hover td {
     border: none;
     outline: none;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text);
     flex: 1;
     min-width: 0;

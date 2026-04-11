@@ -526,7 +526,7 @@ export default function DesignCostingPage() {
               })}
             </tbody>
           </table>
-        </div>{/* end acct-table-wrap */}
+        </div>
       )}
     </div>
   );

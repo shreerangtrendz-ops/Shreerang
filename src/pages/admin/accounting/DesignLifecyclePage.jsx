@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 
@@ -175,7 +175,7 @@ function IssueToMillBlock({ rows }) {
 // ── V-03 Jobwork Bill ─────────────────────────────────────────────────────────
 // V-03 ↔ V-04 link: rec_from_mill.jw_voucher_number = jobwork_expenses.voucher_number
 // This is resolved by compute_jw_allocation() — NOT a direct field match.
-// (supplier_invoice_no is the mill’s own invoice number; party_challan_no is our issue challan — different numbers)
+// (supplier_invoice_no is the mill's own invoice number; party_challan_no is our issue challan — different numbers)
 
 function JobworkBlock({ row }) {
   if (!row) {
@@ -190,24 +190,24 @@ function JobworkBlock({ row }) {
     <VBlock title="V-03 · Jobwork Bill" subtitle={decodeHtml(row.voucher_number)} borderColor={T.amber}>
 
       {/* Header row: voucher no + date */}
-      <div style={{display:’flex’,gap:16,flexWrap:’wrap’,alignItems:’center’,marginBottom:10}}>
+      <div style={{display:'flex',gap:16,flexWrap:'wrap',alignItems:'center',marginBottom:10}}>
         <div>
-          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
+          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
             letterSpacing:.5,marginBottom:2}}>JW Voucher No</div>
-          <div style={{fontFamily:"’DM Mono’,monospace",fontSize:13,fontWeight:800,color:T.amber}}>
-            {decodeHtml(row.voucher_number)||’—‘}
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:13,fontWeight:800,color:T.amber}}>
+            {decodeHtml(row.voucher_number)||'—'}
           </div>
         </div>
         <div>
-          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
+          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
             letterSpacing:.5,marginBottom:2}}>Date</div>
           <div style={{fontSize:12,color:T.text}}>{fmtDate(row.voucher_date)}</div>
         </div>
         {row.supplier_invoice_no && (
           <div>
-            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:’uppercase’,
-              letterSpacing:.5,marginBottom:2}}>Mill’s Invoice No</div>
-            <div style={{fontFamily:"’DM Mono’,monospace",fontSize:12,color:T.text}}>
+            <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',
+              letterSpacing:.5,marginBottom:2}}>Mill's Invoice No</div>
+            <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:T.text}}>
               {decodeHtml(row.supplier_invoice_no)}
             </div>
           </div>
@@ -215,7 +215,7 @@ function JobworkBlock({ row }) {
       </div>
 
       {/* Bill amounts — keeping only correct fields */}
-      <div style={{display:’grid’,gridTemplateColumns:’repeat(3,1fr)’,gap:’8px 16px’}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px 16px'}}>
         <KV label="Mill / Jobworker" value={decodeHtml(row.party_name)} />
         <KV label="Bill Amount" value={fmt(row.expense_amount)} mono />
         <KV label="Net Payable" value={fmt(row.party_amount)} mono />

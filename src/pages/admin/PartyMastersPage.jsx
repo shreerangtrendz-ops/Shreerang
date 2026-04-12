@@ -131,7 +131,7 @@ function CustomerProfile({ customer, onClose }) {
       .select('bill_number,bill_date,total_amount,quantity_mtrs,design_no,status')
       .eq('customer_name', name)
       .order('bill_date', { ascending: false })
-      .limit(100)
+      .limit(5000)
       .then(({ data }) => {
         const rows = data || [];
         const total   = rows.reduce((s,r) => s + Number(r.total_amount||0), 0);
@@ -342,6 +342,7 @@ function AgentProfile({ agent, custCounts, onClose }) {
     supabase.from('sales_bills')
       .select('total_amount,bill_date,commission_amount,comm_amount')
       .eq('agent_name', name)
+      .limit(5000)
       .then(({ data }) => {
         const rows = data || [];
         const total = rows.reduce((s,r) => s+Number(r.total_amount||0), 0);
@@ -412,7 +413,7 @@ function SupplierProfile({ supplier, onClose }) {
       .select('total_amount,voucher_date,qty_mtrs,purchase_rate')
       .eq('supplier_name', supplier.supplier_name)
       .order('voucher_date', { ascending: false })
-      .limit(100)
+      .limit(5000)
       .then(({ data }) => {
         const rows = data || [];
         const total   = rows.reduce((s,r)=>s+Number(r.total_amount||0),0);

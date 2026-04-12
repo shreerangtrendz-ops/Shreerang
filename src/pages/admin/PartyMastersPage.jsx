@@ -552,19 +552,19 @@ function CustomersTab() {
       </div>
       <div style={{background:'#EEF8F6',border:`1px solid ${T.border}`,borderRadius:8,
         padding:'9px 14px',marginBottom:12,fontSize:12,color:T.navy,display:'flex',alignItems:'center',gap:8}}>
-        <span>[Map]</span>
-        <span><strong>Route Planning:</strong> Filter by city - AI route optimisation coming soon.</span>
+        <span>🗺️</span>
+        <span><strong>Route Planning:</strong> Filter by city — AI route optimisation coming soon.</span>
       </div>
       <MasterTable columns={columns} rows={rows} loading={loading} selected={selected}
         onSelect={r => setSelected(prev => prev?.id===r?.id ? null : r)} emptyMsg="No customers found" />
       <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:14,alignItems:'center'}}>
         <button onClick={() => setPage(p=>Math.max(0,p-1))} disabled={page===0}
           style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,
-            cursor:page===0?'not-allowed':'pointer',fontSize:12,opacity:page===0?0.4:1}}>\u2190 Prev</button>
-        <span style={{fontSize:12,color:T.muted}}>Page {page+1} \u00b7 {rows.length} shown</span>
+            cursor:page===0?'not-allowed':'pointer',fontSize:12,opacity:page===0?0.4:1}}>← Prev</button>
+        <span style={{fontSize:12,color:T.muted}}>Page {page+1} · {rows.length} shown</span>
         <button onClick={() => setPage(p=>p+1)} disabled={rows.length<PAGE}
           style={{padding:'5px 14px',borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,
-            cursor:rows.length<PAGE?'not-allowed':'pointer',fontSize:12,opacity:rows.length<PAGE?0.4:1}}>Next \u2192</button>
+            cursor:rows.length<PAGE?'not-allowed':'pointer',fontSize:12,opacity:rows.length<PAGE?0.4:1}}>Next →</button>
       </div>
       <CustomerProfile customer={selected} onClose={() => setSelected(null)} />
     </div>
@@ -748,11 +748,11 @@ export default function PartyMastersPage() {
   return (
     <div style={{padding:'24px 28px',background:T.bg,minHeight:'100vh',fontFamily:'system-ui,sans-serif'}}>
       <div style={{marginBottom:24,display:'flex',alignItems:'center',gap:12}}>
-        <span style={{fontSize:28}}>[M]</span>
+        <span style={{fontSize:28}}>📋</span>
         <div>
           <h1 style={{margin:0,fontSize:22,fontWeight:800,color:T.navy}}>Party Masters</h1>
           <p style={{margin:0,fontSize:13,color:T.muted}}>
-            Customers \u00b7 Agents \u00b7 Suppliers \u00b7 Transporters \u2014 click any row to view full profile
+            Customers · Agents · Suppliers · Transporters — click any row to view full profile
           </p>
         </div>
       </div>

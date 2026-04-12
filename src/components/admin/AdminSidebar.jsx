@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -23,6 +23,7 @@ const ALL_GROUPS = [
     roles: ['admin','manager','operations','sales','sales_executive','accounts'],
     items: [
       { icon: '👥', label: 'Customers',          to: '/admin/customers',           roles: ['admin','manager','operations','sales','sales_executive'] },
+      { icon: '📋', label: 'Party Masters',       to: '/admin/masters',             roles: ['admin','manager','accounts'] },
       { icon: '📱', label: 'WhatsApp Inbox',     to: '/admin/whatsapp-inbox',      roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '💬', label: 'Quotations',         to: '/admin/accounting/quotations',roles: ['admin','manager','accounts'] },
       { icon: '📋', label: 'Sales Orders',       to: '/admin/orders',              roles: ['admin','manager','operations','sales','sales_executive'] },

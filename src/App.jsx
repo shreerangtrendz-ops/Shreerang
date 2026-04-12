@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -117,6 +117,7 @@ import OutstandingReceivableV2 from '@/pages/reports/OutstandingReceivableV2';
 import SmartOutstandingPage from '@/pages/admin/SmartOutstandingPage';
 import OutstandingPayableV2 from '@/pages/reports/OutstandingPayableV2';
 import DesignCostingPage from '@/pages/admin/accounting/DesignCostingPage';
+import PartyMastersPage from '@/pages/admin/PartyMastersPage';
 import AnalyticsPage from '@/pages/admin/AnalyticsPage';
 import ActivityLogsPage from '@/pages/admin/ActivityLogsPage';
 import CodeReviewPage from '@/pages/admin/CodeReviewPage';
@@ -296,6 +297,7 @@ const App = () => {
                     <Route path="accounting/jobwork-expenses" element={<JobWorkExpensesPage />} />
                     <Route path="accounting/hub" element={<TallyAccountingHub />} />
                     <Route path="accounting/design-costing" element={<DesignCostingPage />} />
+                     <Route path="masters" element={<PartyMastersPage />} />
                      <Route path="accounting/process-issues" element={<ProcessIssuesPage />} />
                      <Route path="accounting/grey-purchase" element={<GreyPurchasePage />} />
                      <Route path="accounting/missing-rec" element={<MissingRecFromMillPage />} />

@@ -8,11 +8,11 @@ const T = {
   bg:'#F0F9F7', surface:'#FFFFFF', text:'#0B2E2B', muted:'#6A9B95',
 };
 
-const fmt  = n => n ? '\u20B9' + Math.abs(Math.round(Number(n))).toLocaleString('en-IN') : '\u2014';
-const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '\u2014';
+const fmt  = n => n ? '₹' + Math.abs(Math.round(Number(n))).toLocaleString('en-IN') : '—';
+const fmtD = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : '—';
 
 function GSTBadge({ gst }) {
-  if (!gst) return <span style={{color:T.muted,fontSize:12}}>\u2014</span>;
+  if (!gst) return <span style={{color:T.muted,fontSize:12}}>—</span>;
   const clean = gst.trim().toUpperCase();
   const valid = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(clean);
   const SC = {'01':'J&K','02':'HP','03':'PB','04':'CH','05':'UK','06':'HR','07':'DL','08':'RJ','09':'UP','10':'BR','18':'AS','19':'WB','20':'JH','21':'OD','22':'CG','23':'MP','24':'GJ','27':'MH','29':'KA','30':'GA','32':'KL','33':'TN','36':'TG'};
@@ -22,7 +22,7 @@ function GSTBadge({ gst }) {
       <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,
         background:valid?'#D1FAE5':'#FEF3C7',color:valid?'#065F46':'#92400E',
         border:`1px solid ${valid?'#6EE7B7':'#FCD34D'}`}}>
-        {valid ? `\u2713 ${sname}` : '\u26A0 Invalid'}
+        {valid ? `✓ ${sname}` : '⚠ Invalid'}
       </span>
       <span style={{fontSize:11,color:T.muted,fontFamily:'monospace'}}>{clean}</span>
     </span>
@@ -57,7 +57,7 @@ function TabBar({ tabs, active, onChange }) {
 function SearchBar({ value, onChange, placeholder, extra }) {
   return (
     <div style={{display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder||'Search\u2026'}
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder||'Search…'}
         style={{flex:1,minWidth:200,padding:'8px 12px',border:`1px solid ${T.border}`,
           borderRadius:8,fontSize:13,color:T.text,outline:'none',background:T.surface}}/>
       {extra}
@@ -76,7 +76,7 @@ function DetailRow({ label, value }) {
 }
 
 function MasterTable({ columns, rows, onSelect, selected, loading, emptyMsg }) {
-  if (loading) return <div style={{textAlign:'center',padding:'40px 0',color:T.muted,fontSize:13}}>Loading\u2026</div>;
+  if (loading) return <div style={{textAlign:'center',padding:'40px 0',color:T.muted,fontSize:13}}>Loading…</div>;
   if (!rows.length) return <div style={{textAlign:'center',padding:'40px 0',color:T.muted,fontSize:13}}>{emptyMsg||'No records found'}</div>;
   return (
     <div style={{overflowX:'auto'}}>
@@ -99,7 +99,7 @@ function MasterTable({ columns, rows, onSelect, selected, loading, emptyMsg }) {
               onMouseLeave={e => { if(selected?.id!==row.id) e.currentTarget.style.background=i%2===0?T.surface:'#F8FCFB'; }}>
               {columns.map(c => (
                 <td key={c.key} style={{padding:'9px 12px',color:T.text,whiteSpace:c.wrap?'normal':'nowrap'}}>
-                  {c.render ? c.render(row) : (row[c.key] ?? '\u2014')}
+                  {c.render ? c.render(row) : (row[c.key] ?? '—')}
                 </td>
               ))}
             </tr>
@@ -118,7 +118,7 @@ function DetailPanel({ title, subtitle, onClose, children, actions }) {
           <h3 style={{margin:0,fontSize:16,fontWeight:800,color:T.navy}}>{title}</h3>
           {subtitle && <div style={{fontSize:11,color:T.muted,marginTop:2}}>{subtitle}</div>}
         </div>
-        <button onClick={onClose} style={{border:'none',background:'none',cursor:'pointer',fontSize:18,color:T.muted}}>&#10005;</button>
+        <button onClick={onClose} style={{border:'none',background:'none',cursor:'pointer',fontSize:18,color:T.muted}}>✕</button>
       </div>
       {children}
       {actions && <div style={{marginTop:12,display:'flex',gap:8}}>{actions}</div>}
@@ -130,7 +130,7 @@ function LedgerBtn({ name }) {
   return (
     <a href={`/admin/reports/party-ledger?party=${encodeURIComponent(name)}`}
       style={{padding:'7px 14px',background:T.teal,color:'#fff',borderRadius:7,fontSize:12,fontWeight:600,textDecoration:'none'}}>
-      \uD83D\uDCCB View Ledger
+      📒 View Ledger
     </a>
   );
 }
@@ -168,30 +168,30 @@ function CustomersTab() {
 
   const columns = [
     { key:'name', label:'Customer Name', render: r => <span style={{fontWeight:600,color:T.navy}}>{r.name}</span> },
-    { key:'city', label:'City', render: r => r.city ? `${r.city}${r.state ? ', '+r.state : ''}` : '\u2014' },
+    { key:'city', label:'City', render: r => r.city ? `${r.city}${r.state ? ', '+r.state : ''}` : '—' },
     { key:'area', label:'Area' },
-    { key:'agent_name', label:'Agent', render: r => r.agent_name || '\u2014' },
+    { key:'agent_name', label:'Agent', render: r => r.agent_name || '—' },
     { key:'gst_number', label:'GST', render: r => <GSTBadge gst={r.gst_number} /> },
     { key:'customer_type', label:'Type', render: r => (
       <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:10,
         background:r.customer_type==='wholesale'?'#DBEAFE':'#F3E8FF',
         color:r.customer_type==='wholesale'?'#1D4ED8':'#7C3AED'}}>
-        {r.customer_type||'\u2014'}
+        {r.customer_type||'—'}
       </span>
     )},
-    { key:'credit_days', label:'Credit Days', render: r => r.credit_days>0 ? `${r.credit_days}d` : '\u2014' },
+    { key:'credit_days', label:'Credit Days', render: r => r.credit_days>0 ? `${r.credit_days}d` : '—' },
     { key:'status', label:'Status', render: r => (
       <span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10,
         background:r.status==='active'?'#D1FAE5':'#FEF2F2',
         color:r.status==='active'?'#065F46':'#991B1B'}}>
-        {r.status||'\u2014'}
+        {r.status||'—'}
       </span>
     )},
   ];
 
   return (
     <div>
-      <SearchBar value={search} onChange={v=>{setSearch(v);setPage(0);}} placeholder="Search customer name\u2026"
+      <SearchBar value={search} onChange={v=>{setSearch(v);setPage(0);}} placeholder="Search customer name…"
         extra={
           <select value={city} onChange={e=>{setCity(e.target.value);setPage(0);}}
             style={{padding:'8px 12px',border:`1px solid ${T.border}`,borderRadius:8,fontSize:13,color:T.text,background:T.surface}}>
@@ -202,21 +202,21 @@ function CustomersTab() {
       />
       <div style={{background:'#EEF8F6',border:`1px solid ${T.border}`,borderRadius:8,padding:'10px 14px',
         marginBottom:16,fontSize:12,color:T.navy,display:'flex',alignItems:'center',gap:8}}>
-        <span style={{fontSize:16}}>\uD83D\uDDFA\uFE0F</span>
-        <span><strong>Route Planning:</strong> Filter by city to see all customers in that area \u2014 AI will auto-generate optimised visit routes in a future update.</span>
+        <span style={{fontSize:16}}>🗺️</span>
+        <span><strong>Route Planning:</strong> Filter by city to see all customers in that area — AI will auto-generate optimised visit routes in a future update.</span>
       </div>
       <MasterTable columns={columns} rows={rows} loading={loading} selected={selected} onSelect={setSelected} emptyMsg="No customers found" />
       <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:16,alignItems:'center'}}>
         <button onClick={() => setPage(p => Math.max(0,p-1))} disabled={page===0}
           style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,
             cursor:page===0?'not-allowed':'pointer',color:T.text,fontSize:12,opacity:page===0?0.5:1}}>
-          \u2190 Prev
+          ← Prev
         </button>
-        <span style={{fontSize:12,color:T.muted}}>Page {page+1} &mdash; {rows.length} records</span>
+        <span style={{fontSize:12,color:T.muted}}>Page {page+1} — {rows.length} records</span>
         <button onClick={() => setPage(p => p+1)} disabled={rows.length<PAGE}
           style={{padding:'6px 14px',borderRadius:6,border:`1px solid ${T.border}`,background:T.surface,
             cursor:rows.length<PAGE?'not-allowed':'pointer',color:T.text,fontSize:12,opacity:rows.length<PAGE?0.5:1}}>
-          Next \u2192
+          Next →
         </button>
       </div>
       {selected && (
@@ -228,7 +228,7 @@ function CustomersTab() {
             <LedgerBtn key="l" name={selected.name} />,
             <a key="o" href={`/admin/smart-outstanding?search=${encodeURIComponent(selected.name)}`}
               style={{padding:'7px 14px',background:'#EEF8F6',color:T.navy,border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,fontWeight:600,textDecoration:'none'}}>
-              \uD83D\uDCB0 Outstanding
+              💰 Outstanding
             </a>
           ]}
         >
@@ -284,7 +284,7 @@ function AgentsTab() {
     { key:'city', label:'City' },
     { key:'commission_percentage', label:'Commission %', render: r => (
       <span style={{fontWeight:700,color:T.green}}>
-        {r.commission_percentage ? `${parseFloat(r.commission_percentage).toFixed(2)}%` : '\u2014'}
+        {r.commission_percentage ? `${parseFloat(r.commission_percentage).toFixed(2)}%` : '—'}
       </span>
     )},
     { key:'customers', label:'Customers', render: r => (
@@ -295,14 +295,14 @@ function AgentsTab() {
       <span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10,
         background:r.status==='active'?'#D1FAE5':'#FEF2F2',
         color:r.status==='active'?'#065F46':'#991B1B'}}>
-        {r.status||'\u2014'}
+        {r.status||'—'}
       </span>
     )},
   ];
 
   return (
     <div>
-      <SearchBar value={search} onChange={setSearch} placeholder="Search agent name\u2026" />
+      <SearchBar value={search} onChange={setSearch} placeholder="Search agent name…" />
       <MasterTable columns={columns} rows={filtered} loading={loading} selected={selected} onSelect={setSelected} emptyMsg="No agents found" />
       {selected && (
         <DetailPanel
@@ -343,31 +343,30 @@ function SuppliersTab() {
   }, []);
 
   const filtered = rows.filter(r => !search || r.supplier_name?.toLowerCase().includes(search.toLowerCase()));
-
   const SC = {'24':'Gujarat','27':'Maharashtra','29':'Karnataka','07':'Delhi','09':'UP','08':'Rajasthan','19':'West Bengal','33':'Tamil Nadu','32':'Kerala'};
   const stateFromGST = gst => gst ? (SC[gst.slice(0,2)] || `State ${gst.slice(0,2)}`) : null;
 
   const columns = [
     { key:'supplier_name', label:'Supplier Name', render: r => <span style={{fontWeight:600,color:T.navy}}>{r.supplier_name}</span> },
     { key:'gst_number', label:'GST', render: r => <GSTBadge gst={r.gst_number} /> },
-    { key:'city', label:'City', render: r => r.city || (r.gst_number ? stateFromGST(r.gst_number) : '\u2014') },
-    { key:'last_purchase_rate', label:'Last Rate', render: r => r.last_purchase_rate>0 ? fmt(r.last_purchase_rate) : '\u2014' },
-    { key:'credit_days', label:'Credit Days', render: r => r.credit_days>0 ? `${r.credit_days}d` : '\u2014' },
+    { key:'city', label:'City', render: r => r.city || (r.gst_number ? stateFromGST(r.gst_number) : '—') },
+    { key:'last_purchase_rate', label:'Last Rate', render: r => r.last_purchase_rate>0 ? fmt(r.last_purchase_rate) : '—' },
+    { key:'credit_days', label:'Credit Days', render: r => r.credit_days>0 ? `${r.credit_days}d` : '—' },
     { key:'bank', label:'Bank', render: r => r.bank_name
-      ? <span style={{fontSize:11,fontWeight:700,color:T.green}}>\u2713 {r.bank_name}</span>
-      : <span style={{fontSize:11,color:T.muted}}>\u2014</span> },
+      ? <span style={{fontSize:11,fontWeight:700,color:T.green}}>✓ {r.bank_name}</span>
+      : <span style={{fontSize:11,color:T.muted}}>—</span> },
     { key:'status', label:'Status', render: r => (
       <span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10,
         background:r.status==='active'?'#D1FAE5':'#FEF2F2',
         color:r.status==='active'?'#065F46':'#991B1B'}}>
-        {r.status||'\u2014'}
+        {r.status||'—'}
       </span>
     )},
   ];
 
   return (
     <div>
-      <SearchBar value={search} onChange={setSearch} placeholder="Search supplier name\u2026" />
+      <SearchBar value={search} onChange={setSearch} placeholder="Search supplier name…" />
       <MasterTable columns={columns} rows={filtered} loading={loading} selected={selected} onSelect={setSelected} emptyMsg="No suppliers found" />
       {selected && (
         <DetailPanel
@@ -420,13 +419,13 @@ function TransportersTab() {
   const columns = [
     { key:'name', label:'Transporter Name', render: r => <span style={{fontWeight:600,color:T.navy}}>{r.name}</span> },
     { key:'city', label:'City' },
-    { key:'phone', label:'Phone', render: r => r.phone || '\u2014' },
+    { key:'phone', label:'Phone', render: r => r.phone || '—' },
     { key:'created_at', label:'Added', render: r => fmtD(r.created_at) },
   ];
 
   return (
     <div>
-      <SearchBar value={search} onChange={setSearch} placeholder="Search transporter or city\u2026" />
+      <SearchBar value={search} onChange={setSearch} placeholder="Search transporter or city…" />
       <MasterTable columns={columns} rows={filtered} loading={loading} selected={selected} onSelect={setSelected} emptyMsg="No transporters found" />
       {selected && (
         <DetailPanel title={selected.name} onClose={() => setSelected(null)}>
@@ -454,19 +453,19 @@ export default function PartyMastersPage() {
   }, []);
 
   const tabs = [
-    { id:'customers',    icon:'\uD83D\uDC65', label:'Customers',    count:counts.customers },
-    { id:'agents',       icon:'\uD83E\uDDD1\u200D\uD83D\uDCBC', label:'Agents',       count:counts.agents },
-    { id:'suppliers',    icon:'\uD83C\uDFED', label:'Suppliers',    count:counts.suppliers },
-    { id:'transporters', icon:'\uD83D\uDE9A', label:'Transporters', count:counts.transporters },
+    { id:'customers',    icon:'👥', label:'Customers',    count:counts.customers },
+    { id:'agents',       icon:'🤝', label:'Agents',       count:counts.agents },
+    { id:'suppliers',    icon:'🏭', label:'Suppliers',    count:counts.suppliers },
+    { id:'transporters', icon:'🚚', label:'Transporters', count:counts.transporters },
   ];
 
   return (
     <div style={{padding:'24px 28px',background:T.bg,minHeight:'100vh',fontFamily:'system-ui,sans-serif'}}>
       <div style={{marginBottom:24,display:'flex',alignItems:'center',gap:12}}>
-        <span style={{fontSize:28}}>\uD83D\uDCCB</span>
+        <span style={{fontSize:28}}>📋</span>
         <div>
           <h1 style={{margin:0,fontSize:22,fontWeight:800,color:T.navy}}>Party Masters</h1>
-          <p style={{margin:0,fontSize:13,color:T.muted}}>Customers \u00B7 Agents \u00B7 Suppliers \u00B7 Transporters \u2014 central reference database</p>
+          <p style={{margin:0,fontSize:13,color:T.muted}}>Customers · Agents · Suppliers · Transporters — central reference database</p>
         </div>
       </div>
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,padding:'20px 24px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>

@@ -86,7 +86,7 @@ for (const block of ledgerBlocks) {
 
   const phone        = getXmlVal(block, 'LEDGERMOBILE') || getXmlVal(block, 'LEDGERPHONE');
   const email        = getXmlVal(block, 'EMAIL');
-  const gst_number   = getXmlVal(block, 'GSTREGISTRATIONNUMBER');
+  const gst_number   = getXmlVal(block, 'PARTYGSTIN') || getXmlVal(block, 'GSTREGISTRATIONNUMBER');
   const pincode      = getXmlVal(block, 'PINCODE');
   const state        = getXmlVal(block, 'LEDGERSTATE');
   const creditRaw    = getXmlVal(block, 'CREDITPERIOD');

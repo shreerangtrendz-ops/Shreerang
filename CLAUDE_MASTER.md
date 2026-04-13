@@ -544,3 +544,66 @@ Tally JSON field → Supabase column:
 - design_no shows lot_no format (1355/22-23) for old FY22-23 entries — partyChNo not captured in old sync
 - grey_purchase_rate = 0 for many REC rows — grey_purchase data not yet synced for those lots
 - OriginPanel decodeHtml helper: decodes &#10; &#13; &amp; &quot; from Tally XML entities
+
+## Session 12-13-Apr-2026 -- Party Masters + SQL Migration + n8n v35 Plan
+
+### CRITICAL LESSON LEARNED: Windows-MCP FileSystem corrupts unicode
+Windows-MCP FileSystem write() converts all non-ASCII characters to \uXXXX escape sequences.
+These appear as literal text on screen (e.g. \uD83D\uDCCB instead of emoji, \u2014 instead of --).
+RULE: ALL JSX file writes MUST go through Claude's server bash_tool + git push. NEVER use Windows-MCP for JSX.
+
+### PartyMastersPage.jsx -- Status
+- Built: 783-line full profile page with 4 tabs, customer/agent/supplier/transporter profiles
+- Live sales stats, recent bills, AI analysis button per customer
+- PROBLEM: Page showing unicode escapes on live site
+- CAUSE: Windows-MCP wrote old 657-line version with unicode corruptions, Claude's server has correct 783-line version at commit fab8828 but it never got pushed to GitHub
+- FIX NEEDED: git push from terminal (or GitHub PAT) to push commit fab8828
+
+### SQL Migration Applied: add_tally_master_fields_v35 (13-Apr-2026)
+Applied to Supabase zdekydcscwhuusliwqaz:
+- customers: + opening_balance, tally_group, pan_number, transporter_name, enable_broker, distance, tally_sync_at, tally_opening_dr, tally_opening_cr
+- suppliers: + opening_balance, tally_group, pan_number, supplier_type, tally_sync_at, tally_opening_dr, tally_opening_cr
+- agents: + tally_ledger_name, opening_balance, pan_number, tally_group, tally_sync_at
+- transporters: + address, state, pincode, email, gst_number, pan_number, tally_ledger_name, tally_group, opening_balance, status, notes, tally_sync_at
+- Indexes: tally_ledger_name on all 4 tables + transporters.name
+
+### Full Gap Analysis Done
+Current n8n v34 ONLY syncs vouchers (Sales/Purchase/Issue/REC/JW etc). It NEVER calls Tally Ledger Master export. This means:
+- customers.gst_number = NULL for 100% of records
+- customers.phone = blank for 100%
+- customers.address = blank for 100%
+- customers.city = partially wrong (comes from voucher STATENAME, not ledger master)
+- suppliers.city/state/phone/email = all blank
+- transporters = only had 5 columns (id,name,city,phone,created_at) -- now has 17 columns
+- agents = missing tally_ledger_name, PAN, opening balance
+
+### n8n v35 Plan (S_LM Step)
+New step calls Tally Collection of Ledger Masters XML endpoint.
+Parses: NAME, MAILINGNAME, MAILINGADDR, STATENAME, PINCODE, LEDGERMOBILE, LEDGEREMAIL, GSTIN, PANIT, CREDITPERIOD, OPENINGBALANCE, PARENT, COUNTRYNAME, ISDEEMEDPOSITIVE
+Routes to tables by PARENT group:
+- Sundry Debtors -> customers (ON CONFLICT tally_ledger_name)
+- Sundry Creditors/Grey/Mill/Fabric -> suppliers
+- Transport Agency/Courier -> transporters
+- Broker/Commission/Agent -> agents
+Opening balance parsing: "-12,17,20,542.99 Dr" -> tally_opening_dr / tally_opening_cr / opening_balance
+Do NOT overwrite: bank_name, bank_account_number, ifsc_code, account_holder_name, notes in suppliers
+
+### Build Order for v35
+1. SQL columns -- DONE (13-Apr-2026)
+2. PartyMastersPage UI -- fix unicode + show all new fields (pending git push)
+3. n8n v35 code -- write S_LM step + add to workflow
+4. Test S_LM on one ledger group first (transporters -- smallest)
+5. After S_LM runs -- all master data will populate correctly
+
+### Files Updated This Session
+- CLAUDE.md -- updated with current status + build plan
+- CLAUDE_MASTER.md -- this file, appended
+- SHREERANG_2026_MASTER_REFERENCE.md -- sections 12-15 added (Party Masters field mapping, n8n v35 plan, sessions log)
+- Supabase: migration add_tally_master_fields_v35 applied
+- PartyMastersPage.jsx: correct 783-line version on Claude server commit fab8828 (NOT yet on GitHub)
+
+### Data Reference (13-Apr-2026)
+- customers: 1,162 | agents: 213 | suppliers: 79 | transporters: 225
+- Top cities: Mumbai(388), Ahmedabad(116), Surat(100), Kolkata(86), Delhi(85), Jaipur(61)
+- Resync running since 11-Apr: last_synced_voucher_date reset to 2022-03-31
+- After resync completes: run SELECT * FROM compute_jw_allocation()

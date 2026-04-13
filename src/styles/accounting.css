@@ -9,18 +9,18 @@
 .acct-page .page-title,
 .acct-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text, #0D2E2B);
 }
 
 /* ─── TABLE — ROW PADDING ─── */
 .acct-table td {
-  padding: 14px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border, rgba(43,168,152,0.18));
   vertical-align: middle;
   color: var(--text, #0D2E2B);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 /* Primary cell text: voucher no, design no, amounts */
@@ -73,7 +73,7 @@
 .sc-value,
 .acct-summary-card .kpi-value {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1;
 }
@@ -95,9 +95,9 @@
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--text-muted, #4A7A74);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .acct-summary-card .sc-sub {
@@ -164,18 +164,18 @@
 }
 
 .sync-health-bar .shb-value.warn {
-  color: #D97706; /* amber-600 */
+  color: #D97706;
 }
 
 .sync-health-bar .shb-value.error {
-  color: #DC2626; /* red-600 */
+  color: #DC2626;
 }
 
 .sync-health-bar .shb-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #10B981; /* green */
+  background: #10B981;
   flex-shrink: 0;
 }
 
@@ -199,7 +199,6 @@
 
 /* ─── MOBILE CARD VIEW (<768px) ─── */
 @media (max-width: 767px) {
-  /* Hide table, show cards */
   .acct-table-wrap {
     display: none !important;
   }
@@ -226,7 +225,6 @@
     margin-bottom: 10px;
   }
 
-  /* Design badge — large & prominent on mobile */
   .acct-mobile-card .amc-design-badge {
     font-size: 20px;
     font-weight: 800;
@@ -241,11 +239,10 @@
     margin-top: 2px;
   }
 
-  /* Cost per metre — dominant number on mobile */
   .acct-mobile-card .amc-cost {
     font-size: 22px;
     font-weight: 800;
-    color: #0D9488; /* teal-600 */
+    color: #0D9488;
     font-family: 'JetBrains Mono', monospace;
     text-align: right;
   }
@@ -292,7 +289,6 @@
     margin-top: 10px;
   }
 
-  /* Show table only on desktop */
   .acct-table-wrap {
     display: block;
   }

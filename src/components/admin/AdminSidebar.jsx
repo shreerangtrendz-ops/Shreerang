@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -67,15 +67,14 @@ const ALL_GROUPS = [
     roles: ['admin','manager','accounts'],
     items: [
       { icon: '🔄', label: 'Tally Sync Hub',     to: '/admin/tally-sync',           roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '⚡', label: 'Accounting Hub',      to: '/admin/accounting/hub',       roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
+      { icon: '⚡', label: 'Accounting Hub',      to: '/admin/accounting/hub',       roles: ['admin','manager','accounts'], badge: 'v35', badgeClass: 'ok' },
+      { icon: '🤖', label: 'Smart Finance',       to: '/admin/smart-finance',        roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'AI' },
       { icon: '🏢', label: 'Party Ledger',       to: '/admin/reports/party-ledger', roles: ['admin','manager','accounts'] },
-      { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable-v2', roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
       { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable-v2',   roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
       { icon: '💹', label: 'Design Costing',     to: '/admin/accounting/design-costing',roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
       { icon: '📈', label: 'Design P&L',        to: '/admin/accounting/design-pnl',      roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
       { icon: '🏭', label: 'REC from Mill',     to: '/admin/accounting/rec-from-mill',   roles: ['admin','manager','accounts'], badge: 'LIVE', badgeClass: 'ok' },
       { icon: '❓', label: 'Missing REC',        to: '/admin/accounting/missing-rec',     roles: ['admin','manager','accounts'], badge: 'ACTION', badgeClass: 'warn' },
-      { icon: '💼', label: 'Broker Analytics',   to: '/admin/broker-analytics',     roles: ['admin','manager','accounts'] },
     ]
   },
   {
@@ -94,8 +93,8 @@ const ALL_GROUPS = [
 
 const BADGE_STYLES = {
   ok:      { bg: '#D1FAE5', color: '#065F46' },
-  warn:    { bg: '#FEF3C7', color: '#92400E' },
   AI:      { bg: '#F3E8FF', color: '#7C3AED' },
+  warn:    { bg: '#FEF3C7', color: '#92400E' },
   LIVE:    { bg: '#D1FAE5', color: '#065F46' },
   ON:      { bg: '#D1FAE5', color: '#065F46' },
   NEW:     { bg: '#FEF3C7', color: '#B45309' },
@@ -152,46 +151,24 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
     if (onCollapseChange) onCollapseChange(val);
   };
 
-  // Live system status checks
   useEffect(() => {
     const check = async () => {
       try {
-        // Check Tally: ping the URL + check recent sync log (within last 25 hours)
         let tallyOk = false;
         let n8nOk = false;
-        let waOk = false;
-
-        // Tally infra check
         try {
-          const tr = await fetch('https://tally.shreerangtrendz.com', {
-            method: 'HEAD', signal: AbortSignal.timeout(4000)
-          });
+          const tr = await fetch('https://tally.shreerangtrendz.com', { method: 'HEAD', signal: AbortSignal.timeout(4000) });
           tallyOk = tr.status < 500;
         } catch { tallyOk = false; }
-
-        // n8n check
         try {
-          const nr = await fetch('https://n8n.shreerangtrendz.com/healthz', {
-            signal: AbortSignal.timeout(4000)
-          });
+          const nr = await fetch('https://n8n.shreerangtrendz.com/healthz', { signal: AbortSignal.timeout(4000) });
           n8nOk = nr.ok;
         } catch { n8nOk = false; }
-
-        // WhatsApp: check recent message in last 24h
-        try {
-          const { data: waMsgs } = await supabase
-            .from('whatsapp_messages')
-            .select('id')
-            .gte('created_at', new Date(Date.now() - 86400000).toISOString())
-            .limit(1);
-          waOk = true; // WhatsApp bot is always active if n8n is up
-        } catch { waOk = false; }
-
-        setLiveBadges({ tallyOk, n8nOk, waOk });
+        setLiveBadges({ tallyOk, n8nOk, waOk: true });
       } catch {}
     };
     check();
-    const id = setInterval(check, 30000); // check every 30s
+    const id = setInterval(check, 30000);
     return () => clearInterval(id);
   }, []);
 
@@ -215,7 +192,7 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   useEffect(() => {
     const active = visibleGroups.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
     if (active) setOpenGroups(prev => ({ ...prev, [active.id]: true }));
-  }, [location.pathname]);
+  }, [location.pathname]); // eslint-disable-line
 
   const searchLower = search.toLowerCase();
   const filteredGroups = search
@@ -355,8 +332,6 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
                   style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                 >↪</button>
               </div>
-
-              {/* Live status dots */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {[
                   { label: 'Tally Prime',    on: liveBadges.tallyOk },

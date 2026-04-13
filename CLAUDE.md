@@ -1,5 +1,5 @@
 # SRTPL Horizon -- Active Context
-*Last updated: 13-Apr-2026 (late evening)*
+*Last updated: 13-Apr-2026 (night)*
 
 ## Infrastructure
 - Code: C:\Shreerang 2026\Horizon Code
@@ -30,69 +30,61 @@ grey_purchase -> issue_to_mill -> jobwork_expenses -> rec_from_mill -> sales_bil
 ## CRITICAL: Windows-MCP CORRUPTS unicode in JSX files
 JSX must go via Claude server bash_tool -> git commit -> push. Windows-MCP only safe for ASCII (like this file).
 
-## n8n Workflow -- v35 LIVE
-- Current: SRTPL_Tally_Sync_v35_FIXED2.json (import this into n8n)
-- S_LM: 8,681 ledgers -> 5,627 customers, 1,901 suppliers, 511 agents synced
-- S_LM 502 error: transient (Tally went offline during large XML fetch) -- self-heals next run
-- transporters=0: check actual Tally group name, update routeLedger() in n8n
+## n8n Workflow -- FIXED3 is latest
+- Current file: SRTPL_Tally_Sync_v35_FIXED3.json -- import this into n8n
+- FIXED3 changes vs FIXED2: routeLedger() now matches Transport Agency, Transport Agencies, Roadway, Roadlines, Parcel, Express Carrier + JOB WORKERS group for suppliers. Transporter push includes raw_tally_group for debugging.
+- S_LM 502 error: transient -- self-heals next run
 - Trigger: POST https://n8n.shreerangtrendz.com/api/v1/workflows/CU6dMm7DCtSP6rMQ/run
   Header: X-N8N-API-KEY: n8n_api_45dba335541e42cfa98255662629155c
 
-## JW Allocation Status (13-Apr-2026)
-- matched_direct=607, matched_rows=1878, unmatched=3469 (from last compute_jw_allocation run)
-- 1,878 of 5,347 REC rows have JW link -- 65% still unmatched (resync still in progress from 2022)
-- Run SELECT * FROM compute_jw_allocation() AFTER resync reaches Apr 2026
-
-## Sync Status (13-Apr-2026)
-- Resync at 2022-08-18 (batch running every ~12 min, catching up from 2022-03-31)
-- S_AV_LINES OK | S_LM OK (502 is transient)
-- After resync completes: run compute_jw_allocation()
+## Sync Status (13-Apr-2026 night)
+- Resync at ~2022-08 (behind ~1341 days, running every ~12min)
+- After resync completes: run SELECT * FROM compute_jw_allocation()
+- JW match: 1,878/5,347 (35%) -- will improve dramatically after full resync + compute_jw_allocation()
 
 ## SQL Migrations Applied (all 13-Apr-2026)
-1. add_tally_master_fields_v35 -- customers/suppliers/agents/transporters new columns
+1. add_tally_master_fields_v35
 2. fix_receipt_payment_lines_upsert_null_bill_ref -- UNIQUE NULLS NOT DISTINCT
 3. create_ai_accounting_tables -- 7 smart finance tables
-4. fix_customer_data_quality -- decoded HTML entities, cleared address fragments from city
+4. fix_customer_data_quality -- HTML entity decode, city fragment cleanup
+5. add_gst_filing_status_columns -- customers + suppliers get gst_filing_status, gst_registration_type, gst_status_checked_at, gst_last_return_period. Index on gst_number (not null). transporters gets raw_tally_group.
 
-## FY 2024-25 Key Numbers (live from Supabase)
+## GST Filing Status -- Planned (column ready)
+- customers.gst_filing_status: regular/composition/non_filer/suspended/cancelled
+- customers.gst_last_return_period: last GSTR-3B period (YYYY-MM)
+- Will be populated by n8n weekly cron calling GSTN public API
+- Already shown as "Pending Data" badge in AccountingHub + PartyMastersPage
+
+## FY 2024-25 Key Numbers
 - Sales: Rs 15.46 Cr | 2,450 bills | 487 customers
-- Grey Cost: Rs 5.67 Cr | JW Cost: Rs 4.80 Cr | Credit Notes: Rs 1.29 Cr
-- Gross Profit: ~Rs 3.70 Cr | Margin: ~24%
-- Output GST: Rs 73.6L (IGST Rs 63.4L + CGST/SGST Rs 10.2L)
-- ITC (Purchase GST): Rs 27L | Net GST Liability: ~Rs 46.6L
-- 88% interstate (IGST), 12% intra-Gujarat (CGST+SGST)
-- Top states: Maharashtra Rs 5.69Cr, Kerala Rs 2.63Cr, Gujarat Rs 2.14Cr, Rajasthan Rs 2.06Cr
+- Grey Cost: Rs 5.67 Cr | JW Cost: Rs 4.80 Cr | CN: Rs 1.29 Cr | Gross Profit: ~Rs 3.70 Cr (24%)
+- Output GST: Rs 73.6L | ITC: Rs 27L | Net liability: ~Rs 46.6L
+- 88% interstate (IGST) | Top states: MH 5.69Cr, KL 2.63Cr, GJ 2.14Cr, RJ 2.06Cr
+- 225 transporters in DB (manually added, no tally_ledger_name yet -- will populate after FIXED3 runs)
 
-## Pages Live (all need git push via terminal with PAT)
-AccountingHub v35 OK (991 lines, 5 tabs) | RecFromMillPage OK | MissingRecFromMillPage OK
-SalesBillsPage OK | PurchaseBillsPage OK | GreyPurchasePage OK
-ProcessIssuesPage OK | DesignLifecyclePage OK | DesignCostingPage OK
-PartyMastersPage OK (1039 lines, inline editing, completeness score)
-SmartFinancePage OK (1138 lines, Bill OCR + GST Recon + Bank Recon + TDS)
+## Git Commits Ready to Push (5 commits since last push)
+- ea2b0d7 SmartFinancePage added to App.jsx + route
+- d21ae00 accounting.css font sizes (rows 15px, title 22px, KPI 26px)
+- cd0a18e AdminLayout mobile hamburger + AdminSidebar Smart Finance added
+- a89213e TallyAccountingHub v35 (5 tabs, CA-grade)
+- 10ad219 PartyMastersPage rebuilt (inline edit, completeness)
+Run: cd "C:\Shreerang 2026\Horizon Code" && git push origin master
 
-## AccountingHub v35 -- What's New (5 tabs)
-1. Dashboard: 8 KPI cards, monthly sales chart, cost structure CA view, JW allocation health
-2. Pipeline: V-01->V-05 pipeline cards + supporting vouchers grid
-3. GST Analysis: GSTR-1 summary, ITC/output breakdown, state-wise filing table, GST filer status (pending API)
-4. Mill Performance: Shortage %, JW cost, efficiency score per mill -- TDS 194C note included
-5. Top Customers: Top 10 + revenue concentration analysis + GST filing status column (pending GSTN API)
-
-## GST Filing Status -- Planned Feature
-- Will fetch customer GST filing regularity from GSTN API
-- customers.gst_number already synced from Tally via v35 S_LM
-- Column to add: customers.gst_filing_status (regular/composition/non_filer/suspended), gst_status_checked_at
-- Trigger: weekly cron via n8n calling GSTN public API
-- Display in: PartyMastersPage + AccountingHub GST tab + Customer Profile
+## Pages Live (in repo, need git push)
+AccountingHub v35 (991 lines, 5 tabs: Dashboard/Pipeline/GST/Mills/Customers)
+PartyMastersPage (1039 lines, inline editing, completeness score, GST status)
+SmartFinancePage (1138 lines: Bill OCR + GST Recon + Bank Recon + TDS)
+RecFromMillPage | MissingRecFromMillPage | SalesBillsPage | PurchaseBillsPage
+GreyPurchasePage | ProcessIssuesPage | DesignLifecyclePage | DesignCostingPage
+AdminLayout (mobile hamburger) | AdminSidebar (Smart Finance in nav, no duplicates)
 
 ## Pending Tasks (priority order)
-1. git push -- TallyAccountingHub.jsx + PartyMastersPage.jsx + SmartFinancePage.jsx via terminal with PAT
-2. Import n8n FIXED2.json into n8n dashboard
-3. Fix transporters sync -- check Tally group name, update routeLedger()
-4. GST filing status feature -- GSTN API integration (customers.gst_filing_status column)
-5. Font size -- all accounting pages (15px rows, 26px cards, 22px titles)
-6. Mobile hamburger -- AdminLayout.jsx sidebar overlay on <768px
-7. compute_jw_allocation() -- run after resync reaches Apr 2026
-8. DesignGalleryPage -- BunnyNet CDN https://shreerang.b-cdn.net/designs/{design_no}.jpg
+1. git push -- run from terminal: cd "C:\Shreerang 2026\Horizon Code" && git push origin master
+2. Import FIXED3.json into n8n (replaces FIXED2)
+3. compute_jw_allocation() -- run after resync reaches Apr 2026
+4. GST filing status -- GSTN API integration in n8n (columns ready)
+5. DesignGalleryPage -- BunnyNet CDN https://shreerang.b-cdn.net/designs/{design_no}.jpg
+6. Outstanding Recv/Pay pages -- need review for accuracy
 
 ## MCP Setup
 claude_desktop_config.json at C:\Users\SHRIKUMAR\AppData\Roaming\Claude\

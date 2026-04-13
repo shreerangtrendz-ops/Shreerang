@@ -19,16 +19,19 @@ function parseNum(val) {
   return isNaN(n) ? null : n;
 }
 function getXmlVal(xml, tag) {
-  const re = new RegExp('<' + tag + '[^>]*>([^<]*)<\\/' + tag + '>', 'i');
+  const re = new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + tag + '>', 'i');
   const m = xml.match(re);
-  return m ? cleanText(m[1]) : null;
+  return m ? cleanText(m[1].replace(/<[^>]+>/g, '')) : null;
 }
 function getAllXmlVals(xml, tag) {
-  const re = new RegExp('<' + tag + '[^>]*>([^<]*)<\\/' + tag + '>', 'gi');
+  const re = new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + tag + '>', 'gi');
   const results = [];
   let m;
-  while ((m = re.exec(xml)) !== null) results.push(cleanText(m[1]));
-  return results.filter(Boolean);
+  while ((m = re.exec(xml)) !== null) {
+      const txt = cleanText(m[1].replace(/<[^>]+>/g, ''));
+      if (txt) results.push(txt);
+  }
+  return results;
 }
 
 // TDL XML — fetch Sundry Debtors + Creditors ledger masters

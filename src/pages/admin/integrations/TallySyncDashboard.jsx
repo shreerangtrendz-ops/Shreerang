@@ -233,7 +233,7 @@ export default function TallySyncDashboard() {
     try {
       const r = await fetch('https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-health', {
         method:'GET',
-        headers:{ 'Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey':import.meta.env.VITE_SUPABASE_ANON_KEY },
+        headers:{ 'Authorization':`Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o`, 'apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o' },
         signal: AbortSignal.timeout(12000)
       });
       const json = await r.json();
@@ -349,9 +349,9 @@ export default function TallySyncDashboard() {
     if (pendingPushCount === 0) { toast({ title: 'Nothing to Push', description: 'No bills are queued for Tally push yet.' }); return; }
     setPushing(true);
     try {
-      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tally-push-vouchers`, {
+      const r = await fetch(`https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-push-vouchers`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o`, 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o', 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(30000)
       });
       const j = await r.json();

@@ -414,10 +414,10 @@ export async function syncOutstandingFromTally() { return syncCustomersFromTally
 export async function pushOrderToTally(orderId) { 
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tally-push-vouchers`, {
+    const res = await fetch(`https://zdekydcscwhuusliwqaz.supabase.co/functions/v1/tally-push-vouchers`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Authorization': `Bearer ${session?.access_token || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o'}`,
         'Content-Type': 'application/json'
       }
     });

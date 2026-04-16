@@ -138,7 +138,7 @@ const AddCustomerDialog = ({ onCustomerAdded, triggerButton, open, onOpenChange 
 
         const emailToUse = formData.email || `cust_${Date.now()}@offline.local`;
         
-        const tempSupabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+        const tempSupabase = createClient('https://zdekydcscwhuusliwqaz.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkZWt5ZGNzY3dodXVzbGl3cWF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NDk4NTUsImV4cCI6MjA3OTAyNTg1NX0.47cCribhShEYGqsLbsh7lUwFaFK-rXf2SusVhq4-p0o', { auth: { persistSession: false } });
         
         const { data: authData, error: authError } = await tempSupabase.auth.signUp({
             email: emailToUse,

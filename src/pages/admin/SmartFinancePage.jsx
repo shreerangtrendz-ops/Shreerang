@@ -1,10 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { customSupabaseClient as supabase } from "@/lib/customSupabaseClient";
 
 // ─── Teal/gold palette matching Horizon design system ───────────────────────
 const T = {

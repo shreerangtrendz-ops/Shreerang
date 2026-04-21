@@ -85,19 +85,30 @@ export default function SalesBillsPage() {
   }, [dateFrom, dateTo, partyFilter, brokerFilter, search]);
 
   const fetchSummary = useCallback(async () => {
-    let q = supabase.from('sales_bills')
-      .select('total_amount,quantity_mtrs,total_taka_pcs,comm_amount,broker_name');
-    if (dateFrom) q = q.gte('bill_date',dateFrom);
-    if (dateTo)   q = q.lte('bill_date',dateTo);
-    const {data} = await q;
-    if (data) {
+    // Paginate to bypass Supabase 1000-row default cap (FY 24-25 has 5000+ bills)
+    let allData = [];
+    let pg = 0;
+    const PG = 1000;
+    while (true) {
+      let q = supabase.from('sales_bills')
+        .select('total_amount,quantity_mtrs,total_taka_pcs,comm_amount,broker_name')
+        .range(pg * PG, (pg + 1) * PG - 1);
+      if (dateFrom) q = q.gte('bill_date', dateFrom);
+      if (dateTo)   q = q.lte('bill_date', dateTo);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PG) break;
+      pg++;
+    }
+    if (allData.length) {
       setSummary({
-        total:           data.reduce((s,b)=>s+Number(b.total_amount||0),0),
-        count:           data.length,
-        totalMtrs:       data.reduce((s,b)=>s+Number(b.quantity_mtrs||0),0),
-        totalTaka:       data.reduce((s,b)=>s+Number(b.total_taka_pcs||0),0),
-        totalComm:       data.reduce((s,b)=>s+Number(b.comm_amount||0),0),
-        billsWithBroker: data.filter(b=>b.broker_name).length,
+        total:           allData.reduce((s,b)=>s+Number(b.total_amount||0),0),
+        count:           allData.length,
+        totalMtrs:       allData.reduce((s,b)=>s+Number(b.quantity_mtrs||0),0),
+        totalTaka:       allData.reduce((s,b)=>s+Number(b.total_taka_pcs||0),0),
+        totalComm:       allData.reduce((s,b)=>s+Number(b.comm_amount||0),0),
+        billsWithBroker: allData.filter(b=>b.broker_name).length,
       });
     }
   }, [dateFrom, dateTo]);
@@ -117,7 +128,6 @@ export default function SalesBillsPage() {
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
 
-      {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div>
           <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,color:T.text,margin:0}}>Sales Bills</h1>
@@ -126,10 +136,8 @@ export default function SalesBillsPage() {
         <Badge label={`${totalCount.toLocaleString()} bills`} color={T.teal} bg={T.tealLight}/>
       </div>
 
-      {/* Sync Health Bar */}
       <SyncHealthBar tableName="sales_bills" recordCount={totalCount} />
 
-      {/* FY Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
         {FY_YEARS.map(yr => (
           <button key={yr} onClick={()=>setFY(yr)}
@@ -140,7 +148,6 @@ export default function SalesBillsPage() {
         ))}
       </div>
 
-      {/* Summary Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
         <SummaryCard label="Total Sales"       value={fmtL(summary.total)}       sub={`${summary.count} bills`}               color={T.teal}/>
         <SummaryCard label="Total Metres"      value={fmtMtr(summary.totalMtrs)} sub="billed quantity"                        color={T.blue}/>
@@ -149,7 +156,6 @@ export default function SalesBillsPage() {
         <SummaryCard label="Avg Per Bill"      value={summary.count?fmtL(summary.total/summary.count):'—'} sub="per bill avg" color={T.green}/>
       </div>
 
-      {/* Filters */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
         <div style={{flex:'1 1 180px'}}>
           <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Search</div>
@@ -180,7 +186,6 @@ export default function SalesBillsPage() {
         <button onClick={resetFilters} style={{padding:'8px 14px',background:'transparent',color:T.textMuted,border:`1px solid ${T.border}`,borderRadius:7,fontSize:12,cursor:'pointer',height:34}}>Reset</button>
       </div>
 
-      {/* Mobile Cards */}
       <div className="acct-mobile-cards">
         {loading ? (
           <div style={{padding:40,textAlign:'center',color:T.textMuted,fontSize:13}}>Loading…</div>
@@ -199,22 +204,10 @@ export default function SalesBillsPage() {
                 <div className="amc-cost-label">total amt</div>
               </div>
             </div>
-            <div className="amc-row">
-              <span className="amc-row-label">Date</span>
-              <span className="amc-row-val">{fmtDate(b.bill_date)}</span>
-            </div>
-            <div className="amc-row">
-              <span className="amc-row-label">Metres</span>
-              <span className="amc-row-val">{b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'}</span>
-            </div>
-            <div className="amc-row">
-              <span className="amc-row-label">Rate / m</span>
-              <span className="amc-row-val cell-financial">{b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'}</span>
-            </div>
-            <div className="amc-row">
-              <span className="amc-row-label">Taka</span>
-              <span className="amc-row-val">{b.total_taka_pcs||'—'}</span>
-            </div>
+            <div className="amc-row"><span className="amc-row-label">Date</span><span className="amc-row-val">{fmtDate(b.bill_date)}</span></div>
+            <div className="amc-row"><span className="amc-row-label">Metres</span><span className="amc-row-val">{b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'}</span></div>
+            <div className="amc-row"><span className="amc-row-label">Rate / m</span><span className="amc-row-val cell-financial">{b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'}</span></div>
+            <div className="amc-row"><span className="amc-row-label">Taka</span><span className="amc-row-val">{b.total_taka_pcs||'—'}</span></div>
             <div className="amc-badges">
               {b.design_no && <span className="badge bteal">D{b.design_no}</span>}
               {b.broker_name && <span className="badge bgold">{b.broker_name} {b.comm_rate}%</span>}
@@ -223,7 +216,6 @@ export default function SalesBillsPage() {
         ))}
       </div>
 
-      {/* Table (desktop) */}
       <div className="acct-table-wrap" style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'140px 90px 1fr 80px 110px 90px 90px 110px 50px',gap:0,background:T.bg,borderBottom:`1px solid ${T.border}`,padding:'10px 16px'}}>
           {['Bill No','Date','Customer','Taka','Metres','Rate/m','Broker%','Amount',''].map((h,i)=>(
@@ -270,40 +262,22 @@ export default function SalesBillsPage() {
                 <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'16px 18px 20px'}}>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16,padding:'12px 14px',background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
                     {[
-                      ['Bill Number',      b.bill_number],
-                      ['Bill Date',        fmtDate(b.bill_date)],
-                      ['Customer',         b.customer_name],
-                      ['Customer GSTIN',   b.customer_gstin||'—'],
-                      ['Customer State',   b.customer_state||'—'],
-                      ['Fabric',           b.fabric_name||'—'],
-                      ['Design No',        b.design_no||'—'],
-                      ['Batch Name',       b.batch_name||'—'],
-                      ['Godown',           b.godown||'—'],
-                      ['Sales Ledger',     b.sales_ledger||'—'],
-                      ['Voucher Class',    b.voucher_class||'—'],
-                      ['Place of Supply',  b.place_of_supply||'—'],
-                      ['Broker',           b.broker_name||'None'],
-                      ['Comm Rate',        b.comm_rate?`${b.comm_rate}%`:'None'],
-                      ['Comm Amount',      b.comm_amount?fmt(b.comm_amount):'—'],
-                      ['Comm Assessed',    b.comm_assessed_value?fmt(b.comm_assessed_value):'—'],
-                      ['Qty (Mtrs)',        b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'],
-                      ['Taka / Pcs',       b.total_taka_pcs||'—'],
-                      ['Rate/Mtr',         b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'],
-                      ['Taxable Value',    b.taxable_value?fmt(b.taxable_value):'—'],
-                      ['IGST',             b.igst_amount?fmt(b.igst_amount):'—'],
-                      ['CGST',             b.cgst_amount?fmt(b.cgst_amount):'—'],
-                      ['SGST',             b.sgst_amount?fmt(b.sgst_amount):'—'],
-                      ['Round Off',        b.round_off!=null?`₹${b.round_off}`:'—'],
-                      ['Total Amount',     fmt(b.total_amount)],
-                      ['Credit Days',      b.credit_days||'—'],
-                      ['Bill Ref No',      b.bill_ref_number||'—'],
-                      ['Transporter',      b.transporter_name||'—'],
-                      ['LR Number',        b.lr_number||'—'],
-                      ['Destination City', b.destination_city||'—'],
-                      ['e-Way Bill No',    b.eway_bill_no||'—'],
-                      ['IRN',              b.irn||'—'],
-                      ['Entered By',       b.entered_by||'—'],
-                      ['Narration',        b.narration||'—'],
+                      ['Bill Number',b.bill_number],['Bill Date',fmtDate(b.bill_date)],['Customer',b.customer_name],
+                      ['Customer GSTIN',b.customer_gstin||'—'],['Customer State',b.customer_state||'—'],
+                      ['Fabric',b.fabric_name||'—'],['Design No',b.design_no||'—'],['Batch Name',b.batch_name||'—'],
+                      ['Godown',b.godown||'—'],['Sales Ledger',b.sales_ledger||'—'],
+                      ['Voucher Class',b.voucher_class||'—'],['Place of Supply',b.place_of_supply||'—'],
+                      ['Broker',b.broker_name||'None'],['Comm Rate',b.comm_rate?`${b.comm_rate}%`:'None'],
+                      ['Comm Amount',b.comm_amount?fmt(b.comm_amount):'—'],['Comm Assessed',b.comm_assessed_value?fmt(b.comm_assessed_value):'—'],
+                      ['Qty (Mtrs)',b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'],['Taka / Pcs',b.total_taka_pcs||'—'],
+                      ['Rate/Mtr',b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'],['Taxable Value',b.taxable_value?fmt(b.taxable_value):'—'],
+                      ['IGST',b.igst_amount?fmt(b.igst_amount):'—'],['CGST',b.cgst_amount?fmt(b.cgst_amount):'—'],
+                      ['SGST',b.sgst_amount?fmt(b.sgst_amount):'—'],['Round Off',b.round_off!=null?`₹${b.round_off}`:'—'],
+                      ['Total Amount',fmt(b.total_amount)],['Credit Days',b.credit_days||'—'],
+                      ['Bill Ref No',b.bill_ref_number||'—'],['Transporter',b.transporter_name||'—'],
+                      ['LR Number',b.lr_number||'—'],['Destination City',b.destination_city||'—'],
+                      ['e-Way Bill No',b.eway_bill_no||'—'],['IRN',b.irn||'—'],
+                      ['Entered By',b.entered_by||'—'],['Narration',b.narration||'—'],
                     ].map(([k,v])=>(
                       <div key={k}>
                         <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
@@ -312,120 +286,49 @@ export default function SalesBillsPage() {
                     ))}
                   </div>
 
-                  {b.design_no && (
-                    <div style={{marginBottom:12}}>
-                      <OriginPanel designNo={b.design_no} />
-                    </div>
-                  )}
+                  {b.design_no && <div style={{marginBottom:12}}><OriginPanel designNo={b.design_no} /></div>}
 
-                  {/* ── Line Items (multi-design JSONB) ── */}
                   {Array.isArray(b.line_items) && b.line_items.length > 0 && (
                     <div style={{marginBottom:12}}>
-                      <div style={{fontSize:11,fontWeight:700,color:T.text,
-                        textTransform:'uppercase',letterSpacing:.5,marginBottom:8,
-                        display:'flex',alignItems:'center',gap:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:T.text,textTransform:'uppercase',letterSpacing:.5,marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
                         Line Items
-                        <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,
-                          fontWeight:700,background:T.teal+'22',color:T.teal}}>
+                        <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,background:T.teal+'22',color:T.teal}}>
                           {b.line_items.length} design{b.line_items.length!==1?'s':''}
                         </span>
                       </div>
-                      <div style={{overflowX:'auto',borderRadius:8,
-                        border:`1px solid ${T.border}`}}>
-                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,
-                          background:T.surface}}>
+                      <div style={{overflowX:'auto',borderRadius:8,border:`1px solid ${T.border}`}}>
+                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,background:T.surface}}>
                           <thead>
                             <tr style={{background:T.bg,borderBottom:`1px solid ${T.border}`}}>
-                              {['Design No','Batch / Fabric','Item Name','HSN',
-                                'Godown','Qty (m)','Rate/m','Discount','Amount'].map(h=>(
-                                <th key={h} style={{padding:'7px 10px',textAlign:'left',
-                                  fontWeight:700,fontSize:10,color:T.textMuted,
-                                  textTransform:'uppercase',letterSpacing:.4,
-                                  whiteSpace:'nowrap'}}>{h}</th>
+                              {['Design No','Batch / Fabric','Item Name','HSN','Godown','Qty (m)','Rate/m','Discount','Amount'].map(h=>(
+                                <th key={h} style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,whiteSpace:'nowrap'}}>{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {b.line_items.map((li, idx) => (
-                              <tr key={idx} style={{
-                                borderBottom:`1px solid ${T.border}`,
-                                background:idx%2===0?T.surface:T.bg}}>
-                                <td style={{padding:'7px 10px',fontWeight:700,
-                                  color:T.purple,fontFamily:"'DM Mono',monospace",
-                                  fontSize:12}}>
-                                  {li.design_no||'—'}
-                                </td>
+                              <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,background:idx%2===0?T.surface:T.bg}}>
+                                <td style={{padding:'7px 10px',fontWeight:700,color:T.purple,fontFamily:"'DM Mono',monospace",fontSize:12}}>{li.design_no||'—'}</td>
                                 <td style={{padding:'7px 10px'}}>
-                                  <div style={{fontWeight:600,fontSize:12,color:T.text}}>
-                                    {li.batch_name||li.design_no||'—'}
-                                  </div>
-                                  {li.fabric_name && (
-                                    <div style={{fontSize:10,color:T.textMuted,marginTop:1}}>
-                                      {li.fabric_name}
-                                    </div>
-                                  )}
+                                  <div style={{fontWeight:600,fontSize:12,color:T.text}}>{li.batch_name||li.design_no||'—'}</div>
+                                  {li.fabric_name && <div style={{fontSize:10,color:T.textMuted,marginTop:1}}>{li.fabric_name}</div>}
                                 </td>
-                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,
-                                  maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',
-                                  whiteSpace:'nowrap'}}>
-                                  {li.item_name||li.name||'—'}
-                                </td>
-                                <td style={{padding:'7px 10px',fontFamily:"'DM Mono',monospace",
-                                  color:T.textMuted,fontSize:11}}>
-                                  {li.hsn_code||'—'}
-                                </td>
-                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,
-                                  whiteSpace:'nowrap'}}>
-                                  {li.godown||li.godown_name||'—'}
-                                </td>
-                                <td style={{padding:'7px 10px',textAlign:'right',
-                                  fontFamily:"'DM Mono',monospace",fontWeight:600}}>
-                                  {li.qty_mtrs||li.quantity_mtrs
-                                    ? Number(li.qty_mtrs||li.quantity_mtrs||0)
-                                        .toLocaleString('en-IN',{maximumFractionDigits:2})+'m'
-                                    : '—'}
-                                </td>
-                                <td style={{padding:'7px 10px',textAlign:'right',
-                                  color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>
-                                  {li.rate||li.rate_per_mtr
-                                    ? `₹${Number(li.rate||li.rate_per_mtr||0).toFixed(2)}`
-                                    : '—'}
-                                </td>
-                                <td style={{padding:'7px 10px',textAlign:'right',
-                                  color:T.textMuted}}>
-                                  {li.discount_pct>0 ? `${li.discount_pct}%` : '—'}
-                                </td>
-                                <td style={{padding:'7px 10px',textAlign:'right',
-                                  fontWeight:700,color:T.green,
-                                  fontFamily:"'DM Mono',monospace"}}>
-                                  {li.item_amount||li.amount
-                                    ? '₹'+Number(li.item_amount||li.amount||0)
-                                        .toLocaleString('en-IN',{maximumFractionDigits:0})
-                                    : '—'}
-                                </td>
+                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{li.item_name||li.name||'—'}</td>
+                                <td style={{padding:'7px 10px',fontFamily:"'DM Mono',monospace",color:T.textMuted,fontSize:11}}>{li.hsn_code||'—'}</td>
+                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,whiteSpace:'nowrap'}}>{li.godown||li.godown_name||'—'}</td>
+                                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:600}}>{li.qty_mtrs||li.quantity_mtrs?Number(li.qty_mtrs||li.quantity_mtrs||0).toLocaleString('en-IN',{maximumFractionDigits:2})+'m':'—'}</td>
+                                <td style={{padding:'7px 10px',textAlign:'right',color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>{li.rate||li.rate_per_mtr?`₹${Number(li.rate||li.rate_per_mtr||0).toFixed(2)}`:'—'}</td>
+                                <td style={{padding:'7px 10px',textAlign:'right',color:T.textMuted}}>{li.discount_pct>0?`${li.discount_pct}%`:'—'}</td>
+                                <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>{li.item_amount||li.amount?'₹'+Number(li.item_amount||li.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0}):'—'}</td>
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
                             <tr style={{background:T.bg,borderTop:`2px solid ${T.border}`}}>
-                              <td colSpan={5} style={{padding:'7px 10px',fontWeight:700,
-                                fontSize:11,color:T.textMuted}}>
-                                TOTAL ({b.line_items.length} lines)
-                              </td>
-                              <td style={{padding:'7px 10px',textAlign:'right',
-                                fontWeight:700,fontFamily:"'DM Mono',monospace"}}>
-                                {b.quantity_mtrs
-                                  ? Number(b.quantity_mtrs).toLocaleString('en-IN',
-                                      {maximumFractionDigits:2})+'m'
-                                  : '—'}
-                              </td>
+                              <td colSpan={5} style={{padding:'7px 10px',fontWeight:700,fontSize:11,color:T.textMuted}}>TOTAL ({b.line_items.length} lines)</td>
+                              <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{b.quantity_mtrs?Number(b.quantity_mtrs).toLocaleString('en-IN',{maximumFractionDigits:2})+'m':'—'}</td>
                               <td colSpan={2}/>
-                              <td style={{padding:'7px 10px',textAlign:'right',
-                                fontWeight:700,color:T.green,
-                                fontFamily:"'DM Mono',monospace"}}>
-                                ₹{Number(b.total_amount||0).toLocaleString('en-IN',
-                                    {maximumFractionDigits:0})}
-                              </td>
+                              <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>₹{Number(b.total_amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                             </tr>
                           </tfoot>
                         </table>
@@ -454,7 +357,7 @@ export default function SalesBillsPage() {
             </div>
           </div>
         )}
-      </div>{/* end acct-table-wrap */}
+      </div>
     </div>
   );
 }

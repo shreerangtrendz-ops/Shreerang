@@ -306,3 +306,11 @@ For office PC commands: use AnyDesk manually or VPS terminal if SSH available.
 ## ══ TWO-FILE SYSTEM ══
 - CLAUDE.md = this file, loads every session, updated frequently
 - CLAUDE_MASTER.md = full technical history, read when deep context needed
+## Migration added 21-Apr-2026 (evening)
+8. fix_sales_bills_trigger_security_definer
+   - update_ai_purchase_memory trigger was failing with 500 on chunk50 of sales upsert
+   - Cause: trigger runs UPDATE on customers table but RLS blocked it (not service_role context)
+   - Fix: SECURITY DEFINER + EXCEPTION handler so sales insert never fails due to memory update
+   - Also: Opus 4.7 Chrome extension session committed TallyAccountingHub v36 (627d353)
+     v36 changes: fixed monthly chart loading, sync catch-up progress bar, Outstanding KPI,
+     default FY 2025-26, graceful Tally offline handling, no-cors health check

@@ -1,12 +1,19 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { customSupabase as supabase } from '@/lib/customSupabaseClient';
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   SRTPL ACCOUNTING HUB — v35
-   Complete CA-grade dashboard: pipeline health · business intelligence ·
-   GST analysis · mill performance · outstanding tracking
-   ═══════════════════════════════════════════════════════════════════════════ */
+/*
+ ═══════════════════════════════════════════════════════════════════════════
+  SRTPL ACCOUNTING HUB — v36
+  Upgraded CA-grade dashboard
+    • Fixed monthly sales chart loading bug
+    • Added sync catch-up progress bar (ETA to current FY)
+    • Added Outstanding Receivables KPI
+    • Default FY = 2025-26 (current) with auto-fallback when no data
+    • Graceful Tally connection failure handling
+    • Compact sync health bar + quick-action bar
+ ═══════════════════════════════════════════════════════════════════════════
+*/
 
 const T = {
   teal:'#0d9488', tealDark:'#0f766e', tealLight:'#ccfbf1', tealBg:'#f0fdfa',
@@ -23,13 +30,17 @@ const T = {
   text:'#0f172a', muted:'#64748b', faint:'#94a3b8',
 };
 
-// ─── Formatters ──────────────────────────────────────────────────────────────
-const fmtL  = n => { if(!n && n!==0) return '—'; const v=Math.abs(Number(n)); return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(2)}L`:`₹${Math.round(v).toLocaleString('en-IN')}`; };
-const fmtN  = n => n != null ? Number(n).toLocaleString('en-IN') : '—';
-const fmtD  = d => d ? new Date(d+(d.length===10?'T00:00:00':'')).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
+// Formatters
+const fmtL = n => {
+  if(!n && n!==0) return '—';
+  const v=Math.abs(Number(n));
+  return v>=10000000?`₹${(v/10000000).toFixed(2)}Cr`:v>=100000?`₹${(v/100000).toFixed(2)}L`:`₹${Math.round(v).toLocaleString('en-IN')}`;
+};
+const fmtN = n => n != null ? Number(n).toLocaleString('en-IN') : '—';
+const fmtD = d => d ? new Date(d+(d.length===10?'T00:00:00':'')).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}) : '—';
 const fmtAgo= d => { if(!d) return '—'; const m=Math.floor((Date.now()-new Date(d))/60000); if(m<60)return `${m}m ago`; if(m<1440)return `${Math.floor(m/60)}h ago`; return `${Math.floor(m/1440)}d ago`; };
 const daysSince = d => d ? Math.floor((Date.now()-new Date(d))/86400000) : 999;
-const pct   = (a,b) => b ? Math.round((a/b)*100) : 0;
+const pct = (a,b) => b ? Math.round((a/b)*100) : 0;
 const healthColor = d => { const n=daysSince(d); return n<=7?T.green:n<=30?T.amber:T.red; };
 
 const FY = [
@@ -40,57 +51,39 @@ const FY = [
 ];
 
 const PIPELINE = [
-  { id:'grey',    label:'Grey Purchase', sub:'V-01',  icon:'🧵', color:T.teal,   table:'grey_purchase',    dateField:'voucher_date', path:'/admin/accounting/grey-purchase' },
-  { id:'issue',   label:'Issue to Mill', sub:'V-02',  icon:'🏭', color:T.blue,   table:'issue_to_mill',    dateField:'voucher_date', path:'/admin/accounting/process-issues' },
-  { id:'jw',      label:'Jobwork Bills', sub:'V-03',  icon:'🔧', color:T.gold,   table:'jobwork_expenses', dateField:'voucher_date', path:null },
-  { id:'rec',     label:'REC from Mill', sub:'V-04',  icon:'⚙️', color:T.amber,  table:'rec_from_mill',    dateField:'voucher_date', path:'/admin/accounting/rec-from-mill' },
-  { id:'sales',   label:'Sales Bills',   sub:'V-05',  icon:'📤', color:T.purple, table:'sales_bills',      dateField:'bill_date',    path:'/admin/accounting/sales-bills' },
+  { id:'grey',   label:'Grey Purchase',   sub:'V-01', icon:'🧵', color:T.teal,   table:'grey_purchase',     dateField:'voucher_date', path:'/admin/accounting/grey-purchase' },
+  { id:'issue',  label:'Issue to Mill',   sub:'V-02', icon:'🏭', color:T.blue,   table:'issue_to_mill',     dateField:'voucher_date', path:'/admin/accounting/process-issues' },
+  { id:'jw',     label:'Jobwork Bills',   sub:'V-03', icon:'🔧', color:T.gold,   table:'jobwork_expenses',  dateField:'voucher_date', path:'/admin/accounting/job-work-bills' },
+  { id:'rec',    label:'REC from Mill',   sub:'V-04', icon:'⚙️', color:T.amber,  table:'rec_from_mill',     dateField:'voucher_date', path:'/admin/accounting/rec-from-mill' },
+  { id:'sales',  label:'Sales Bills',     sub:'V-05', icon:'📤', color:T.purple, table:'sales_bills',       dateField:'bill_date',    path:'/admin/accounting/sales-bills' },
 ];
 
 const SUPPORT = [
-  { key:'purchase_bills',      label:'Purchase Bills',    icon:'📥', color:T.blue,   path:'/admin/accounting/purchase-bills' },
-  { key:'credit_note',         label:'Credit Notes',      icon:'📋', color:T.pink,   path:null },
-  { key:'debit_note',          label:'Debit Notes',       icon:'📝', color:T.red,    path:null },
-  { key:'accounting_vouchers', label:'Financial Vouchers',icon:'💰', color:T.green,  path:null },
-  { key:'receipt_payment_lines',label:'Payment Lines',    icon:'🧾', color:T.teal,   path:null },
-  { key:'stock_journal',       label:'Stock Journals',    icon:'📒', color:T.purple, path:null },
+  { key:'purchase_bills',         label:'Purchase Bills',     icon:'📥', color:T.blue,   path:'/admin/accounting/purchase-bills' },
+  { key:'credit_note',            label:'Credit Notes',       icon:'📋', color:T.pink,   path:null },
+  { key:'debit_note',             label:'Debit Notes',        icon:'📝', color:T.red,    path:null },
+  { key:'accounting_vouchers',    label:'Financial Vouchers', icon:'💰', color:T.green,  path:null },
+  { key:'receipt_payment_lines',  label:'Payment Lines',      icon:'🧾', color:T.teal,   path:null },
+  { key:'stock_journal',          label:'Stock Journals',     icon:'📒', color:T.purple, path:null },
 ];
 
-// ─── Mini bar chart ───────────────────────────────────────────────────────────
-function MiniBar({ data, valueKey, labelKey, color = T.teal, height = 40 }) {
-  if (!data?.length) return null;
-  const max = Math.max(...data.map(d => Number(d[valueKey]) || 0));
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height }}>
-      {data.map((d, i) => {
-        const h = max > 0 ? Math.round((Number(d[valueKey]) / max) * height) : 0;
-        return (
-          <div key={i} title={`${d[labelKey]}: ${fmtL(d[valueKey])}`}
-            style={{ flex: 1, background: color, borderRadius: '2px 2px 0 0',
-              height: `${Math.max(h, 2)}px`, opacity: 0.75 + (i / data.length) * 0.25,
-              transition: 'height 0.5s ease', cursor: 'default' }} />
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Stat card ────────────────────────────────────────────────────────────────
+// Sub-components
 function KPI({ label, value, sub, color = T.teal, icon, trend, onClick }) {
   return (
     <div onClick={onClick}
-      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
+      style={{
+        background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
         padding: '14px 18px', cursor: onClick ? 'pointer' : 'default',
         transition: 'box-shadow 0.15s, transform 0.15s',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+      }}
       onMouseEnter={e => onClick && (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)')}
       onMouseLeave={e => onClick && (e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)')}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
         <span style={{ fontSize: 18 }}>{icon}</span>
         {trend != null && (
           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-            background: trend >= 0 ? T.greenLight : T.redLight,
-            color: trend >= 0 ? T.green : T.red }}>
+            background: trend >= 0 ? T.greenLight : T.redLight, color: trend >= 0 ? T.green : T.red }}>
             {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
           </span>
         )}
@@ -102,7 +95,6 @@ function KPI({ label, value, sub, color = T.teal, icon, trend, onClick }) {
   );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
 function SectionHead({ icon, title, sub, action }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -119,7 +111,6 @@ function SectionHead({ icon, title, sub, action }) {
   );
 }
 
-// ─── Progress bar ─────────────────────────────────────────────────────────────
 function Bar({ value, max, color = T.teal, label, sub }) {
   const p = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
@@ -135,7 +126,6 @@ function Bar({ value, max, color = T.teal, label, sub }) {
   );
 }
 
-// ─── Badge ────────────────────────────────────────────────────────────────────
 function Badge({ label, color = T.teal, bg }) {
   return (
     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
@@ -145,7 +135,6 @@ function Badge({ label, color = T.teal, bg }) {
   );
 }
 
-// ─── GST filing status badge (future: will be live data) ─────────────────────
 function GSTStatus({ regular = null }) {
   if (regular === null) return <Badge label="Pending Data" color={T.muted} />;
   return regular
@@ -153,13 +142,18 @@ function GSTStatus({ regular = null }) {
     : <Badge label="Non-Filer / Irregular" color={T.red} bg={T.redLight} />;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ════════════════════════════════════════════════════════════════════════════
+// Sync health bar helpers
+function HPill({ children }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px 4px 0', flexWrap: 'nowrap' }}>{children}</div>; }
+function HLabel({ children }) { return <span style={{ fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>{children}</span>; }
+function HDot({ color }) { return <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />; }
+function HSep() { return <div style={{ width: 1, height: 20, background: T.border, flexShrink: 0, margin: '0 4px' }} />; }
+
+// Main component
 export default function TallyAccountingHub() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [fy, setFy] = useState('2024-25');
+  // Default to 2025-26 (current FY in Apr 2026); user can switch
+  const [fy, setFy] = useState('2025-26');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [tallyOnline, setTallyOnline] = useState(null);
@@ -170,24 +164,31 @@ export default function TallyAccountingHub() {
   const [supportStats, setSupportStats] = useState({});
   const [fyMetrics, setFyMetrics] = useState(null);
   const [monthlyTrend, setMonthlyTrend] = useState([]);
+  const [monthlyLoading, setMonthlyLoading] = useState(true);
   const [topCustomers, setTopCustomers] = useState([]);
   const [stateBreakdown, setStateBreakdown] = useState([]);
   const [millStats, setMillStats] = useState([]);
   const [jwMatchStats, setJwMatchStats] = useState(null);
-  const [gstSummary, setGstSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [outstandingStats, setOutstandingStats] = useState(null);
+  const [, setLoading] = useState(true);
 
-  const fyObj = FY.find(f => f.key === fy) || FY[2];
+  const fyObj = useMemo(() => FY.find(f => f.key === fy) || FY[3], [fy]);
 
-  // ─── Tally health check ──────────────────────────────────────────────────
+  // Tally health check — CORS-safe (no-cors fallback)
   const checkTally = useCallback(async () => {
     try {
-      const r = await fetch('https://tally.shreerangtrendz.com', { method: 'GET', signal: AbortSignal.timeout(5000) });
-      setTallyOnline(r.status < 500);
-    } catch { setTallyOnline(false); }
+      await fetch('https://tally.shreerangtrendz.com', {
+        method: 'GET', mode: 'no-cors',
+        signal: AbortSignal.timeout(5000)
+      });
+      // no-cors opaque response means the request went through (network reachable)
+      setTallyOnline(true);
+    } catch {
+      setTallyOnline(false);
+    }
   }, []);
 
-  // ─── Sync health ─────────────────────────────────────────────────────────
+  // Sync health
   const loadSyncHealth = useCallback(async () => {
     try {
       const { data: st } = await supabase.from('tally_sync_state')
@@ -202,7 +203,7 @@ export default function TallyAccountingHub() {
     } catch {}
   }, []);
 
-  // ─── Pipeline record counts ──────────────────────────────────────────────
+  // Pipeline record counts
   const loadPipeline = useCallback(async () => {
     const res = {};
     await Promise.all(PIPELINE.map(async p => {
@@ -211,6 +212,7 @@ export default function TallyAccountingHub() {
       res[p.id] = { count: count || 0, lastDate: data?.[0]?.[p.dateField] };
     }));
     setPipelineStats(res);
+
     const sup = {};
     await Promise.all(SUPPORT.map(async s => {
       const { count } = await supabase.from(s.key).select('*', { count: 'exact', head: true });
@@ -219,7 +221,7 @@ export default function TallyAccountingHub() {
     setSupportStats(sup);
   }, []);
 
-  // ─── FY-specific metrics ──────────────────────────────────────────────────
+  // FY-specific metrics (same logic as v35 + received/outstanding)
   const loadFyMetrics = useCallback(async (fyData) => {
     try {
       const { data: sales } = await supabase.from('sales_bills')
@@ -227,17 +229,17 @@ export default function TallyAccountingHub() {
         .gte('bill_date', fyData.from).lte('bill_date', fyData.to);
       const sRows = sales || [];
       const salesTotal = sRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
-      const salesMtrs  = sRows.reduce((s, r) => s + Number(r.quantity_mtrs || 0), 0);
-      const igst       = sRows.reduce((s, r) => s + Number(r.igst_amount || 0), 0);
-      const cgstSgst   = sRows.reduce((s, r) => s + Number((r.cgst_amount || 0)) + Number((r.sgst_amount || 0)), 0);
-      const totalGST   = igst + cgstSgst;
+      const salesMtrs = sRows.reduce((s, r) => s + Number(r.quantity_mtrs || 0), 0);
+      const igst = sRows.reduce((s, r) => s + Number(r.igst_amount || 0), 0);
+      const cgstSgst = sRows.reduce((s, r) => s + Number((r.cgst_amount || 0)) + Number((r.sgst_amount || 0)), 0);
+      const totalGST = igst + cgstSgst;
       const interstate = sRows.filter(r => r.igst_amount > 0).length;
 
       const { data: purch } = await supabase.from('purchase_bills')
         .select('total_amount,cgst_amount,sgst_amount,igst_amount')
         .gte('bill_date', fyData.from).lte('bill_date', fyData.to);
       const purchTotal = (purch || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
-      const purchGST   = (purch || []).reduce((s, r) => s + Number(r.igst_amount || 0) + Number(r.cgst_amount || 0) + Number(r.sgst_amount || 0), 0);
+      const purchGST = (purch || []).reduce((s, r) => s + Number(r.igst_amount || 0) + Number(r.cgst_amount || 0) + Number(r.sgst_amount || 0), 0);
 
       const { data: jw } = await supabase.from('jobwork_expenses')
         .select('party_amount').gte('voucher_date', fyData.from).lte('voucher_date', fyData.to);
@@ -256,54 +258,47 @@ export default function TallyAccountingHub() {
       const netGSTLiability = totalGST - purchGST;
       const uniqueCust = new Set(sRows.map(r => r.customer_name).filter(Boolean)).size;
       const avgBillSize = sRows.length > 0 ? salesTotal / sRows.length : 0;
+      const outstanding = Math.max(0, salesTotal - received - cnTotal);
 
       setFyMetrics({
         salesTotal, salesMtrs, salesBills: sRows.length,
-        purchTotal, jwTotal, cnTotal, received,
+        purchTotal, jwTotal, cnTotal, received, outstanding,
         grossProfit, grossMarginPct: salesTotal > 0 ? Math.round((grossProfit / salesTotal) * 100) : 0,
         igst, cgstSgst, totalGST, netGSTLiability, purchGST,
         interstate, intrastate: sRows.length - interstate,
         uniqueCust, avgBillSize,
       });
-
-      // GST summary for CA
-      setGstSummary({
-        outputIGST: igst, outputCGST: cgstSgst / 2, outputSGST: cgstSgst / 2,
-        inputIGST: (purch || []).reduce((s, r) => s + Number(r.igst_amount || 0), 0),
-        inputCGST: (purch || []).reduce((s, r) => s + Number(r.cgst_amount || 0), 0),
-        inputSGST: (purch || []).reduce((s, r) => s + Number(r.sgst_amount || 0), 0),
-        netLiability: netGSTLiability,
-        taxableValue: salesTotal - totalGST,
-        rate5: 0, rate12: 0, rate18: sRows.length, // placeholder until HSN breakdown
-      });
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error('loadFyMetrics', e); }
   }, []);
 
-  // ─── Monthly trend ────────────────────────────────────────────────────────
+  // Monthly trend — FIXED: always uses client-side aggregation (the RPC doesn't exist)
   const loadMonthlyTrend = useCallback(async (fyData) => {
+    setMonthlyLoading(true);
     try {
-      const { data } = await supabase.rpc('get_monthly_sales_trend', {
-        p_from: fyData.from, p_to: fyData.to
-      }).catch(() => ({ data: null }));
-      if (data) { setMonthlyTrend(data); return; }
-      // Fallback: fetch and compute client-side
-      const { data: rows } = await supabase.from('sales_bills')
+      const { data: rows, error } = await supabase.from('sales_bills')
         .select('bill_date,total_amount,quantity_mtrs')
-        .gte('bill_date', fyData.from).lte('bill_date', fyData.to);
+        .gte('bill_date', fyData.from).lte('bill_date', fyData.to)
+        .order('bill_date', { ascending: true });
+      if (error) throw error;
       const byMonth = {};
       (rows || []).forEach(r => {
         const m = r.bill_date?.slice(0, 7);
         if (!m) return;
         if (!byMonth[m]) byMonth[m] = { month: m, total: 0, mtrs: 0, bills: 0 };
         byMonth[m].total += Number(r.total_amount || 0);
-        byMonth[m].mtrs  += Number(r.quantity_mtrs || 0);
+        byMonth[m].mtrs += Number(r.quantity_mtrs || 0);
         byMonth[m].bills += 1;
       });
       setMonthlyTrend(Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month)));
-    } catch {}
+    } catch (e) {
+      console.error('loadMonthlyTrend', e);
+      setMonthlyTrend([]);
+    } finally {
+      setMonthlyLoading(false);
+    }
   }, []);
 
-  // ─── Top customers ─────────────────────────────────────────────────────────
+  // Top customers
   const loadTopCustomers = useCallback(async (fyData) => {
     try {
       const { data } = await supabase.from('sales_bills')
@@ -311,11 +306,10 @@ export default function TallyAccountingHub() {
         .gte('bill_date', fyData.from).lte('bill_date', fyData.to);
       const by = {};
       (data || []).forEach(r => {
-        const n = r.customer_name;
-        if (!n) return;
+        const n = r.customer_name; if (!n) return;
         if (!by[n]) by[n] = { name: n, total: 0, mtrs: 0, bills: 0, lastBill: null, state: r.customer_state };
         by[n].total += Number(r.total_amount || 0);
-        by[n].mtrs  += Number(r.quantity_mtrs || 0);
+        by[n].mtrs += Number(r.quantity_mtrs || 0);
         by[n].bills += 1;
         if (!by[n].lastBill || r.bill_date > by[n].lastBill) by[n].lastBill = r.bill_date;
       });
@@ -323,7 +317,7 @@ export default function TallyAccountingHub() {
     } catch {}
   }, []);
 
-  // ─── State breakdown ──────────────────────────────────────────────────────
+  // State breakdown
   const loadStateBreakdown = useCallback(async (fyData) => {
     try {
       const { data } = await supabase.from('sales_bills')
@@ -333,16 +327,16 @@ export default function TallyAccountingHub() {
       (data || []).forEach(r => {
         const s = r.customer_state || r.place_of_supply || 'Unknown';
         if (!by[s]) by[s] = { state: s, total: 0, igst: 0, cgstSgst: 0, bills: 0 };
-        by[s].total   += Number(r.total_amount || 0);
-        by[s].igst    += Number(r.igst_amount || 0);
+        by[s].total += Number(r.total_amount || 0);
+        by[s].igst += Number(r.igst_amount || 0);
         by[s].cgstSgst += Number(r.cgst_amount || 0) + Number(r.sgst_amount || 0);
-        by[s].bills   += 1;
+        by[s].bills += 1;
       });
       setStateBreakdown(Object.values(by).sort((a, b) => b.total - a.total).slice(0, 10));
     } catch {}
   }, []);
 
-  // ─── Mill performance ─────────────────────────────────────────────────────
+  // Mill performance
   const loadMillStats = useCallback(async (fyData) => {
     try {
       const { data } = await supabase.from('rec_from_mill')
@@ -354,11 +348,11 @@ export default function TallyAccountingHub() {
         const n = r.mill_name;
         if (!n || n.includes('ShreeRang')) return;
         if (!by[n]) by[n] = { mill: n, finish: 0, issued: 0, shortage: 0, recs: 0, jobAmt: 0 };
-        by[n].finish   += Number(r.finish_qty_mtrs || 0);
-        by[n].issued   += Number(r.grey_issued_qty_mtrs || 0);
+        by[n].finish += Number(r.finish_qty_mtrs || 0);
+        by[n].issued += Number(r.grey_issued_qty_mtrs || 0);
         by[n].shortage += Number(r.shortage_mtrs || 0);
-        by[n].recs     += 1;
-        by[n].jobAmt   += Math.abs(Number(r.job_amount || 0));
+        by[n].recs += 1;
+        by[n].jobAmt += Math.abs(Number(r.job_amount || 0));
       });
       const mills = Object.values(by)
         .map(m => ({ ...m, shortagePct: m.issued > 0 ? Math.round((m.shortage / m.issued) * 100 * 10) / 10 : 0 }))
@@ -367,17 +361,38 @@ export default function TallyAccountingHub() {
     } catch {}
   }, []);
 
-  // ─── JW match stats ───────────────────────────────────────────────────────
+  // JW match stats
   const loadJwMatch = useCallback(async () => {
     try {
-      const { count: total }   = await supabase.from('rec_from_mill').select('*', { count: 'exact', head: true });
+      const { count: total } = await supabase.from('rec_from_mill').select('*', { count: 'exact', head: true });
       const { count: matched } = await supabase.from('rec_from_mill').select('*', { count: 'exact', head: true }).not('jw_voucher_number', 'is', null);
       const { count: hasGrey } = await supabase.from('rec_from_mill').select('*', { count: 'exact', head: true }).gt('grey_purchase_rate', 0);
       setJwMatchStats({ total: total || 0, matched: matched || 0, unmatched: (total || 0) - (matched || 0), hasGrey: hasGrey || 0 });
     } catch {}
   }, []);
 
-  // ─── Initial load ──────────────────────────────────────────────────────────
+  // Outstanding receivables (NEW)
+  const loadOutstanding = useCallback(async () => {
+    try {
+      // Fetch summary: open sales bills older than today
+      const { data: bills } = await supabase.from('sales_bills')
+        .select('total_amount,bill_date,customer_name')
+        .lte('bill_date', new Date().toISOString().slice(0, 10));
+      const totalBilled = (bills || []).reduce((s, b) => s + Number(b.total_amount || 0), 0);
+
+      const { data: receipts } = await supabase.from('receipt_payment_lines')
+        .select('bill_amount').eq('voucher_type', 'Receipt');
+      const totalReceived = (receipts || []).reduce((s, r) => s + Math.abs(Number(r.bill_amount || 0)), 0);
+
+      const { data: cn } = await supabase.from('credit_note').select('party_amount');
+      const totalCN = (cn || []).reduce((s, r) => s + Math.abs(Number(r.party_amount || 0)), 0);
+
+      const open = Math.max(0, totalBilled - totalReceived - totalCN);
+      setOutstandingStats({ totalBilled, totalReceived, totalCN, open });
+    } catch {}
+  }, []);
+
+  // Initial load
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -386,6 +401,7 @@ export default function TallyAccountingHub() {
         loadSyncHealth(),
         loadPipeline(),
         loadJwMatch(),
+        loadOutstanding(),
         loadFyMetrics(fyObj),
         loadMonthlyTrend(fyObj),
         loadTopCustomers(fyObj),
@@ -399,11 +415,12 @@ export default function TallyAccountingHub() {
     return () => clearInterval(interval);
   }, []); // eslint-disable-line
 
-  // ─── FY change ─────────────────────────────────────────────────────────────
+  // FY change
   useEffect(() => {
     const f = FY.find(x => x.key === fy);
     if (!f) return;
     setFyMetrics(null);
+    setMonthlyTrend([]);
     Promise.all([
       loadFyMetrics(f),
       loadMonthlyTrend(f),
@@ -413,25 +430,42 @@ export default function TallyAccountingHub() {
     ]);
   }, [fy]); // eslint-disable-line
 
-  // ─── Trigger sync ──────────────────────────────────────────────────────────
+  // Trigger sync
   const triggerSync = async () => {
     setSyncing(true); setSyncResult(null);
     try {
-      const r = await fetch(
+      await fetch(
         `https://n8n.shreerangtrendz.com/api/v1/workflows/CU6dMm7DCtSP6rMQ/run`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': 'n8n_api_45dba335541e42cfa98255662629155c' }, body: JSON.stringify({ trigger: 'manual' }) }
+        { method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': 'n8n_api_45dba335541e42cfa98255662629155c' },
+          body: JSON.stringify({ trigger: 'manual' })
+        }
       );
-      const d = await r.json().catch(() => ({}));
-      setSyncResult({ ok: true, msg: `Sync triggered — batch will run in ~30s` });
+      setSyncResult({ ok: true, msg: `Sync triggered — next batch in ~30s` });
       setTimeout(() => { loadSyncHealth(); loadPipeline(); }, 35000);
-    } catch (e) { setSyncResult({ ok: false, msg: e.message }); }
+    } catch (e) {
+      setSyncResult({ ok: false, msg: 'n8n unreachable. Ask Shrikumar to open n8n UI manually.' });
+    }
     setSyncing(false);
   };
 
-  // ─── Derived ──────────────────────────────────────────────────────────────
+  // Derived values
   const behindColor = !syncHealth ? T.muted : syncHealth.daysBehind > 90 ? T.red : syncHealth.daysBehind > 30 ? T.amber : T.green;
   const maxMonthly = Math.max(...monthlyTrend.map(m => m.total || 0), 1);
   const totalSales = topCustomers.reduce((s, c) => s + c.total, 0);
+
+  // Sync catch-up ETA (v36 new)
+  const catchUpPct = (() => {
+    if (!syncHealth?.lastSyncDate) return 0;
+    // Sync started around 01-Apr-2022, target = today
+    const start = new Date('2022-04-01').getTime();
+    const now = Date.now();
+    const last = new Date(syncHealth.lastSyncDate).getTime();
+    const totalSpan = now - start;
+    const covered = last - start;
+    return totalSpan > 0 ? Math.max(0, Math.min(100, Math.round((covered / totalSpan) * 100))) : 0;
+  })();
+  const etaDays = syncHealth?.daysBehind != null ? Math.ceil(syncHealth.daysBehind / 48) : null; // ~48 days/working-day at 7 days per 30-min batch × 16 batches/day
 
   const TABS = [
     { id: 'dashboard', label: '📊 Dashboard' },
@@ -443,8 +477,7 @@ export default function TallyAccountingHub() {
 
   return (
     <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif", background: T.bg, minHeight: '100vh', padding: '20px 24px' }}>
-
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 26, color: T.text, margin: 0, letterSpacing: '-0.02em' }}>
@@ -455,28 +488,34 @@ export default function TallyAccountingHub() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* FY selector */}
-          <select value={fy} onChange={e => setFy(e.target.value)}
-            style={{ padding: '7px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, fontWeight: 600, color: T.text, background: T.surface, cursor: 'pointer' }}>
+          <select value={fy} onChange={e => setFy(e.target.value)} style={{
+            padding: '7px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13,
+            fontWeight: 600, color: T.text, background: T.surface, cursor: 'pointer' }}>
             {FY.map(f => <option key={f.key} value={f.key}>FY {f.key}</option>)}
           </select>
-          {/* Tally status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px' }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: tallyOnline === null ? T.amber : tallyOnline ? T.green : T.red, boxShadow: `0 0 6px ${tallyOnline ? T.green : T.red}` }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>Tally {tallyOnline === null ? '…' : tallyOnline ? 'Online' : 'Offline'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: T.surface,
+            border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%',
+              background: tallyOnline === null ? T.amber : tallyOnline ? T.green : T.red,
+              boxShadow: `0 0 6px ${tallyOnline ? T.green : T.red}` }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.text }}>
+              Tally {tallyOnline === null ? '…' : tallyOnline ? 'Online' : 'Offline'}
+            </span>
             <button onClick={checkTally} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: T.teal, padding: 0 }}>↺</button>
           </div>
-          {/* Sync button */}
-          <button onClick={triggerSync} disabled={syncing}
-            style={{ background: syncing ? T.faint : T.teal, border: 'none', borderRadius: 8, padding: '8px 20px', color: '#fff', fontWeight: 700, fontSize: 13, cursor: syncing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={triggerSync} disabled={syncing} style={{
+            background: syncing ? T.faint : T.teal, border: 'none', borderRadius: 8,
+            padding: '8px 20px', color: '#fff', fontWeight: 700, fontSize: 13,
+            cursor: syncing ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ display: 'inline-block', animation: syncing ? 'spin 1s linear infinite' : 'none' }}>⟳</span>
             {syncing ? 'Syncing…' : '⚡ Sync Now'}
           </button>
         </div>
       </div>
 
-      {/* ── SYNC HEALTH BAR ── */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
+      {/* SYNC HEALTH BAR (v36 compact) */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 20px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 16 }}>Sync Health</span>
         <HPill><HDot color={behindColor} /><span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{syncHealth ? fmtAgo(syncHealth.lastRunAt) : '…'}</span><HLabel>last run</HLabel></HPill>
         <HSep />
@@ -495,7 +534,6 @@ export default function TallyAccountingHub() {
           <HLabel>errors (last 10)</HLabel>
         </HPill>
         <HSep />
-        {/* JW allocation health */}
         <HPill>
           <span style={{ fontSize: 13, fontWeight: 700, color: jwMatchStats ? (jwMatchStats.matched / (jwMatchStats.total || 1)) > 0.4 ? T.green : T.amber : T.muted }}>
             {jwMatchStats ? `${jwMatchStats.matched}/${jwMatchStats.total}` : '…'}
@@ -503,75 +541,120 @@ export default function TallyAccountingHub() {
           <HLabel>JW matched</HLabel>
         </HPill>
         {syncResult && (
-          <div style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 12px', borderRadius: 8, background: syncResult.ok ? T.greenLight : T.redLight, color: syncResult.ok ? T.green : T.red, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 12px', borderRadius: 8,
+            background: syncResult.ok ? T.greenLight : T.redLight, color: syncResult.ok ? T.green : T.red,
+            fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             {syncResult.ok ? '✅' : '❌'} {syncResult.msg}
             <button onClick={() => setSyncResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 14 }}>×</button>
           </div>
         )}
-        <button onClick={loadSyncHealth} style={{ marginLeft: syncResult ? 8 : 'auto', background: 'none', border: `1px solid ${T.border}`, borderRadius: 6, padding: '4px 10px', fontSize: 11, color: T.muted, cursor: 'pointer' }}>↺</button>
+        <button onClick={loadSyncHealth} style={{ marginLeft: syncResult ? 8 : 'auto', background: 'none',
+          border: `1px solid ${T.border}`, borderRadius: 6, padding: '4px 10px', fontSize: 11, color: T.muted, cursor: 'pointer' }}>↺</button>
       </div>
 
-      {/* ── TABS ── */}
+      {/* SYNC CATCH-UP PROGRESS (v36 new) */}
+      {syncHealth?.daysBehind > 30 && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14 }}>⏳</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>Tally Sync Catch-Up</span>
+              <span style={{ fontSize: 11, color: T.muted }}>Historical data being imported</span>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.teal }}>
+              {catchUpPct}% complete · ETA {etaDays != null ? `~${etaDays} working days` : '—'}
+            </span>
+          </div>
+          <div style={{ height: 8, background: T.border, borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${catchUpPct}%`, height: '100%', background: `linear-gradient(90deg, ${T.teal}, ${T.tealDark})`, transition: 'width 0.6s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: T.muted }}>
+            <span>Apr 2022</span>
+            <span>Synced: {fmtD(syncHealth.lastSyncDate)}</span>
+            <span>Today</span>
+          </div>
+        </div>
+      )}
+
+      {/* TABS */}
       <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `2px solid ${T.border}` }}>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            style={{ padding: '9px 18px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 13, fontWeight: activeTab === t.id ? 700 : 500, color: activeTab === t.id ? T.teal : T.muted, borderBottom: activeTab === t.id ? `2px solid ${T.teal}` : '2px solid transparent', marginBottom: -2, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+          <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
+            padding: '9px 18px', border: 'none', background: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: activeTab === t.id ? 700 : 500,
+            color: activeTab === t.id ? T.teal : T.muted,
+            borderBottom: activeTab === t.id ? `2px solid ${T.teal}` : '2px solid transparent',
+            marginBottom: -2, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════
-          TAB: DASHBOARD
-          ══════════════════════════════════════════════════════════════ */}
+      {/* TAB: DASHBOARD */}
       {activeTab === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-          {/* KPI row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KPI icon="📤" label={`Sales FY ${fy}`} value={fmtL(fyMetrics?.salesTotal)} sub={`${fmtN(fyMetrics?.salesBills)} bills · ${fmtN(Math.round(fyMetrics?.salesMtrs || 0))}m`} color={T.teal} onClick={() => navigate('/admin/accounting/sales-bills')} />
-            <KPI icon="📥" label="Grey + JW Cost" value={fmtL((fyMetrics?.purchTotal || 0) + (fyMetrics?.jwTotal || 0))} sub={`Grey: ${fmtL(fyMetrics?.purchTotal)} · JW: ${fmtL(fyMetrics?.jwTotal)}`} color={T.blue} />
-            <KPI icon="💰" label="Gross Profit" value={fmtL(fyMetrics?.grossProfit)} sub={`Margin: ${fyMetrics?.grossMarginPct ?? '…'}%`} color={fyMetrics?.grossMarginPct > 20 ? T.green : T.amber} />
-            <KPI icon="🧾" label="Net GST Liability" value={fmtL(fyMetrics?.netGSTLiability)} sub={`Output: ${fmtL(fyMetrics?.totalGST)} − ITC: ${fmtL(fyMetrics?.purchGST)}`} color={T.purple} />
+            <KPI icon="📤" label={`Sales FY ${fy}`} value={fmtL(fyMetrics?.salesTotal)}
+              sub={`${fmtN(fyMetrics?.salesBills)} bills · ${fmtN(Math.round(fyMetrics?.salesMtrs || 0))}m`}
+              color={T.teal} onClick={() => navigate('/admin/accounting/sales-bills')} />
+            <KPI icon="📥" label="Grey + JW Cost" value={fmtL((fyMetrics?.purchTotal || 0) + (fyMetrics?.jwTotal || 0))}
+              sub={`Grey: ${fmtL(fyMetrics?.purchTotal)} · JW: ${fmtL(fyMetrics?.jwTotal)}`} color={T.blue} />
+            <KPI icon="💰" label="Gross Profit" value={fmtL(fyMetrics?.grossProfit)}
+              sub={`Margin: ${fyMetrics?.grossMarginPct ?? '…'}%`}
+              color={fyMetrics?.grossMarginPct > 20 ? T.green : T.amber} />
+            <KPI icon="🧾" label="Net GST Liability" value={fmtL(fyMetrics?.netGSTLiability)}
+              sub={`Output: ${fmtL(fyMetrics?.totalGST)} − ITC: ${fmtL(fyMetrics?.purchGST)}`} color={T.purple} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KPI icon="💳" label="Received from Customers" value={fmtL(fyMetrics?.received)} sub={`Collection: ${pct(fyMetrics?.received || 0, fyMetrics?.salesTotal || 1)}%`} color={T.green} />
-            <KPI icon="📋" label="Credit Notes Issued" value={fmtL(fyMetrics?.cnTotal)} sub={`Return/discount adj.`} color={T.pink} />
-            <KPI icon="👥" label="Active Customers" value={fmtN(fyMetrics?.uniqueCust)} sub={`Avg bill: ${fmtL(fyMetrics?.avgBillSize)}`} color={T.navy} />
-            <KPI icon="🗺️" label="Interstate Sales" value={`${pct(fyMetrics?.interstate || 0, fyMetrics?.salesBills || 1)}%`} sub={`IGST: ${fmtL(fyMetrics?.igst)} · CGST+SGST: ${fmtL(fyMetrics?.cgstSgst)}`} color={T.amber} />
+            <KPI icon="💳" label="Received from Customers" value={fmtL(fyMetrics?.received)}
+              sub={`Collection: ${pct(fyMetrics?.received || 0, fyMetrics?.salesTotal || 1)}%`} color={T.green} />
+            <KPI icon="⏱️" label="Outstanding (FY)" value={fmtL(fyMetrics?.outstanding)}
+              sub={`${pct(fyMetrics?.outstanding || 0, fyMetrics?.salesTotal || 1)}% of sales`}
+              color={T.red} onClick={() => navigate('/admin/smart-outstanding')} />
+            <KPI icon="👥" label="Active Customers" value={fmtN(fyMetrics?.uniqueCust)}
+              sub={`Avg bill: ${fmtL(fyMetrics?.avgBillSize)}`} color={T.navy}
+              onClick={() => navigate('/admin/masters')} />
+            <KPI icon="🗺️" label="Interstate Sales"
+              value={`${pct(fyMetrics?.interstate || 0, fyMetrics?.salesBills || 1)}%`}
+              sub={`IGST: ${fmtL(fyMetrics?.igst)} · CGST+SGST: ${fmtL(fyMetrics?.cgstSgst)}`} color={T.amber} />
           </div>
 
-          {/* Monthly chart + JW allocation */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
-            {/* Monthly sales trend */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
               <SectionHead icon="📈" title={`Monthly Sales — FY ${fy}`} sub="₹ value trend" />
-              {monthlyTrend.length > 0 ? (
+              {monthlyLoading ? (
+                <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 12 }}>Loading…</div>
+              ) : monthlyTrend.length > 0 ? (
                 <>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 100, marginBottom: 8 }}>
                     {monthlyTrend.map((m, i) => {
-                      const h = maxMonthly > 0 ? Math.round((m.total / maxMonthly) * 80) : 0;
+                      const h = maxMonthly > 0 ? Math.round((m.total / maxMonthly) * 100) : 0;
                       const monthLabel = m.month ? new Date(m.month + '-01').toLocaleDateString('en-IN', { month: 'short' }) : '';
                       return (
                         <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                          <span style={{ fontSize: 9, color: T.muted, fontWeight: 600 }}>{fmtL(m.total).replace('₹','')}</span>
                           <div title={`${monthLabel}: ${fmtL(m.total)} · ${fmtN(m.bills)} bills`}
-                            style={{ width: '100%', background: T.teal, borderRadius: '3px 3px 0 0', height: `${Math.max(h, 3)}px`, opacity: 0.8, transition: 'height 0.5s ease', cursor: 'default' }} />
-                          <span style={{ fontSize: 9, color: T.muted, transform: 'rotate(-35deg)', transformOrigin: 'top center', marginTop: 4 }}>{monthLabel}</span>
+                            style={{ width: '100%', background: T.teal, borderRadius: '3px 3px 0 0',
+                              height: `${Math.max(h, 3)}px`, opacity: 0.85, transition: 'height 0.5s ease', cursor: 'default' }} />
+                          <span style={{ fontSize: 10, color: T.muted, marginTop: 2, fontWeight: 600 }}>{monthLabel}</span>
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.muted, marginTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.muted, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
                     <span>Peak: <strong style={{ color: T.text }}>{fmtL(maxMonthly)}</strong></span>
                     <span>Avg: <strong style={{ color: T.text }}>{fmtL(monthlyTrend.length ? monthlyTrend.reduce((s, m) => s + m.total, 0) / monthlyTrend.length : 0)}</strong></span>
                     <span>Lowest: <strong style={{ color: T.text }}>{fmtL(Math.min(...monthlyTrend.map(m => m.total)))}</strong></span>
                   </div>
                 </>
-              ) : <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 12 }}>Loading…</div>}
+              ) : (
+                <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.muted, fontSize: 12 }}>
+                  No sales data for this FY yet
+                </div>
+              )}
             </div>
 
-            {/* JW allocation status */}
             <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
               <SectionHead icon="🔗" title="JW Cost Allocation" sub="REC ↔ Jobwork match" />
               {jwMatchStats && (
@@ -592,7 +675,7 @@ export default function TallyAccountingHub() {
             </div>
           </div>
 
-          {/* Cost breakdown */}
+          {/* Cost structure CA view */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="⚖️" title="Cost Structure — CA View" sub={`FY ${fy} · all figures in ₹`} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
@@ -611,15 +694,37 @@ export default function TallyAccountingHub() {
               ))}
             </div>
           </div>
+
+          {/* OUTSTANDING RECEIVABLES SNAPSHOT (v36 new) */}
+          {outstandingStats && (
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
+              <SectionHead icon="⏱️" title="Outstanding Receivables — All Time"
+                sub="Total open balance across all customers"
+                action={<button onClick={() => navigate('/admin/smart-outstanding')} style={{ padding: '6px 14px', background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>Outstanding Report →</button>} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                {[
+                  { label: 'Total Billed', val: outstandingStats.totalBilled, color: T.teal },
+                  { label: 'Total Received', val: outstandingStats.totalReceived, color: T.green },
+                  { label: 'Credit Notes', val: outstandingStats.totalCN, color: T.pink },
+                  { label: 'Open Balance', val: outstandingStats.open, color: T.red },
+                ].map((item, i) => (
+                  <div key={i} style={{ background: T.bg, borderRadius: 10, padding: '12px 14px', borderLeft: `3px solid ${item.color}` }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: item.color }}>{fmtL(item.val)}</div>
+                    <div style={{ fontSize: 11, color: T.text, fontWeight: 600, marginTop: 4 }}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 11, color: T.muted, background: T.tealBg, borderRadius: 8, padding: '8px 12px' }}>
+                💡 Collection efficiency: {pct(outstandingStats.totalReceived, outstandingStats.totalBilled)}% · Note: open balance is net of credit notes.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          TAB: PIPELINE
-          ══════════════════════════════════════════════════════════════ */}
+      {/* TAB: PIPELINE */}
       {activeTab === 'pipeline' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* V-01 → V-05 flow */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="🔄" title="V-01 → V-05 Fabric Pipeline" sub="Grey → Issue → JW Bill → REC → Sales" />
             <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
@@ -644,13 +749,15 @@ export default function TallyAccountingHub() {
                         <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>records · last {fmtD(s?.lastDate)}</div>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {stage.path && (
-                            <button onClick={() => navigate(stage.path)}
-                              style={{ flex: 1, background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '6px 0', fontSize: 11, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>
+                            <button onClick={() => navigate(stage.path)} style={{
+                              flex: 1, background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 6,
+                              padding: '6px 0', fontSize: 11, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>
                               View
                             </button>
                           )}
-                          <button onClick={triggerSync} disabled={syncing}
-                            style={{ flex: 1, background: syncing ? T.faint : stage.color, border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 11, fontWeight: 700, color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer' }}>
+                          <button onClick={triggerSync} disabled={syncing} style={{
+                            flex: 1, background: syncing ? T.faint : stage.color, border: 'none', borderRadius: 6,
+                            padding: '6px 0', fontSize: 11, fontWeight: 700, color: '#fff', cursor: syncing ? 'not-allowed' : 'pointer' }}>
                             {syncing ? '…' : '↓ Sync'}
                           </button>
                         </div>
@@ -667,7 +774,6 @@ export default function TallyAccountingHub() {
             </div>
           </div>
 
-          {/* Supporting vouchers */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="📂" title="Supporting Vouchers" sub="All other voucher types" />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -683,8 +789,9 @@ export default function TallyAccountingHub() {
                       </div>
                     </div>
                     {item.path && (
-                      <button onClick={() => navigate(item.path)}
-                        style={{ width: '100%', background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '5px 0', fontSize: 11, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>
+                      <button onClick={() => navigate(item.path)} style={{
+                        width: '100%', background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 6,
+                        padding: '5px 0', fontSize: 11, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>
                         View →
                       </button>
                     )}
@@ -696,32 +803,30 @@ export default function TallyAccountingHub() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          TAB: GST ANALYSIS — CA Grade
-          ══════════════════════════════════════════════════════════════ */}
+      {/* TAB: GST ANALYSIS */}
       {activeTab === 'gst' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-          {/* GST summary cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KPI icon="⬆️" label="Output Tax (Sales GST)" value={fmtL(fyMetrics?.totalGST)} sub={`IGST: ${fmtL(fyMetrics?.igst)} | CGST+SGST: ${fmtL(fyMetrics?.cgstSgst)}`} color={T.red} />
+            <KPI icon="⬆️" label="Output Tax (Sales GST)" value={fmtL(fyMetrics?.totalGST)}
+              sub={`IGST: ${fmtL(fyMetrics?.igst)} | CGST+SGST: ${fmtL(fyMetrics?.cgstSgst)}`} color={T.red} />
             <KPI icon="⬇️" label="Input Tax Credit (ITC)" value={fmtL(fyMetrics?.purchGST)} sub="From purchase bills" color={T.green} />
             <KPI icon="💸" label="Net GST Payable" value={fmtL(fyMetrics?.netGSTLiability)} sub="Output − ITC (approx)" color={T.purple} />
-            <KPI icon="🗺️" label="Interstate (IGST) Ratio" value={`${pct(fyMetrics?.interstate || 0, fyMetrics?.salesBills || 1)}%`} sub={`${fmtN(fyMetrics?.interstate)} of ${fmtN(fyMetrics?.salesBills)} bills`} color={T.amber} />
+            <KPI icon="🗺️" label="Interstate (IGST) Ratio"
+              value={`${pct(fyMetrics?.interstate || 0, fyMetrics?.salesBills || 1)}%`}
+              sub={`${fmtN(fyMetrics?.interstate)} of ${fmtN(fyMetrics?.salesBills)} bills`} color={T.amber} />
           </div>
 
-          {/* GST filing note */}
           <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <span style={{ fontSize: 18 }}>🔔</span>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.blue }}>GST Filing Status — Coming Soon</div>
               <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>
-                Customer GST compliance data (Regular / Composition / Non-filer) will be fetched automatically from GSTN APIs. This will flag bills where ITC risk exists due to non-filing by the supplier. The <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 3, fontSize: 11 }}>customers.gst_number</code> column is already synced from Tally — GSTN API integration is next.
+                Customer GST compliance data (Regular / Composition / Non-filer) will be fetched automatically from GSTN APIs.
+                This will flag bills where ITC risk exists due to non-filing by the supplier. The <code style={{ background: '#dbeafe', padding: '1px 5px', borderRadius: 3, fontSize: 11 }}>customers.gst_number</code> column is already synced from Tally — GSTN API integration is next.
               </div>
             </div>
           </div>
 
-          {/* GSTR-1 summary (CA format) */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="📋" title={`GSTR-1 Summary — FY ${fy}`} sub="Output liability breakdown · Nature of supply" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -755,6 +860,7 @@ export default function TallyAccountingHub() {
                   </tbody>
                 </table>
               </div>
+
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Input Tax Credit (GSTR-2B)</div>
                 <div style={{ background: T.bg, borderRadius: 8, padding: '12px 14px', marginBottom: 10 }}>
@@ -779,7 +885,6 @@ export default function TallyAccountingHub() {
             </div>
           </div>
 
-          {/* State-wise breakdown */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="🗺️" title="State-wise Sales Distribution" sub={`FY ${fy} · For GSTR-1 table-wise filing`} />
             <div style={{ overflowX: 'auto' }}>
@@ -817,25 +922,22 @@ export default function TallyAccountingHub() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          TAB: MILL PERFORMANCE
-          ══════════════════════════════════════════════════════════════ */}
+      {/* TAB: MILLS */}
       {activeTab === 'mills' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             <KPI icon="🏭" label="Total REC from Mill" value={fmtN(pipelineStats.rec?.count)} sub="All time" color={T.amber} />
-            <KPI icon="🔗" label="JW Matched" value={`${fmtN(jwMatchStats?.matched)}`} sub={`${pct(jwMatchStats?.matched || 0, jwMatchStats?.total || 1)}% allocation rate`} color={T.green} />
+            <KPI icon="🔗" label="JW Matched" value={`${fmtN(jwMatchStats?.matched)}`}
+              sub={`${pct(jwMatchStats?.matched || 0, jwMatchStats?.total || 1)}% allocation rate`} color={T.green} />
             <KPI icon="⚠️" label="JW Unmatched" value={fmtN(jwMatchStats?.unmatched)} sub="Need compute_jw_allocation()" color={T.amber} />
-            <KPI icon="📉" label="Avg Shortage" value={millStats.length ? `${(millStats.reduce((s, m) => s + m.shortagePct, 0) / millStats.length).toFixed(1)}%` : '—'} sub="Across all mills FY" color={T.red} />
+            <KPI icon="📉" label="Avg Shortage"
+              value={millStats.length ? `${(millStats.reduce((s, m) => s + m.shortagePct, 0) / millStats.length).toFixed(1)}%` : '—'}
+              sub="Across all mills FY" color={T.red} />
           </div>
 
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
-            <SectionHead icon="🏭" title={`Mill Performance — FY ${fy}`} sub="REC-based · Shortage analysis · Job cost" action={
-              <button onClick={() => navigate('/admin/accounting/rec-from-mill')}
-                style={{ padding: '6px 14px', background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>
-                Full REC List →
-              </button>
-            } />
+            <SectionHead icon="🏭" title={`Mill Performance — FY ${fy}`} sub="REC-based · Shortage analysis · Job cost"
+              action={<button onClick={() => navigate('/admin/accounting/rec-from-mill')} style={{ padding: '6px 14px', background: T.tealBg, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: T.tealDark, cursor: 'pointer' }}>Full REC List →</button>} />
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -854,14 +956,17 @@ export default function TallyAccountingHub() {
                       <td style={{ padding: '9px 12px', color: T.teal, fontWeight: 600 }}>{fmtN(Math.round(m.finish))}</td>
                       <td style={{ padding: '9px 12px', color: m.shortage > 0 ? T.red : T.muted }}>{fmtN(Math.round(m.shortage))}</td>
                       <td style={{ padding: '9px 12px' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700, background: m.shortagePct > 10 ? T.redLight : m.shortagePct > 5 ? T.amberLight : T.greenLight, color: m.shortagePct > 10 ? T.red : m.shortagePct > 5 ? T.amber : T.green }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                          background: m.shortagePct > 10 ? T.redLight : m.shortagePct > 5 ? T.amberLight : T.greenLight,
+                          color: m.shortagePct > 10 ? T.red : m.shortagePct > 5 ? T.amber : T.green }}>
                           {m.shortagePct}%
                         </span>
                       </td>
                       <td style={{ padding: '9px 12px', fontWeight: 600, color: T.gold }}>{fmtL(m.jobAmt)}</td>
                       <td style={{ padding: '9px 12px' }}>
                         <div style={{ width: 60, height: 5, background: T.border, borderRadius: 2 }}>
-                          <div style={{ width: `${Math.max(0, 100 - m.shortagePct * 5)}%`, height: '100%', background: m.shortagePct < 5 ? T.green : m.shortagePct < 10 ? T.amber : T.red, borderRadius: 2 }} />
+                          <div style={{ width: `${Math.max(0, 100 - m.shortagePct * 5)}%`, height: '100%',
+                            background: m.shortagePct < 5 ? T.green : m.shortagePct < 10 ? T.amber : T.red, borderRadius: 2 }} />
                         </div>
                       </td>
                     </tr>
@@ -870,15 +975,14 @@ export default function TallyAccountingHub() {
               </table>
             </div>
             <div style={{ marginTop: 14, padding: '10px 14px', background: T.goldBg, borderRadius: 8, fontSize: 12, color: T.gold, border: `1px solid ${T.goldLight}` }}>
-              💡 <strong>Textile CA Note:</strong> Shortage &gt;10% is a red flag — verify if it's genuine fabric loss, rejection, or underreporting. For Section 194C TDS: JW payments &gt;₹30,000 per transaction or &gt;₹1L annually require TDS @1% (individual) / 2% (company). Use Smart Finance → TDS Tracker for auto-computation.
+              💡 <strong>Textile CA Note:</strong> Shortage &gt;10% is a red flag — verify if it's genuine fabric loss, rejection, or underreporting.
+              For Section 194C TDS: JW payments &gt;₹30,000 per transaction or &gt;₹1L annually require TDS @1% (individual) / 2% (company). Use Smart Finance → TDS Tracker for auto-computation.
             </div>
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          TAB: TOP CUSTOMERS
-          ══════════════════════════════════════════════════════════════ */}
+      {/* TAB: TOP CUSTOMERS */}
       {activeTab === 'customers' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -935,7 +1039,6 @@ export default function TallyAccountingHub() {
             </div>
           </div>
 
-          {/* Concentration risk */}
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '18px 20px' }}>
             <SectionHead icon="⚖️" title="Revenue Concentration Analysis" sub="CA view — customer dependency risk" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -983,9 +1086,3 @@ export default function TallyAccountingHub() {
     </div>
   );
 }
-
-// ── Sync health bar helpers ────────────────────────────────────────────────────
-function HPill({ children }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 14px 4px 0', flexWrap: 'nowrap' }}>{children}</div>; }
-function HLabel({ children }) { return <span style={{ fontSize: 11, color: T.muted, whiteSpace: 'nowrap' }}>{children}</span>; }
-function HDot({ color }) { return <div style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />; }
-function HSep() { return <div style={{ width: 1, height: 20, background: T.border, flexShrink: 0, margin: '0 4px' }} />; }

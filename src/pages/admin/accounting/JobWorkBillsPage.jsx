@@ -161,35 +161,37 @@ export default function JobWorkBillsPage() {
     setExpandedId(null);
     setIssPage(0); setRecPage(0); setJwPage(0); setExpPage(0);
 
-    const [issRes, recRes, jwRes, expRes, maxIssRes, maxRecRes] = await Promise.all([
-      supabase.from('issue_to_mill')
-        .select('id,lot_no,tally_voucher_no,voucher_date,mill_name,item_name,qty_mtrs,rate,amount,process_type,narration,tally_synced_at,is_sampling,destination_godown')
-        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending:false}),
+    // Fetch all data with pagination to bypass 1000-row Supabase default cap
+    const fetchAll = async (table, select, filters = []) => {
+      let all = [], page = 0, PG = 1000;
+      while (true) {
+        let q = supabase.from(table).select(select).order('voucher_date', {ascending:false}).range(page*PG, (page+1)*PG-1);
+        filters.forEach(([method, ...args]) => { q = q[method](...args); });
+        const { data } = await q;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < PG) break;
+        page++;
+      }
+      return all;
+    };
 
-      supabase.from('rec_from_mill')
-        .select('id,tally_voucher_no,voucher_date,mill_name,job_godown,our_godown,party_challan_no,lot_no,design_no,grey_lot_no,grey_item_name,finish_item_name,grey_issued_qty_mtrs,finish_qty_mtrs,grey_rate,grey_amount,job_rate,job_amount,finish_rate,finish_amount,shortage_mtrs,shortage_pct,grey_purchase_rate,grey_cost_actual,cumulative_cost_per_mtr,jw_allocated_cost,jw_allocation_pct,jw_voucher_number,narration,stage_no,issue_challan_no,weaver_name,quality_name,dest_godown,source_godown,short_qty_mtrs,gross_amount')
-        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending:false}),
+    const issFields = 'id,lot_no,tally_voucher_no,voucher_date,mill_name,item_name,qty_mtrs,rate,amount,process_type,narration,tally_synced_at,is_sampling,destination_godown';
+    const recFields = 'id,tally_voucher_no,voucher_date,mill_name,job_godown,our_godown,party_challan_no,lot_no,design_no,grey_lot_no,grey_item_name,finish_item_name,grey_issued_qty_mtrs,finish_qty_mtrs,grey_rate,grey_amount,job_rate,job_amount,finish_rate,finish_amount,shortage_mtrs,shortage_pct,grey_purchase_rate,grey_cost_actual,cumulative_cost_per_mtr,jw_allocated_cost,jw_allocation_pct,jw_voucher_number,narration,stage_no,issue_challan_no,weaver_name,quality_name,dest_godown,source_godown,short_qty_mtrs,gross_amount';
 
-      supabase.from('jobwork_expenses')
-        .select('*').eq('voucher_type','Jobwork')
-        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending:false}),
-
-      supabase.from('jobwork_expenses')
-        .select('*').eq('voucher_type','Expenses')
-        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
-        .order('voucher_date', {ascending:false}),
-
+    const [issData, recData, jwData, expData, maxIssRes, maxRecRes] = await Promise.all([
+      fetchAll('issue_to_mill', issFields, [['gte','voucher_date',dateFrom],['lte','voucher_date',dateTo]]),
+      fetchAll('rec_from_mill', recFields, [['gte','voucher_date',dateFrom],['lte','voucher_date',dateTo]]),
+      fetchAll('jobwork_expenses', '*', [['eq','voucher_type','Jobwork'],['gte','voucher_date',dateFrom],['lte','voucher_date',dateTo]]),
+      fetchAll('jobwork_expenses', '*', [['eq','voucher_type','Expenses'],['gte','voucher_date',dateFrom],['lte','voucher_date',dateTo]]),
       supabase.from('issue_to_mill').select('voucher_date').order('voucher_date',{ascending:false}).limit(1),
       supabase.from('rec_from_mill').select('voucher_date').order('voucher_date',{ascending:false}).limit(1),
     ]);
 
-    setIssues(issRes.data   || []);
-    setRecMill(recRes.data  || []);
-    setJobwork(jwRes.data   || []);
-    setExpenses(expRes.data || []);
+    setIssues(issData   || []);
+    setRecMill(recData  || []);
+    setJobwork(jwData   || []);
+    setExpenses(expData || []);
     if (maxIssRes.data?.[0]) setMaxIssueDate(maxIssRes.data[0].voucher_date);
     if (maxRecRes.data?.[0]) setMaxRecDate(maxRecRes.data[0].voucher_date);
     setLoading(false);

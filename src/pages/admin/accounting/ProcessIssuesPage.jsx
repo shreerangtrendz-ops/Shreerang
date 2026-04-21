@@ -105,29 +105,24 @@ export default function ProcessIssuesPage() {
   const [millFilter, setMillFilter] = useState('');
   const [samplingFilter, setSamplingFilter] = useState('all');
 
-  // Issues tab
   const [issues, setIssues]               = useState([]);
   const [issuesLoading, setIssuesLoading] = useState(true);
   const [issuesTotalCount, setIssuesTotalCount] = useState(0);
   const [issuesPage, setIssuesPage]       = useState(0);
   const [expandedIssue, setExpandedIssue] = useState(null);
 
-  // REC tab
   const [recs, setRecs]               = useState([]);
   const [recsLoading, setRecsLoading] = useState(false);
   const [recsTotalCount, setRecsTotalCount] = useState(0);
   const [recsPage, setRecsPage]       = useState(0);
   const [expandedRec, setExpandedRec] = useState(null);
 
-  // Pending tab
   const [pendingIssues, setPendingIssues]   = useState([]);
   const [pendingLoading, setPendingLoading] = useState(false);
 
-  // Recon tab
   const [reconData, setReconData]     = useState([]);
   const [reconLoading, setReconLoading] = useState(false);
 
-  // Summary
   const [summary, setSummary] = useState({
     totalIssued:0, totalRecdMtrs:0, totalShortage:0,
     totalRecCount:0, samplingCount:0, productionCount:0,
@@ -140,8 +135,6 @@ export default function ProcessIssuesPage() {
     setIssuesPage(0);
     setRecsPage(0);
   };
-
-  // ── Fetchers ──────────────────────────────────────────────────────────────
 
   const fetchIssues = useCallback(async (pg=0) => {
     setIssuesLoading(true);
@@ -183,13 +176,19 @@ export default function ProcessIssuesPage() {
     setPendingLoading(true);
     const {data:allIssues} = await supabase.from('issue_to_mill')
       .select('id,lot_no,voucher_date,mill_name,item_name,qty_mtrs,is_sampling,process_type,purpose_note')
-      .order('voucher_date',{ascending:false});
+      .order('voucher_date',{ascending:false})
+      .limit(3000);
     if (!allIssues) { setPendingLoading(false); return; }
     const lotNos = [...new Set(allIssues.map(i=>i.lot_no).filter(Boolean))];
     if (!lotNos.length) { setPendingIssues([]); setPendingLoading(false); return; }
-    const {data:recLots} = await supabase.from('rec_from_mill')
-      .select('grey_lot_no').in('grey_lot_no',lotNos.slice(0,1000));
-    const recLotSet = new Set((recLots||[]).map(r=>r.grey_lot_no));
+    const CHUNK = 500;
+    const recLotSet = new Set();
+    for (let i = 0; i < lotNos.length; i += CHUNK) {
+      const chunk = lotNos.slice(i, i + CHUNK);
+      const {data:recLots} = await supabase.from('rec_from_mill')
+        .select('grey_lot_no').in('grey_lot_no', chunk);
+      (recLots || []).forEach(r => recLotSet.add(r.grey_lot_no));
+    }
     setPendingIssues(allIssues.filter(i=>i.lot_no&&!recLotSet.has(i.lot_no)));
     setPendingLoading(false);
   }, []);
@@ -197,27 +196,57 @@ export default function ProcessIssuesPage() {
   const fetchRecon = useCallback(async () => {
     setReconLoading(true);
     const {data} = await supabase.from('jobwork_expenses')
-      .select('*').order('voucher_date',{ascending:false}).limit(200);
+      .select('*').order('voucher_date',{ascending:false}).limit(1000);
     setReconData(data||[]);
     setReconLoading(false);
   }, []);
 
   const fetchSummary = useCallback(async () => {
-    const [issRes,recRes] = await Promise.all([
-      supabase.from('issue_to_mill').select('qty_mtrs,is_sampling').gte('voucher_date',dateFrom).lte('voucher_date',dateTo),
-      supabase.from('rec_from_mill').select('finish_qty_mtrs,shortage_mtrs').gte('voucher_date',dateFrom).lte('voucher_date',dateTo),
+    const [issRes, recRes, sampRes, recCountRes] = await Promise.all([
+      supabase.from('issue_to_mill')
+        .select('qty_mtrs', { count: 'exact' })
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo),
+      supabase.from('rec_from_mill')
+        .select('finish_qty_mtrs,shortage_mtrs', { count: 'exact' })
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo),
+      supabase.from('issue_to_mill')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_sampling', true)
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo),
+      supabase.from('issue_to_mill')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_sampling', false)
+        .gte('voucher_date', dateFrom).lte('voucher_date', dateTo),
     ]);
-    const iss = issRes.data||[];
-    const rec = recRes.data||[];
+    const iss = issRes.data || [];
+    const rec = recRes.data || [];
+    let totalIssuedMtrs = iss.reduce((s, r) => s + Math.abs(Number(r.qty_mtrs || 0)), 0);
+    let totalRecdMtrs = rec.reduce((s, r) => s + Math.abs(Number(r.finish_qty_mtrs || 0)), 0);
+    let totalShortage = rec.reduce((s, r) => s + Math.abs(Number(r.shortage_mtrs || 0)), 0);
+    const issTotal = issRes.count || 0;
+    const recTotal = recRes.count || 0;
+    if (issTotal > iss.length) {
+      const { data: issAll } = await supabase.from('issue_to_mill')
+        .select('qty_mtrs').gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
+        .range(1000, Math.min(issTotal - 1, 4999));
+      totalIssuedMtrs += (issAll || []).reduce((s, r) => s + Math.abs(Number(r.qty_mtrs || 0)), 0);
+    }
+    if (recTotal > rec.length) {
+      const { data: recAll } = await supabase.from('rec_from_mill')
+        .select('finish_qty_mtrs,shortage_mtrs').gte('voucher_date', dateFrom).lte('voucher_date', dateTo)
+        .range(1000, Math.min(recTotal - 1, 4999));
+      totalRecdMtrs += (recAll || []).reduce((s, r) => s + Math.abs(Number(r.finish_qty_mtrs || 0)), 0);
+      totalShortage += (recAll || []).reduce((s, r) => s + Math.abs(Number(r.shortage_mtrs || 0)), 0);
+    }
     setSummary({
-      totalIssued:     iss.reduce((s,r)=>s+Math.abs(Number(r.qty_mtrs||0)),0),
-      totalRecCount:   rec.length,
-      totalRecdMtrs:   rec.reduce((s,r)=>s+Math.abs(Number(r.finish_qty_mtrs||0)),0),
-      totalShortage:   rec.reduce((s,r)=>s+Math.abs(Number(r.shortage_mtrs||0)),0),
-      samplingCount:   iss.filter(i=>i.is_sampling).length,
-      productionCount: iss.filter(i=>!i.is_sampling).length,
+      totalIssued:     totalIssuedMtrs,
+      totalRecCount:   recTotal,
+      totalRecdMtrs:   totalRecdMtrs,
+      totalShortage:   totalShortage,
+      samplingCount:   sampRes.count || 0,
+      productionCount: recCountRes.count || 0,
     });
-  }, [dateFrom,dateTo]);
+  }, [dateFrom, dateTo]);
 
   useEffect(()=>{ fetchSummary(); }, [fetchSummary]);
   useEffect(()=>{ if(activeTab==='issues')  fetchIssues(0);  }, [activeTab,fetchIssues]);
@@ -225,16 +254,12 @@ export default function ProcessIssuesPage() {
   useEffect(()=>{ if(activeTab==='pending') fetchPending();  }, [activeTab,fetchPending]);
   useEffect(()=>{ if(activeTab==='recon')   fetchRecon();    }, [activeTab,fetchRecon]);
 
-  function applyFilters() {
-    fetchIssues(0); fetchRecs(0); fetchSummary();
-  }
+  function applyFilters() { fetchIssues(0); fetchRecs(0); fetchSummary(); }
   function resetFilters() {
     setSearch(''); setMillFilter(''); setSamplingFilter('all');
     const f = getCurrentFY();
     setActiveFY(f.yr); setDateFrom(f.from); setDateTo(f.to);
   }
-
-  // ── Inline edits ──────────────────────────────────────────────────────────
 
   const toggleSampling = async (id,cur) => {
     const {error} = await supabase.from('issue_to_mill').update({is_sampling:!cur}).eq('id',id);
@@ -247,8 +272,6 @@ export default function ProcessIssuesPage() {
     await supabase.from('issue_to_mill').update({process_type:val}).eq('id',id);
     setIssues(p=>p.map(i=>i.id===id?{...i,process_type:val}:i));
   };
-
-  // ── Tab renderers ─────────────────────────────────────────────────────────
 
   const renderIssues = () => (
     <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
@@ -269,7 +292,6 @@ export default function ProcessIssuesPage() {
               onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background=T.bg}}
               onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background='#fff'}}
             >
-              {/* Sampling toggle */}
               <div
                 onClick={e=>{e.stopPropagation();toggleSampling(iss.id,iss.is_sampling);}}
                 style={{width:36,height:20,borderRadius:10,background:iss.is_sampling?T.gold:T.border,
@@ -294,7 +316,6 @@ export default function ProcessIssuesPage() {
               {iss.process_type && <Badge label={iss.process_type} color={T.purple}/>}
               <div style={{color:T.textFaint,fontSize:16}}>{isOpen?'▲':'▼'}</div>
             </div>
-
             {isOpen && (
               <div style={{padding:'14px 16px',background:'#F8FFFE',borderTop:`1px solid ${T.border}`}}>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:12}}>
@@ -383,7 +404,6 @@ export default function ProcessIssuesPage() {
               </div>
               <div style={{color:T.textFaint,fontSize:16}}>{isOpen?'▲':'▼'}</div>
             </div>
-
             {isOpen && (
               <div style={{padding:'14px 16px',background:'#F0F6FF',borderTop:`1px solid ${T.border}`}}>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
@@ -538,8 +558,6 @@ export default function ProcessIssuesPage() {
     </div>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   const TABS = [
     {key:'issues',  label:'Issue to Mill',  count:issuesTotalCount,                             color:T.teal},
     {key:'rec',     label:'REC FROM MILL',  count:recsTotalCount,                               color:T.blue},
@@ -549,8 +567,6 @@ export default function ProcessIssuesPage() {
 
   return (
     <div style={{fontFamily:"'DM Sans',sans-serif",background:T.bg,minHeight:'100vh',padding:'20px 24px'}}>
-
-      {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div>
           <h1 style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:24,color:T.text,margin:0}}>
@@ -562,8 +578,6 @@ export default function ProcessIssuesPage() {
         </div>
         <Badge label={`${issuesTotalCount.toLocaleString()} issues`} color={T.teal} bg={T.tealLight}/>
       </div>
-
-      {/* FY Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:4,width:'fit-content'}}>
         {FY_YEARS.map(yr => (
           <button key={yr} onClick={()=>setFY(yr)}
@@ -573,8 +587,6 @@ export default function ProcessIssuesPage() {
           </button>
         ))}
       </div>
-
-      {/* Summary Cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:20}}>
         <SummaryCard label="Total Issued"     value={fmtMtr(summary.totalIssued)}   color={T.teal}/>
         <SummaryCard label="Total Received"   value={fmtMtr(summary.totalRecdMtrs)} sub={`${summary.totalRecCount} entries`} color={T.blue}/>
@@ -583,8 +595,6 @@ export default function ProcessIssuesPage() {
         <SummaryCard label="Production Issues"value={summary.productionCount||0}    color={T.teal}/>
         <SummaryCard label="Pending at Mill"  value={pendingIssues.length||'—'}     sub="no REC found"    color={T.red}/>
       </div>
-
-      {/* Filters */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
         <div style={{flex:'1 1 180px'}}>
           <div style={{fontSize:10,color:T.textMuted,fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:.4}}>Search</div>
@@ -624,8 +634,6 @@ export default function ProcessIssuesPage() {
           Reset
         </button>
       </div>
-
-      {/* Content Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:16,background:T.surface,border:`1px solid ${T.border}`,
         borderRadius:8,padding:4,width:'fit-content'}}>
         {TABS.map(tab => (
@@ -639,12 +647,10 @@ export default function ProcessIssuesPage() {
           </button>
         ))}
       </div>
-
       {activeTab==='issues'  && renderIssues()}
       {activeTab==='rec'     && renderRecs()}
       {activeTab==='pending' && renderPending()}
       {activeTab==='recon'   && renderRecon()}
-
     </div>
   );
 }

@@ -173,6 +173,23 @@ export default function OriginPanel({ designNo, lotNo }) {
               <span style={{ fontWeight: 700, color: T.green }}>₹{Number(row.cost_per_mtr).toFixed(2)}/m</span>
             </>
           )}
+          {row.sale_customer ? (
+            <>
+              <span style={{ color: T.faint }}>→</span>
+              <span style={{ fontWeight: 700, color: '#7C3AED' }}>{row.sale_customer}</span>
+              {row.sale_rate_per_mtr && <span style={{ color: T.muted, fontFamily:"'DM Mono',monospace", fontSize: 11 }}>{' '}@₹{Number(row.sale_rate_per_mtr).toFixed(0)}/m</span>}
+              {row.sale_margin_pct != null && Number(row.cost_per_mtr) > 0 && (
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                  background: Number(row.sale_margin_pct)>=20?'#E8FFF4':Number(row.sale_margin_pct)>=10?'#FFF8E8':'#FFF5F5',
+                  color: Number(row.sale_margin_pct)>=20?'#1E9E5A':Number(row.sale_margin_pct)>=10?'#E67E22':'#D93025' }}>
+                  {row.sale_margin_pct}% margin
+                </span>
+              )}
+              {row.sale_bill_count > 1 && <span style={{ fontSize: 10, color: T.muted }}>+{Number(row.sale_bill_count)-1} more bills</span>}
+            </>
+          ) : (
+            <><span style={{ color: T.faint }}>→</span><span style={{ fontSize: 10, color: T.muted, fontStyle: 'italic' }}>not yet sold</span></>
+          )}
         </div>
         <span style={{ fontSize: 11, color: T.teal, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>
           {open ? '▲' : '▼'} Origin
@@ -181,7 +198,7 @@ export default function OriginPanel({ designNo, lotNo }) {
 
       {/* ── Expanded cards ── */}
       {open && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginTop: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginTop: 8 }}>
 
           {/* V-01 Grey Purchase */}
           <StageCard title="Grey Purchase (V-01)" color={T.amber} step="1">
@@ -243,6 +260,41 @@ export default function OriginPanel({ designNo, lotNo }) {
               </>
             ) : (
               <PendingNote message="JW bill not yet matched" />
+            )}
+          </StageCard>
+
+          {/* V-05 Sales Bill — forward link */}
+          <StageCard title="Sales Bill (V-05)" color="#7C3AED" step="5">
+            {row.sale_customer ? (
+              <>
+                <KV label="Bill No"    value={row.sale_bill_number} mono />
+                <KV label="Date"       value={fmtDate(row.sale_date)} />
+                <KV label="Customer"   value={row.sale_customer} />
+                <KV label="State"      value={row.sale_customer_state} />
+                <KV label="Sale Rate"  value={fmtRate(row.sale_rate_per_mtr)} mono color="#7C3AED" />
+                <KV label="Qty Sold"   value={row.sale_qty_mtrs ? fmtMtr(row.sale_qty_mtrs) : null} mono />
+                {row.sale_broker && <KV label="Broker" value={row.sale_broker} />}
+                {row.sale_margin_pct != null && Number(row.cost_per_mtr) > 0 && (
+                  <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6,
+                    background: Number(row.sale_margin_pct)>=20?'#E8FFF4':Number(row.sale_margin_pct)>=10?'#FFF8E8':'#FFF5F5',
+                    border: `1px solid ${Number(row.sale_margin_pct)>=20?'#1E9E5A33':Number(row.sale_margin_pct)>=10?'#E67E2233':'#D9302533'}` }}>
+                    <div style={{ fontSize: 9, color: T.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 }}>Margin on this design</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: Number(row.sale_margin_pct)>=20?'#1E9E5A':Number(row.sale_margin_pct)>=10?'#E67E22':'#D93025' }}>
+                      {row.sale_margin_pct}%
+                    </div>
+                    <div style={{ fontSize: 10, color: T.muted, marginTop: 1 }}>
+                      ₹{Number(row.sale_rate_per_mtr||0).toFixed(2)}/m sold − ₹{Number(row.cost_per_mtr||0).toFixed(2)}/m cost = <strong>₹{row.sale_margin_per_mtr}/m profit</strong>
+                    </div>
+                  </div>
+                )}
+                {row.sale_bill_count > 1 && (
+                  <div style={{ marginTop: 4, fontSize: 10, color: T.muted, fontStyle: 'italic' }}>
+                    +{Number(row.sale_bill_count)-1} more bill{Number(row.sale_bill_count)>2?'s':''} for this design
+                  </div>
+                )}
+              </>
+            ) : (
+              <PendingNote message="No sales bill found yet — fabric may still be in stock" />
             )}
           </StageCard>
 

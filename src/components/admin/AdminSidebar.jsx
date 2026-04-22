@@ -5,88 +5,107 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 
 // ─── NAVIGATION STRUCTURE ─────────────────────────────────────────────────────
+const A = ['admin','manager','accounts'];
+const ALL = ['admin','manager','accounts','operations','sales','sales_executive','production_staff','payment_recovery','viewer'];
+
 const ALL_GROUPS = [
   {
-    id: 'overview', label: 'Command Center', icon: '⬡',
-    roles: ['admin','manager','accounts','operations','sales','sales_executive','production_staff','payment_recovery','viewer'],
+    id: 'overview', label: 'Command Center', icon: '⬡', roles: ALL,
     items: [
-      { icon: '⬡',  label: 'Dashboard',    to: '/admin/dashboard',      roles: ['admin','manager','accounts','operations','sales','sales_executive','production_staff','payment_recovery','viewer'] },
-      { icon: '📊', label: 'Analytics',         to: '/admin/analytics',          roles: ['admin','manager'] },
-      { icon: '🏭', label: 'Mill Performance',   to: '/admin/mill-performance',   roles: ['admin','manager','operations'] },
-      { icon: '🤝', label: 'Broker Analytics',   to: '/admin/broker-analytics',   roles: ['admin','manager','accounts'] },
-      { icon: '📋', label: 'Activity Log',  to: '/admin/activity-logs',  roles: ['admin','manager'] },
-      { icon: '🔍', label: 'Code Review',   to: '/admin/code-review',    roles: ['admin'] },
+      { icon: '⬡',  label: 'Dashboard',        to: '/admin/dashboard',      roles: ALL },
+      { icon: '📊', label: 'Analytics',         to: '/admin/analytics',      roles: ['admin','manager'] },
+      { icon: '🏭', label: 'Mill Performance',  to: '/admin/mill-performance',roles: ['admin','manager','operations'] },
+      { icon: '🤝', label: 'Broker Analytics',  to: '/admin/broker-analytics',roles: A },
+      { icon: '📋', label: 'Activity Log',      to: '/admin/activity-logs',  roles: ['admin','manager'] },
+      { icon: '🔍', label: 'Code Review',       to: '/admin/code-review',    roles: ['admin'] },
     ]
   },
   {
     id: 'crm', label: 'CRM & Sales', icon: '🤝',
     roles: ['admin','manager','operations','sales','sales_executive','accounts'],
     items: [
-      { icon: '👥', label: 'Customers',          to: '/admin/customers',           roles: ['admin','manager','operations','sales','sales_executive'] },
-      { icon: '📋', label: 'Party Masters',       to: '/admin/masters',             roles: ['admin','manager','accounts'] },
-      { icon: '📱', label: 'WhatsApp Inbox',     to: '/admin/whatsapp-inbox',      roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '💬', label: 'Quotations',         to: '/admin/accounting/quotations',roles: ['admin','manager','accounts'] },
-      { icon: '📋', label: 'Sales Orders',       to: '/admin/orders',              roles: ['admin','manager','operations','sales','sales_executive'] },
-      { icon: '🎯', label: 'Make-to-Order',      to: '/admin/mto-orders',          roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',   roles: ['admin','manager','accounts','operations'], badge: '⚡' },
-      { icon: '📍', label: 'Smart Outstanding',  to: '/admin/smart-outstanding',   roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'new' },
-      { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable-v2',roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
-      { icon: '🤝', label: 'Broker Outstanding', to: '/admin/broker-outstanding',  roles: ['admin','manager','accounts'], badge: 'NEW' },
+      { icon: '👥', label: 'Customers',         to: '/admin/customers',               roles: ['admin','manager','operations','accounts'] },
+      { icon: '📋', label: 'Party Masters',     to: '/admin/masters',                 roles: A },
+      { icon: '📱', label: 'WhatsApp Inbox',    to: '/admin/whatsapp-inbox',          roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'LIVE' },
+      { icon: '💬', label: 'Quotations',        to: '/admin/accounting/quotations',   roles: A },
+      { icon: '📋', label: 'Sales Orders',      to: '/admin/orders',                  roles: ['admin','manager','operations','sales','sales_executive'] },
+      { icon: '🎯', label: 'Make-to-Order',     to: '/admin/mto-orders',              roles: ['admin','manager','operations'] },
     ]
   },
   {
     id: 'catalogue', label: 'Catalogue & Stock', icon: '🏪',
     roles: ['admin','manager','operations','sales_executive'],
     items: [
-      { icon: '🖼', label: 'Design Gallery',     to: '/admin/design-gallery',       roles: ['admin','manager','sales_executive'], badge: 'NEW' },
-      { icon: '🔩', label: 'Base Fabric',        to: '/admin/fabric/base-fabric-form',roles: ['admin','manager'] },
-      { icon: '🧵', label: 'Finish Fabric',      to: '/admin/fabric/finish',        roles: ['admin','manager'] },
-      { icon: '📦', label: 'Live Stock',         to: '/admin/stock',                roles: ['admin','manager','operations'] },
-      { icon: '⚠️', label: 'Low Stock Alerts',   to: '/admin/stock/alerts',         roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📥', label: 'Stock In / Out',     to: '/admin/stock/inward',         roles: ['admin','manager','operations'] },
-      { icon: '🗂', label: 'Media Library',      to: '/admin/media-library',        roles: ['admin','manager'] },
+      { icon: '🖼',  label: 'Design Gallery',   to: '/admin/design-gallery',         roles: ['admin','manager','sales_executive','operations'] },
+      { icon: '🔩', label: 'Base Fabric',       to: '/admin/fabric/base-fabric-form',roles: ['admin','manager'] },
+      { icon: '🧵', label: 'Finish Fabric',     to: '/admin/fabric/finish',          roles: ['admin','manager'] },
+      { icon: '📦', label: 'Live Stock',        to: '/admin/stock',                  roles: ['admin','manager','operations','sales_executive'] },
+      { icon: '⚠️', label: 'Low Stock Alerts',  to: '/admin/stock/alerts',           roles: ['admin','manager','operations'] },
+      { icon: '📥', label: 'Stock In / Out',    to: '/admin/stock/inward',           roles: ['admin','manager','operations'] },
+      { icon: '🗂',  label: 'Media Library',    to: '/admin/media-library',          roles: ['admin','manager'] },
     ]
   },
   {
     id: 'production', label: 'Production & Job Work', icon: '🏭',
     roles: ['admin','manager','operations','accounts'],
     items: [
-      { icon: '🏭', label: 'Production Floor',   to: '/admin/production-floor',     roles: ['admin','manager','operations'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '📋', label: 'Job Work Lots',      to: '/admin/job-work-jobs',        roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '🧾', label: 'Job Work Bills',     to: '/admin/accounting/job-work-bills', roles: ['admin','manager','operations','accounts'] },
-      { icon: '🔗', label: 'Design Lifecycle',   to: '/admin/design-lifecycle',     roles: ['admin','manager','operations','accounts'], badge: 'NEW' },
-      { icon: '🖼️', label: 'Image Linker',        to: '/admin/design-image-linker',  roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '🤝', label: 'Job Workers',        to: '/admin/job-workers',          roles: ['admin','manager','operations'] },
-      { icon: '📦', label: 'Job Work Challans',  to: '/admin/challans',             roles: ['admin','manager','operations'] },
-      { icon: '💰', label: 'MTO Cost Templates', to: '/admin/mto-cost-template',    roles: ['admin','manager','operations'], badge: 'NEW' },
-      { icon: '🧮', label: 'Cost Engine',        to: '/admin/cost/cost-sheet',      roles: ['admin','manager'] },
+      { icon: '🏭', label: 'Production Floor',  to: '/admin/production-floor',       roles: ['admin','manager','operations'] },
+      { icon: '📋', label: 'Job Work Lots',     to: '/admin/job-work-jobs',          roles: ['admin','manager','operations'] },
+      { icon: '🔗', label: 'Design Lifecycle',  to: '/admin/design-lifecycle',       roles: ['admin','manager','operations'] },
+      { icon: '🖼️', label: 'Image Linker',      to: '/admin/design-image-linker',   roles: ['admin','manager','operations'] },
+      { icon: '🤝', label: 'Job Workers',       to: '/admin/job-workers',            roles: ['admin','manager','operations'] },
+      { icon: '📦', label: 'Job Work Challans', to: '/admin/challans',               roles: ['admin','manager','operations'] },
+      { icon: '💰', label: 'MTO Cost Templates',to: '/admin/mto-cost-template',      roles: ['admin','manager','operations'] },
+      { icon: '🧮', label: 'Cost Engine',       to: '/admin/cost/cost-sheet',        roles: ['admin','manager'] },
     ]
   },
   {
     id: 'accounting', label: 'Accounting & Sync', icon: '🧾',
-    roles: ['admin','manager','accounts'],
+    roles: A,
     items: [
-      { icon: '🔄', label: 'Tally Sync Hub',     to: '/admin/tally-sync',           roles: ['admin','manager'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '⚡', label: 'Accounting Hub',      to: '/admin/accounting/hub',       roles: ['admin','manager','accounts'], badge: 'v35', badgeClass: 'ok' },
-      { icon: '🤖', label: 'Smart Finance',       to: '/admin/smart-finance',        roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'AI' },
-      { icon: '🏢', label: 'Party Ledger',       to: '/admin/reports/party-ledger', roles: ['admin','manager','accounts'] },
-      { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable-v2',   roles: ['admin','manager','accounts'], badge: 'v2', badgeClass: 'ok' },
-      { icon: '💹', label: 'Design Costing',     to: '/admin/accounting/design-costing',roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
-      { icon: '📈', label: 'Design P&L',        to: '/admin/accounting/design-pnl',      roles: ['admin','manager','accounts'], badge: 'NEW', badgeClass: 'ok' },
-      { icon: '🏭', label: 'REC from Mill',     to: '/admin/accounting/rec-from-mill',   roles: ['admin','manager','accounts'], badge: 'LIVE', badgeClass: 'ok' },
-      { icon: '❓', label: 'Missing REC',        to: '/admin/accounting/missing-rec',     roles: ['admin','manager','accounts'], badge: 'ACTION', badgeClass: 'warn' },
+      // ── SYNC ──
+      { subHeader: 'SYNC' },
+      { icon: '🔄', label: 'Tally Sync Hub',    to: '/admin/tally-sync',                     roles: A, badge: 'LIVE', badgeClass: 'LIVE' },
+      { icon: '⚡', label: 'Accounting Hub',    to: '/admin/accounting/hub',                  roles: A, badge: 'v35',  badgeClass: 'warn' },
+
+      // ── VOUCHER REGISTERS ──
+      { subHeader: 'VOUCHER REGISTERS' },
+      { icon: '💰', label: 'Sales Bills',        to: '/admin/accounting/sales-bills',         roles: A },
+      { icon: '🧾', label: 'Grey Purchase',      to: '/admin/accounting/grey-purchase',       roles: A },
+      { icon: '🏭', label: 'REC from Mill',      to: '/admin/accounting/rec-from-mill',       roles: A, badge: 'LIVE', badgeClass: 'LIVE' },
+      { icon: '⚙️', label: 'Jobwork Expenses',   to: '/admin/accounting/job-work-bills',      roles: A },
+      { icon: '📋', label: 'Financial Vouchers', to: '/admin/accounting/financial-vouchers',  roles: A },
+
+      // ── PROCESS TRACKING ──
+      { subHeader: 'PROCESS TRACKING' },
+      { icon: '🔄', label: 'Process Issues',     to: '/admin/accounting/process-issues',      roles: A },
+      { icon: '❓', label: 'Missing REC',        to: '/admin/accounting/missing-rec',         roles: A, badge: 'ACTION', badgeClass: 'warn' },
+
+      // ── COLLECTIONS ──
+      { subHeader: 'COLLECTIONS' },
+      { icon: '💰', label: 'Payment Reminders',  to: '/admin/payment-reminders',              roles: A, badge: '!', badgeClass: 'warn' },
+      { icon: '📍', label: 'Smart Outstanding',  to: '/admin/smart-outstanding',              roles: A, badge: 'NEW', badgeClass: 'NEW' },
+      { icon: '📈', label: 'Outstanding Recv',   to: '/admin/outstanding-receivable-v2',      roles: A, badge: 'v2',  badgeClass: 'ok' },
+      { icon: '📉', label: 'Outstanding Pay',    to: '/admin/outstanding-payable-v2',         roles: A, badge: 'v2',  badgeClass: 'ok' },
+      { icon: '🤝', label: 'Broker Outstanding', to: '/admin/broker-outstanding',             roles: A, badge: 'NEW', badgeClass: 'NEW' },
+
+      // ── ANALYSIS ──
+      { subHeader: 'ANALYSIS' },
+      { icon: '🤖', label: 'Smart Finance',      to: '/admin/smart-finance',                  roles: A, badge: 'NEW', badgeClass: 'NEW' },
+      { icon: '🏢', label: 'Party Ledger',       to: '/admin/reports/party-ledger',           roles: A },
+      { icon: '💹', label: 'Design Costing',     to: '/admin/accounting/design-costing',      roles: A, badge: 'NEW', badgeClass: 'NEW' },
+      { icon: '📈', label: 'Design P&L',        to: '/admin/accounting/design-pnl',           roles: A, badge: 'NEW', badgeClass: 'NEW' },
     ]
   },
   {
-    id: 'settings', label: 'Settings', icon: '⚙️',
-    roles: ['admin'],
+    id: 'settings', label: 'Settings', icon: '⚙️', roles: ['admin'],
     items: [
-      { icon: '🛡', label: 'Access Control',    to: '/admin/access-control',       roles: ['admin'] },
-      { icon: '🤖', label: 'WhatsApp Bot',      to: '/admin/whatsapp',             roles: ['admin'], badge: 'ON', badgeClass: 'ok' },
-      { icon: '🔧', label: 'Field Config',      to: '/admin/settings/dropdown-manager',roles: ['admin'] },
-      { icon: '🔢', label: 'HSN Codes',         to: '/admin/settings/hsn-codes',   roles: ['admin'] },
-      { icon: '☁️', label: 'Cloud Storage',     to: '/admin/cloud-sync',           roles: ['admin'] },
-      { icon: '💾', label: 'System Backup',     to: '/admin/backup-control',       roles: ['admin'] },
+      { icon: '🛡',  label: 'Access Control',   to: '/admin/access-control',              roles: ['admin'] },
+      { icon: '🤖', label: 'WhatsApp Bot',       to: '/admin/whatsapp',                    roles: ['admin'], badge: 'ON', badgeClass: 'ok' },
+      { icon: '🔧', label: 'Field Config',       to: '/admin/settings/dropdown-manager',   roles: ['admin'] },
+      { icon: '🔢', label: 'HSN Codes',          to: '/admin/settings/hsn-codes',          roles: ['admin'] },
+      { icon: '☁️', label: 'Cloud Storage',      to: '/admin/cloud-sync',                  roles: ['admin'] },
+      { icon: '💾', label: 'System Backup',      to: '/admin/backup-control',              roles: ['admin'] },
     ]
   }
 ];
@@ -98,6 +117,9 @@ const BADGE_STYLES = {
   LIVE:    { bg: '#D1FAE5', color: '#065F46' },
   ON:      { bg: '#D1FAE5', color: '#065F46' },
   NEW:     { bg: '#FEF3C7', color: '#B45309' },
+  ACTION:  { bg: '#FEE2E2', color: '#991B1B' },
+  v2:      { bg: '#E0F2FE', color: '#0369A1' },
+  v35:     { bg: '#EDE9FE', color: '#5B21B6' },
   '⚡':    { bg: '#FEF3C7', color: '#B45309' },
   default: { bg: '#E0F2FE', color: '#0369A1' },
 };
@@ -105,7 +127,7 @@ const BADGE_STYLES = {
 function Badge({ text, cls }) {
   const style = BADGE_STYLES[cls] || BADGE_STYLES[text] || BADGE_STYLES.default;
   return (
-    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 20, background: style.bg, color: style.color, marginLeft: 'auto', flexShrink: 0 }}>
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', padding: '2px 6px', borderRadius: 20, background: style.bg, color: style.color, flexShrink: 0 }}>
       {text}
     </span>
   );
@@ -124,7 +146,7 @@ function RolePill({ role }) {
   };
   const s = styles[role] || { bg: '#F3F4F6', color: '#374151', label: role };
   return (
-    <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 99, background: s.bg, color: s.color, textTransform: 'uppercase' }}>
+    <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.06em', padding: '2px 7px', borderRadius: 99, background: s.bg, color: s.color }}>
       {s.label}
     </span>
   );
@@ -138,7 +160,7 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   const role = profile?.role || user?.user_metadata?.role || 'admin';
 
   const [openGroups, setOpenGroups] = useState(() => {
-    const active = ALL_GROUPS.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
+    const active = ALL_GROUPS.find(g => g.items.some(i => i.to && location.pathname.startsWith(i.to)));
     return active ? { [active.id]: true } : { overview: true };
   });
   const [collapsed, setCollapsed]   = useState(false);
@@ -154,16 +176,9 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   useEffect(() => {
     const check = async () => {
       try {
-        let tallyOk = false;
-        let n8nOk = false;
-        try {
-          const tr = await fetch('https://tally.shreerangtrendz.com', { method: 'HEAD', signal: AbortSignal.timeout(4000) });
-          tallyOk = tr.status < 500;
-        } catch { tallyOk = false; }
-        try {
-          const nr = await fetch('https://n8n.shreerangtrendz.com/healthz', { signal: AbortSignal.timeout(4000) });
-          n8nOk = nr.ok;
-        } catch { n8nOk = false; }
+        let tallyOk = false, n8nOk = false;
+        try { const tr = await fetch('https://tally.shreerangtrendz.com', { method: 'HEAD', signal: AbortSignal.timeout(4000) }); tallyOk = tr.status < 500; } catch {}
+        try { const nr = await fetch('https://n8n.shreerangtrendz.com/healthz', { signal: AbortSignal.timeout(4000) }); n8nOk = nr.ok; } catch {}
         setLiveBadges({ tallyOk, n8nOk, waOk: true });
       } catch {}
     };
@@ -174,15 +189,13 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
 
   const visibleGroups = ALL_GROUPS
     .filter(g => role === 'admin' || g.roles.includes(role))
-    .map(g => ({ ...g, items: g.items.filter(i => role === 'admin' || (i.roles || []).includes(role)) }))
-    .filter(g => g.items.length > 0);
+    .map(g => ({ ...g, items: g.items.filter(i => i.subHeader || i.divider || role === 'admin' || (i.roles || []).includes(role)) }))
+    .filter(g => g.items.filter(i => !i.subHeader && !i.divider).length > 0);
 
   useEffect(() => {
     const handler = (e) => {
       if (e.key === '/' && !e.target.matches('input,textarea')) {
-        e.preventDefault();
-        setCollapsed(false);
-        searchRef.current?.focus();
+        e.preventDefault(); setCollapsed(false); searchRef.current?.focus();
       }
     };
     window.addEventListener('keydown', handler);
@@ -190,13 +203,13 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
   }, []);
 
   useEffect(() => {
-    const active = visibleGroups.find(g => g.items.some(i => location.pathname.startsWith(i.to)));
+    const active = visibleGroups.find(g => g.items.some(i => i.to && location.pathname.startsWith(i.to)));
     if (active) setOpenGroups(prev => ({ ...prev, [active.id]: true }));
   }, [location.pathname]); // eslint-disable-line
 
   const searchLower = search.toLowerCase();
   const filteredGroups = search
-    ? visibleGroups.map(g => ({ ...g, items: g.items.filter(i => i.label.toLowerCase().includes(searchLower)) })).filter(g => g.items.length > 0)
+    ? visibleGroups.map(g => ({ ...g, items: g.items.filter(i => i.subHeader || i.label?.toLowerCase().includes(searchLower)) })).filter(g => g.items.filter(i => !i.subHeader).length > 0)
     : visibleGroups;
 
   const handleSignOut = async () => { await signOut(); navigate('/'); };
@@ -223,6 +236,12 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
           letter-spacing:0.1em; text-transform:uppercase; transition:all 0.13s; user-select:none; margin-top:4px;
         }
         .sb-group-hdr:hover { color:rgba(200,232,228,0.7); background:rgba(255,255,255,0.04); }
+        .sb-sub-hdr {
+          padding:10px 12px 4px; font-size:8.5px; font-weight:800; letter-spacing:0.12em;
+          text-transform:uppercase; color:rgba(61,191,174,0.45); user-select:none;
+          display:flex; align-items:center; gap:6px;
+        }
+        .sb-sub-hdr::after { content:''; flex:1; height:1px; background:rgba(61,191,174,0.12); }
         .sb-items { overflow:hidden; transition:max-height 0.22s ease; }
         .sb-icon { font-size:15px; flex-shrink:0; width:20px; text-align:center; }
         .sb-search {
@@ -256,7 +275,7 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
           )}
           <button
             onClick={() => toggleCollapse(!collapsed)}
-            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}
+            style={{ width: 28, height: 28, borderRadius: 7, border: 'none', background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             title={collapsed ? 'Expand' : 'Collapse'}
           >{collapsed ? '›' : '‹'}</button>
         </div>
@@ -271,33 +290,45 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
         {/* NAV GROUPS */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '2px 8px 12px', scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.1) transparent' }}>
           {filteredGroups.map(group => {
-            const isOpen = !!openGroups[group.id] || !!search;
+            const isGroupOpen = !!openGroups[group.id] || !!search;
             return (
               <div key={group.id}>
                 {!collapsed && (
                   <div className="sb-group-hdr" onClick={() => setOpenGroups(p => ({ ...p, [group.id]: !p[group.id] }))}>
                     <span style={{ flex: 1 }}>{group.icon} {group.label}</span>
-                    <span style={{ fontSize: 9, transition: 'transform 0.18s', transform: isOpen ? 'rotate(180deg)' : '' }}>▾</span>
+                    <span style={{ fontSize: 9, transition: 'transform 0.18s', transform: isGroupOpen ? 'rotate(180deg)' : '' }}>▾</span>
                   </div>
                 )}
-                <div className="sb-items" style={{ maxHeight: isOpen || collapsed ? '1200px' : '0px' }}>
-                  {group.items.map(item => (
-                    <NavLink
-                      key={item.to + item.label}
-                      to={item.to}
-                      className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}
-                      onClick={onClose}
-                      title={collapsed ? item.label : undefined}
-                    >
-                      <span className="sb-icon">{item.icon}</span>
-                      {!collapsed && (
-                        <>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
-                          {item.badge && <Badge text={item.badge} cls={item.badgeClass} />}
-                        </>
-                      )}
-                    </NavLink>
-                  ))}
+                <div className="sb-items" style={{ maxHeight: isGroupOpen || collapsed ? '2000px' : '0px' }}>
+                  {group.items.map((item, idx) => {
+                    // Sub-header divider
+                    if (item.subHeader) {
+                      if (collapsed) return null;
+                      return (
+                        <div key={`sh-${idx}`} className="sb-sub-hdr">
+                          {item.subHeader}
+                        </div>
+                      );
+                    }
+                    // Regular nav item
+                    return (
+                      <NavLink
+                        key={item.to + item.label}
+                        to={item.to}
+                        className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}
+                        onClick={onClose}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        <span className="sb-icon">{item.icon}</span>
+                        {!collapsed && (
+                          <>
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                            {item.badge && <Badge text={item.badge} cls={item.badgeClass} />}
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -307,7 +338,7 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
         {/* FOOTER */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
           <NavLink to="/"
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '10px' : '9px 12px', textDecoration: 'none', color: 'rgba(200,232,228,0.4)', fontSize: 12, transition: 'background 0.13s', justifyContent: collapsed ? 'center' : 'flex-start' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '10px' : '9px 12px', textDecoration: 'none', color: 'rgba(255,255,255,0.35)', transition: 'all 0.13s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             title={collapsed ? 'Homepage' : undefined}
@@ -319,7 +350,7 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
           {!collapsed && (
             <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(61,191,174,0.2)', border: '1.5px solid rgba(61,191,174,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#3DBFAE', flexShrink: 0 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(61,191,174,0.2)', border: '1.5px solid rgba(61,191,174,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3DBFAE', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
                   {(profile?.full_name || user?.email || 'A')[0].toUpperCase()}
                 </div>
                 <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -329,14 +360,14 @@ export default function AdminSidebar({ isOpen, onClose, onCollapseChange }) {
                   <div style={{ marginTop: 2 }}><RolePill role={role} /></div>
                 </div>
                 <button onClick={handleSignOut} title="Sign out"
-                  style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 12 }}
                 >↪</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {[
-                  { label: 'Tally Prime',    on: liveBadges.tallyOk },
-                  { label: 'n8n Workflows',  on: liveBadges.n8nOk   },
-                  { label: 'WhatsApp Bot',   on: liveBadges.waOk    },
+                  { label: 'Tally Prime',   on: liveBadges.tallyOk },
+                  { label: 'n8n Workflows', on: liveBadges.n8nOk   },
+                  { label: 'WhatsApp Bot',  on: liveBadges.waOk    },
                 ].map(int => (
                   <div key={int.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     <span className={`sb-dot ${int.on ? 'sb-dot-on' : 'sb-dot-off'}`} />

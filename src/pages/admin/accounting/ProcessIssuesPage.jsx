@@ -139,7 +139,9 @@ export default function ProcessIssuesPage() {
   const fetchIssues = useCallback(async (pg=0) => {
     setIssuesLoading(true);
     const from = pg*PAGE, to = from+PAGE-1;
-    let q = supabase.from('issue_to_mill')
+    // Read from enriched VIEW — adds gp_supplier_name, gp_supplier_invoice_no,
+    // gp_rate, gp_broker_name, effective_qty_mtrs, etc. via left join on grey_purchase.
+    let q = supabase.from('issue_to_mill_enriched')
       .select('*',{count:'exact'})
       .order('voucher_date',{ascending:false})
       .range(from,to);
@@ -309,8 +311,8 @@ export default function ProcessIssuesPage() {
                 <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>{iss.mill_name} · {fmtDate(iss.voucher_date)}</div>
               </div>
               <div style={{textAlign:'right',flexShrink:0}}>
-                <div style={{fontWeight:700,fontSize:13,fontFamily:"'DM Mono',monospace"}}>{fmtMtr(iss.qty_mtrs)}</div>
-                <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>{iss.item_name}</div>
+                <div style={{fontWeight:700,fontSize:13,fontFamily:"'DM Mono',monospace"}}>{fmtMtr(iss.effective_qty_mtrs ?? iss.qty_mtrs)}</div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>{iss.item_name || iss.gp_item_name}</div>
               </div>
               <AlertBadge days={days} isSampling={iss.is_sampling}/>
               {iss.process_type && <Badge label={iss.process_type} color={T.purple}/>}
@@ -318,13 +320,52 @@ export default function ProcessIssuesPage() {
             </div>
             {isOpen && (
               <div style={{padding:'14px 16px',background:'#F8FFFE',borderTop:`1px solid ${T.border}`}}>
+
+                {/* ===== FROM GREY PURCHASE (enriched via issue_to_mill_enriched view) ===== */}
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,paddingBottom:6,borderBottom:`1px dashed ${T.border}`}}>
+                  <span style={{fontSize:10,fontWeight:800,letterSpacing:.6,color:T.tealDark,textTransform:'uppercase'}}>From Grey Purchase</span>
+                  {iss.has_grey_purchase_link
+                    ? <Badge label="LINKED" color={T.green} bg={T.greenLight}/>
+                    : <Badge label="NO LINKED GREY PURCHASE" color={T.orange} bg={T.orangeLight}/>}
+                </div>
+                {iss.has_grey_purchase_link ? (
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:14,padding:'10px 12px',background:T.tealLight,borderRadius:8}}>
+                    {[
+                      ['Supplier',              iss.gp_supplier_name],
+                      ['Supplier Bill No',      iss.gp_supplier_invoice_no],
+                      ['Supplier Bill Date',    fmtDate(iss.gp_supplier_invoice_date)],
+                      ['Grey Purchase Qty',     iss.gp_actual_qty_mtrs != null ? fmtMtr(iss.gp_actual_qty_mtrs) : '—'],
+                      ['Grey Rate',             iss.gp_rate ? fmt(iss.gp_rate)+'/m' : '—'],
+                      ['Grey Net Rate',         iss.gp_net_rate ? fmt(iss.gp_net_rate)+'/m' : '—'],
+                      ['Grey Value',            iss.gp_item_amount != null ? fmt(iss.gp_item_amount) : '—'],
+                      ['Broker',                iss.gp_broker_name],
+                      ['Supplier GSTIN',        iss.gp_supplier_gstin],
+                      ['Grey Item',             iss.gp_item_name],
+                      ['Original Mill (GP)',    iss.gp_process_mill_name],
+                    ].map(([l,v]) => (
+                      <div key={l}>
+                        <div style={{fontSize:10,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{l}</div>
+                        <div style={{fontSize:13,color:T.text}}>{v||'—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{marginBottom:14,padding:'10px 12px',background:T.orangeLight,borderRadius:8,fontSize:12,color:T.orange}}>
+                    No matching grey_purchase row for tally_voucher_no <strong>{iss.tally_voucher_no||'—'}</strong>.
+                    This can happen for stage-2+ re-issues, sampling from existing stock, or older entries before Tally sync.
+                  </div>
+                )}
+
+                {/* ===== ISSUE DETAILS (original fields) ===== */}
+                <div style={{fontSize:10,fontWeight:800,letterSpacing:.6,color:T.tealDark,textTransform:'uppercase',marginBottom:8,paddingBottom:6,borderBottom:`1px dashed ${T.border}`}}>Issue Details</div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12,marginBottom:12}}>
                   {[
                     ['Lot / Challan No',    iss.lot_no],
                     ['Tally Voucher',       iss.tally_voucher_no],
-                    ['Destination Godown',  iss.destination_godown],
+                    ['Destination Godown',  iss.effective_destination || iss.destination_godown],
                     ['Takas / Pcs',         iss.taka_pcs],
-                    ['Rate',                iss.rate ? fmt(iss.rate)+'/m' : '—'],
+                    ['Issue Qty',           (iss.effective_qty_mtrs ?? iss.qty_mtrs) ? fmtMtr(iss.effective_qty_mtrs ?? iss.qty_mtrs) : '—'],
+                    ['Rate',                (iss.effective_rate || iss.rate) ? fmt(iss.effective_rate || iss.rate)+'/m' : '—'],
                     ['Amount',              fmt(iss.amount)],
                   ].map(([l,v]) => (
                     <div key={l}>

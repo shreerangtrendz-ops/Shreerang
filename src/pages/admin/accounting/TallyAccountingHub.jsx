@@ -179,6 +179,7 @@ export default function TallyAccountingHub() {
   const [jwMatchStats, setJwMatchStats] = useState(null);
   const [outstandingStats, setOutstandingStats] = useState(null);
   const [, setLoading] = useState(true);
+  const [morningAlerts, setMorningAlerts] = useState(null);
 
   const fyObj = useMemo(() => FY.find(f => f.key === fy) || FY[3], [fy]);
 
@@ -402,6 +403,32 @@ export default function TallyAccountingHub() {
     } catch {}
   }, []);
 
+  // Morning alerts — what needs attention today
+  const loadMorningAlerts = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().slice(0,10);
+      // Bills overdue >90 days (sales)
+      const { count: overdueCount } = await supabase.from('sales_bills')
+        .select('*', { count: 'exact', head: true })
+        .lt('bill_date', new Date(Date.now() - 90*86400000).toISOString().slice(0,10));
+      // Lots at mill >15 days (issue_to_mill with no corresponding rec)
+      const { count: lotsAtMill } = await supabase.from('issue_to_mill')
+        .select('*', { count: 'exact', head: true })
+        .lt('voucher_date', new Date(Date.now() - 15*86400000).toISOString().slice(0,10))
+        .is('rec_voucher_no', null);
+      // Missing REC (grey purchase lots with no REC)
+      const { count: missingRec } = await supabase.from('grey_purchase')
+        .select('*', { count: 'exact', head: true })
+        .is('rec_from_mill_id', null);
+      // JW allocation unmatched count
+      const { count: jwUnmatched } = await supabase.from('rec_from_mill')
+        .select('*', { count: 'exact', head: true })
+        .is('jw_voucher_number', null)
+        .not('grey_lot_no', 'is', null);
+      setMorningAlerts({ overdueCount: overdueCount||0, lotsAtMill: lotsAtMill||0, missingRec: missingRec||0, jwUnmatched: jwUnmatched||0 });
+    } catch {}
+  }, []);
+
   // Run JW allocation function (called by button — replaces developer SQL hint)
   const runJwAllocation = useCallback(async () => {
     try {
@@ -428,6 +455,7 @@ export default function TallyAccountingHub() {
         loadPipeline(),
         loadJwMatch(),
         loadOutstanding(),
+        loadMorningAlerts(),
         loadFyMetrics(fyObj),
         loadMonthlyTrend(fyObj),
         loadTopCustomers(fyObj),
@@ -619,6 +647,51 @@ export default function TallyAccountingHub() {
       {/* TAB: DASHBOARD */}
       {activeTab === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* ── MORNING ALERTS PANEL ── */}
+          {morningAlerts && (morningAlerts.overdueCount > 0 || morningAlerts.lotsAtMill > 0 || morningAlerts.missingRec > 0 || morningAlerts.jwUnmatched > 0) && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '12px 16px', background: '#FFF8E8', border: '1px solid #F59E0B44', borderRadius: 10, borderLeft: '4px solid #F59E0B' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', letterSpacing: '.5px', width: '100%', marginBottom: 4 }}>
+                ⚡ Today's Action Items
+              </div>
+              {morningAlerts.overdueCount > 0 && (
+                <a href="/admin/outstanding-receivable-v2" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#FEF3C7', borderRadius: 8, border: '1px solid #F59E0B33', textDecoration: 'none' }}>
+                  <span style={{ fontSize: 16 }}>💸</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#92400E' }}>{morningAlerts.overdueCount.toLocaleString('en-IN')} overdue bills</div>
+                    <div style={{ fontSize: 10, color: '#B45309' }}>outstanding &gt;90 days</div>
+                  </div>
+                </a>
+              )}
+              {morningAlerts.lotsAtMill > 0 && (
+                <a href="/admin/accounting/missing-rec" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#FFF7ED', borderRadius: 8, border: '1px solid #F97316 33', textDecoration: 'none' }}>
+                  <span style={{ fontSize: 16 }}>🏭</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#9A3412' }}>{morningAlerts.lotsAtMill.toLocaleString('en-IN')} lots at mill</div>
+                    <div style={{ fontSize: 10, color: '#C2410C' }}>&gt;15 days, no REC</div>
+                  </div>
+                </a>
+              )}
+              {morningAlerts.missingRec > 0 && (
+                <a href="/admin/accounting/missing-rec" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#FEF2F2', borderRadius: 8, border: '1px solid #EF444433', textDecoration: 'none' }}>
+                  <span style={{ fontSize: 16 }}>❓</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#991B1B' }}>{morningAlerts.missingRec.toLocaleString('en-IN')} grey lots</div>
+                    <div style={{ fontSize: 10, color: '#DC2626' }}>no REC from mill found</div>
+                  </div>
+                </a>
+              )}
+              {morningAlerts.jwUnmatched > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
+                  <span style={{ fontSize: 16 }}>🔗</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1D4ED8' }}>{morningAlerts.jwUnmatched.toLocaleString('en-IN')} unmatched JW</div>
+                    <div style={{ fontSize: 10, color: '#2563EB' }}>run JW allocation below ↓</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             <KPI icon="📤" label={`Sales FY ${fy}`} value={fmtL(fyMetrics?.salesTotal)}
               sub={`${fmtN(fyMetrics?.salesBills)} bills · ${fmtN(Math.round(fyMetrics?.salesMtrs || 0))}m`}

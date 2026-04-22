@@ -244,7 +244,9 @@ export default function SalesBillsPage() {
                   <div style={{fontSize:12.5,fontWeight:600,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:280}}>{b.customer_name||'—'}</div>
                   <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>
                     {b.broker_name?`via ${b.broker_name}`:'No broker'}
-                    {b.design_no ? ` · Design: ${b.design_no}` : ''}
+                    {Array.isArray(b.line_items) && b.line_items.length > 1
+                      ? <> · <span style={{fontWeight:700,color:'#7C3AED'}}>{b.line_items.length} designs</span></>
+                      : b.design_no ? ` · Design: ${b.design_no}` : ''}
                     {b.sales_ledger ? ` · ${b.sales_ledger}` : ''}
                   </div>
                 </div>

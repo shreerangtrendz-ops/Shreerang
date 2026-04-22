@@ -294,43 +294,69 @@ export default function FinancialVouchersPage() {
 
                               {/* Col 3: Bill Settlements + Ledger Entries */}
                               <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
-                                {/* Bill Settlements */}
                                 <div style={{fontSize:11,fontWeight:800,color:T.purple,textTransform:'uppercase',marginBottom:10,letterSpacing:.5}}>
                                   📑 Bill Settlements ({bills.length})
                                 </div>
                                 {bills.length > 0 ? (
-                                  <div style={{maxHeight:180,overflowY:'auto'}}>
-                                    {bills.map((b,bi) => (
-                                      <div key={bi} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:11.5,gap:6}}>
-                                        <div>
-                                          <span style={{fontWeight:600,color:T.text}}>{b.name}</span>
-                                          {b.bill_type && <span style={{fontSize:10,color:T.muted,marginLeft:6}}>({b.bill_type})</span>}
-                                        </div>
-                                        <span style={{fontWeight:700,color:T.gold,fontFamily:'monospace',whiteSpace:'nowrap'}}>{fmt(b.amount)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  <>
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 80px 100px',gap:4,padding:'4px 0',borderBottom:`2px solid ${T.purple}`,marginBottom:4}}>
+                                      <div style={{fontSize:9,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4}}>Bill / Invoice Ref</div>
+                                      <div style={{fontSize:9,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,textAlign:'center'}}>Type</div>
+                                      <div style={{fontSize:9,fontWeight:700,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,textAlign:'right'}}>Amount</div>
+                                    </div>
+                                    <div style={{maxHeight:200,overflowY:'auto'}}>
+                                      {bills.map((b,bi) => {
+                                        const isNew = (b.bill_type||'').toLowerCase().includes('new');
+                                        const isAgst = (b.bill_type||'').toLowerCase().includes('agst')||(b.bill_type||'').toLowerCase().includes('against');
+                                        const amt = Number(b.amount||0);
+                                        return (
+                                          <div key={bi} style={{display:'grid',gridTemplateColumns:'1fr 80px 100px',gap:4,padding:'5px 0',borderBottom:`1px solid ${T.border}`,alignItems:'center'}}>
+                                            <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:700,color:T.blue,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={b.name}>
+                                              {b.name||'—'}
+                                            </div>
+                                            <div style={{textAlign:'center'}}>
+                                              <span style={{padding:'2px 6px',borderRadius:4,fontSize:9,fontWeight:700,
+                                                background:isNew?T.greenLight:isAgst?T.blueLight:'#F3F4F6',
+                                                color:isNew?T.green:isAgst?T.blue:T.textMuted,whiteSpace:'nowrap'}}>
+                                                {b.bill_type||'—'}
+                                              </span>
+                                            </div>
+                                            <div style={{textAlign:'right',fontWeight:700,color:amt<0?T.red:T.green,fontFamily:"'DM Mono',monospace",fontSize:12}}>
+                                              {amt<0?'(-)':''}{fmt(Math.abs(amt))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderTop:`2px solid ${T.border}`,marginTop:4}}>
+                                      <span style={{fontSize:11,fontWeight:700,color:T.text}}>Total Settled</span>
+                                      <span style={{fontFamily:"'DM Mono',monospace",fontWeight:800,color:T.gold,fontSize:13}}>
+                                        {fmt(Math.abs(bills.reduce((s,b)=>s+Number(b.amount||0),0)))}
+                                      </span>
+                                    </div>
+                                  </>
                                 ) : (
-                                  <div style={{color:T.muted,fontSize:12}}>No bill allocations</div>
+                                  <div style={{color:T.textMuted,fontSize:12,padding:'8px 0'}}>No bill allocations recorded</div>
                                 )}
 
-                                {/* Ledger Breakdown */}
-                                <div style={{fontSize:11,fontWeight:800,color:T.blue,textTransform:'uppercase',marginTop:16,marginBottom:10,letterSpacing:.5}}>
-                                  📊 All Ledger Entries ({ledgers.length})
+                                <div style={{fontSize:11,fontWeight:800,color:T.blue,textTransform:'uppercase',marginTop:14,marginBottom:8,letterSpacing:.5}}>
+                                  📊 Ledger Entries ({ledgers.length})
                                 </div>
                                 {ledgers.length > 0 ? (
-                                  <div style={{maxHeight:200,overflowY:'auto'}}>
-                                    {ledgers.map((le,li) => (
-                                      <div key={li} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:11,gap:6}}>
-                                        <span style={{fontWeight:500,color:T.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={le.ledger_name}>{le.ledger_name}</span>
-                                        <span style={{fontWeight:700,color:le.is_debit?T.red:T.green,fontFamily:'monospace',whiteSpace:'nowrap'}}>
-                                          {le.is_debit?'Dr':'Cr'} {fmt(le.amount)}
+                                  <div style={{maxHeight:150,overflowY:'auto'}}>
+                                    {ledgers.map((l,li) => (
+                                      <div key={li} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.border}`,fontSize:11.5,gap:6}}>
+                                        <span style={{color:l.ispartyledger?T.text:T.textMuted,fontWeight:l.ispartyledger?700:400,flexShrink:0,maxWidth:'60%',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={l.ledgername}>
+                                          {l.ledgername||'—'}
+                                        </span>
+                                        <span style={{fontWeight:600,color:Number(l.amount||0)<0?T.red:T.green,fontFamily:"'DM Mono',monospace",whiteSpace:'nowrap'}}>
+                                          {Number(l.amount||0)<0?'(-) ':''}{fmt(Math.abs(Number(l.amount||0)))}
                                         </span>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  <div style={{color:T.muted,fontSize:12}}>No ledger detail</div>
+                                  <div style={{color:T.textMuted,fontSize:12}}>No ledger entries</div>
                                 )}
                               </div>
 

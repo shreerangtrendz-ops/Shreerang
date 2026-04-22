@@ -337,20 +337,117 @@ export default function RecFromMillPage() {
                 </div>
                 {isExp&&(
                   <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'16px 18px 20px'}}>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16,padding:'12px 14px',background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
-                      {[['Tally Voucher No',r.tally_voucher_no],['Voucher Date',fmtDate(r.voucher_date)],['Design No',r.design_no||'—'],['Grey Lot No',r.grey_lot_no||'—'],['Party Challan No (KEY 2)',r.party_challan_no||'—'],
-                        ['Mill Name',r.mill_name||r.job_godown||'—'],['Job Godown',r.job_godown||'—'],['Process Type',r.process_type||'—'],['Stage No',r.stage_no||'—'],['Grey Item',r.grey_item_name||'—'],
-                        ['Finish Item',r.finish_item_name||'—'],['Grey Issued (m)',r.grey_issued_qty_mtrs?fmtMtr(r.grey_issued_qty_mtrs):'—'],['Finish Qty (m)',fmtMtr(r.finish_qty_mtrs)],['Shortage (m)',r.shortage_mtrs?fmtMtr(r.shortage_mtrs):'—'],['Shortage %',shortage>0?`${shortage.toFixed(2)}%`:'—'],
-                        ['Grey Purchase Rate',r.grey_purchase_rate!=null?`₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m`:'—'],['Job Rate',r.job_rate!=null?`₹${Math.abs(Number(r.job_rate)).toFixed(2)}/m`:'—'],['Job Amount',r.job_amount!=null?fmt(r.job_amount):'—'],['Gross Amount',r.gross_amount!=null?fmt(r.gross_amount):'—'],['JW Alloc Cost',r.jw_allocated_cost!=null?fmt(r.jw_allocated_cost):'—'],
-                        ['JW Alloc %',r.jw_allocation_pct!=null?`${Number(r.jw_allocation_pct).toFixed(2)}%`:'—'],['Cum. Cost / m',r.cumulative_cost_per_mtr!=null?`₹${Math.abs(Number(r.cumulative_cost_per_mtr)).toFixed(2)}`:'—'],['Recon Status',r.recon_status||'pending'],['JW Voucher No',r.jw_voucher_number||'—'],['Issue Challan No',r.issue_challan_no||'—'],
-                        ['Weaver Name',r.weaver_name||'—'],['Quality Name',r.quality_name||'—'],['Our Godown',r.our_godown||'—'],['Narration',r.narration||'—'],
-                      ].map(([k,v])=>(
-                        <div key={k}>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
-                          <div style={{fontSize:12,wordBreak:'break-word',color:k==='Cum. Cost / m'?T.teal:T.text,fontWeight:k==='Cum. Cost / m'?800:500}}>{v||'—'}</div>
+                    <>
+                    {/* ── Tally-style split: SOURCE (Consumption) LEFT | DESTINATION (Production) RIGHT ── */}
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+
+                      {/* SOURCE — Grey Fabric Consumption Side */}
+                      <div style={{background:'#FFFBEB',border:`2px solid ${T.gold}`,borderRadius:8,padding:'12px 14px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:T.gold,letterSpacing:.6,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                          <span style={{background:T.gold,color:'#fff',borderRadius:4,padding:'1px 6px',fontSize:9,fontWeight:800}}>SOURCE</span>
+                          Consumption — Grey Fabric
                         </div>
-                      ))}
+                        {[
+                          ['Grey Item Name',      r.grey_item_name],
+                          ['Grey Lot No (KEY 1)', r.grey_lot_no],
+                          ['Source Godown',       r.source_godown||r.job_godown],
+                          ['Issued Qty (m)',      r.grey_issued_qty_mtrs ? fmtMtr(r.grey_issued_qty_mtrs) : '—'],
+                          ['Recd Qty (m)',        r.grey_recd_qty_mtrs && Number(r.grey_recd_qty_mtrs)>0 ? fmtMtr(r.grey_recd_qty_mtrs) : '—'],
+                          ['Short Qty (m)',       r.short_qty_mtrs && Number(r.short_qty_mtrs)>0 ? fmtMtr(r.short_qty_mtrs) : '—'],
+                          ['Grey Rate (Tally)',   r.grey_rate!=null ? `₹${Math.abs(Number(r.grey_rate)).toFixed(2)}/m` : '—'],
+                          ['Grey Amount',         r.grey_amount!=null ? fmt(r.grey_amount) : '—'],
+                          ['Job Rate (UDF)',      r.job_rate!=null ? `₹${Math.abs(Number(r.job_rate)).toFixed(2)}/m` : '—'],
+                          ['Job Amount (UDF)',    r.job_amount!=null ? fmt(r.job_amount) : '—'],
+                          ['Gross Amount (UDF)',  r.gross_amount!=null ? fmt(r.gross_amount) : '—'],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.gold}22`,fontSize:12,gap:6}}>
+                            <span style={{color:T.textMuted,fontSize:11,flexShrink:0}}>{k}</span>
+                            <span style={{color:k==='Grey Lot No (KEY 1)'?T.teal:T.text,fontWeight:600,textAlign:'right',fontFamily:k==='Grey Lot No (KEY 1)'?"'DM Mono',monospace":'inherit'}}>{v||'—'}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* DESTINATION — Finish Fabric Production Side */}
+                      <div style={{background:'#F0FFF8',border:`2px solid ${T.green}`,borderRadius:8,padding:'12px 14px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:T.green,letterSpacing:.6,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                          <span style={{background:T.green,color:'#fff',borderRadius:4,padding:'1px 6px',fontSize:9,fontWeight:800}}>DEST</span>
+                          Production — Finish Fabric
+                        </div>
+                        {[
+                          ['Finish Item Name',  r.finish_item_name],
+                          ['Design No (KEY 3)', r.design_no||'Primary Batch'],
+                          ['Dest Godown',       r.dest_godown||r.our_godown||'Main Location'],
+                          ['Finish Qty (m)',    fmtMtr(r.finish_qty_mtrs)],
+                          ['Issue Qty ref (m)', r.issue_qty_mtrs && Number(r.issue_qty_mtrs)>0 ? fmtMtr(r.issue_qty_mtrs) : '—'],
+                          ['Shortage',         shortage>0 ? `${fmtMtr(r.shortage_mtrs)} (${shortage.toFixed(1)}%)` : '—'],
+                          ['Finish Rate',      r.finish_rate!=null ? `₹${Math.abs(Number(r.finish_rate)).toFixed(2)}/m` : '—'],
+                          ['Finish Amount',    r.finish_amount!=null ? fmt(r.finish_amount) : '—'],
+                          ['Grey Purchase Rate (computed)', r.grey_purchase_rate ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m` : '—'],
+                          ['Grey Cost Actual', r.grey_cost_actual ? fmt(r.grey_cost_actual) : '—'],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.green}22`,fontSize:12,gap:6}}>
+                            <span style={{color:T.textMuted,fontSize:11,flexShrink:0}}>{k}</span>
+                            <span style={{color:k==='Design No (KEY 3)'?T.blue:T.text,fontWeight:600,textAlign:'right',fontFamily:k==='Design No (KEY 3)'?"'DM Mono',monospace":'inherit'}}>{v||'—'}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
+                    {/* ── Voucher Header + Cost Chain ── */}
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+                      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,padding:'12px 14px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:T.navy,textTransform:'uppercase',letterSpacing:.6,marginBottom:8}}>📋 Voucher Info</div>
+                        {[
+                          ['Tally Voucher No',       r.tally_voucher_no],
+                          ['Voucher Date',           fmtDate(r.voucher_date)],
+                          ['Reference No (lot ref)', r.party_challan_no],
+                          ['Party Name (Mill)',      r.mill_name||r.job_godown],
+                          ['Job Godown',             r.job_godown],
+                          ['Our Godown',             r.our_godown||'Main Location'],
+                          ['Issue Challan No',       r.issue_challan_no],
+                          ['Issue Challan Ref',      r.issue_challan_ref],
+                          ['Weaver Name (UDF)',      r.weaver_name],
+                          ['Quality Name (UDF)',     r.quality_name],
+                          ['Process Type',           r.process_type],
+                          ['Stage No',               String(r.stage_no||1)],
+                          ['Narration',              r.narration],
+                        ].filter(([,v])=>v&&v!=='—'&&v!=='null'&&v!=='undefined').map(([k,v])=>(
+                          <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:6}}>
+                            <span style={{color:T.textMuted,fontSize:11,flexShrink:0}}>{k}</span>
+                            <span style={{color:T.text,fontWeight:500,textAlign:'right',wordBreak:'break-word',maxWidth:'55%'}}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Cost Chain */}
+                      <div style={{background:'#EFF8FF',border:`2px solid ${T.teal}`,borderRadius:8,padding:'12px 14px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',letterSpacing:.6,marginBottom:8}}>₹ Cost Chain</div>
+                        {[
+                          ['Grey Purchase Rate',  r.grey_purchase_rate ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m` : '—'],
+                          ['Grey Cost (Actual)',  r.grey_cost_actual ? fmt(r.grey_cost_actual) : '—'],
+                          ['JW Allocated Cost',  r.jw_allocated_cost ? fmt(r.jw_allocated_cost) : '—'],
+                          ['JW Allocation %',    r.jw_allocation_pct ? `${Number(r.jw_allocation_pct).toFixed(2)}%` : '—'],
+                          ['JW Voucher No',      r.jw_voucher_number],
+                          ['JW Expense Amt',     r.jw_expense_amount ? fmt(r.jw_expense_amount) : '—'],
+                          ['Recon Status',       r.recon_status||'pending'],
+                        ].map(([k,v])=>(
+                          <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.teal}22`,fontSize:12,gap:6}}>
+                            <span style={{color:T.textMuted,fontSize:11,flexShrink:0}}>{k}</span>
+                            <span style={{color:k==='Recon Status'?(r.recon_status==='matched'?T.green:r.recon_status==='mismatch'?T.red:T.orange):T.text,fontWeight:600,textAlign:'right'}}>{v||'—'}</span>
+                          </div>
+                        ))}
+                        <div style={{marginTop:10,padding:'10px 12px',background:r.cumulative_cost_per_mtr?T.tealLight:T.bg,borderRadius:6,border:`1px solid ${T.teal}44`}}>
+                          <div style={{fontSize:9,color:T.textMuted,textTransform:'uppercase',fontWeight:700,letterSpacing:.5,marginBottom:4}}>Cumulative Cost / Metre</div>
+                          <div style={{fontFamily:"'Playfair Display',Georgia,serif",fontSize:26,color:r.cumulative_cost_per_mtr?T.teal:T.textFaint,fontWeight:700}}>
+                            {r.cumulative_cost_per_mtr ? `₹${Math.abs(Number(r.cumulative_cost_per_mtr)).toFixed(2)}` : 'Not Computed'}
+                          </div>
+                          <div style={{fontSize:10,color:T.textMuted,marginTop:2}}>
+                            grey ({r.grey_purchase_rate?`₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}`:'?'}/m) + job ({r.job_rate?`₹${Math.abs(Number(r.job_rate)).toFixed(2)}`:'?'}/m)
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                     {!isPrimary&&r.design_no?(<div style={{marginBottom:12}}><OriginPanel designNo={r.design_no}/></div>)
                     :r.grey_lot_no?(<div style={{marginBottom:12}}><OriginPanel lotNo={r.grey_lot_no}/></div>):null}
                   </div>

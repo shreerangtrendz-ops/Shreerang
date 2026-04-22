@@ -670,34 +670,84 @@ export default function JobWorkBillsPage() {
             if (expandedId !== 'JW-'+r.id) return null;
             return (
               <div key={'exp-JW-'+r.id} style={{padding:'16px 18px',background:'#F8FFFE',borderTop:`1px solid ${T.border}`,borderBottom:`2px solid ${T.teal}`}}>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:10}}>
-                  {[
-                    ['Voucher No',        r.voucher_number],
-                    ['Type',              r.voucher_type],
-                    ['Date',              fmtDate(r.voucher_date)],
-                    ['Party Name',        r.party_name],
-                    ['Party GSTIN',       r.party_gstin||'—'],
-                    ['GST Reg Type',      r.gst_reg_type||'—'],
-                    ['Supplier Invoice',  r.supplier_invoice_no||'—'],
-                    ['Supplier Inv Date', r.supplier_invoice_date?fmtDate(r.supplier_invoice_date):'—'],
-                    ['GP Number',         r.gp_number||'—'],
-                    ['Expense Ledger',    r.expense_ledger||'—'],
-                    ['Expense Amount',    fmt(r.expense_amount)],
-                    ['TDS Deducted',      r.tds_amount>0?fmt(r.tds_amount):'—'],
-                    ['CGST',              r.cgst_amount>0?fmt(r.cgst_amount):'—'],
-                    ['SGST',              r.sgst_amount>0?fmt(r.sgst_amount):'—'],
-                    ['IGST',              r.igst_amount>0?fmt(r.igst_amount):'—'],
-                    ['Total Amount',      fmt(r.total_amount)],
-                    ['Bill Ref',          r.bill_ref||'—'],
-                    ['Narration',         r.narration||'—'],
-                    ['Entered By',        r.entered_by||'—'],
-                    ['Place of Supply',   r.place_of_supply||'—'],
-                  ].map(([l,v]) => (
-                    <div key={l} style={{background:T.surface,borderRadius:6,padding:'6px 10px',border:`1px solid ${T.border}`}}>
-                      <div style={{fontSize:9,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{l}</div>
-                      <div style={{fontSize:12,fontWeight:500,color:T.text,wordBreak:'break-word'}}>{v||'—'}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:12}}>
+
+                  {/* Voucher Info */}
+                  <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,fontWeight:800,color:T.blue,textTransform:'uppercase',marginBottom:8,letterSpacing:.5}}>📋 Voucher</div>
+                    {[
+                      ['Voucher No',        r.voucher_number],
+                      ['Type',              r.voucher_type],
+                      ['Date',              fmtDate(r.voucher_date)],
+                      ['Supplier Invoice',  r.supplier_invoice_no||'—'],
+                      ['Supplier Inv Date', r.supplier_invoice_date?fmtDate(r.supplier_invoice_date):'—'],
+                      ['GP Number',         r.gp_number||'—'],
+                      ['Bill Ref',          r.bill_ref||'—'],
+                      ['Entered By',        r.entered_by||'—'],
+                      ['Narration',         r.narration||'—'],
+                    ].filter(([,v])=>v&&v!=='—').map(([k,v])=>(
+                      <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12,gap:4}}>
+                        <span style={{color:T.textMuted,fontSize:11,flexShrink:0}}>{k}</span>
+                        <span style={{color:T.text,fontWeight:600,textAlign:'right',wordBreak:'break-word',maxWidth:'55%'}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Party + GST Reg Type — color coded */}
+                  <div style={{background:T.surface,borderRadius:8,padding:'12px 14px',border:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',marginBottom:8,letterSpacing:.5}}>🏭 Party</div>
+                    <div style={{fontWeight:700,fontSize:14,color:T.text,marginBottom:4}}>{r.party_name}</div>
+                    {r.party_gstin&&<div style={{fontFamily:"'DM Mono',monospace",fontSize:11,color:T.textMuted,marginBottom:8}}>{r.party_gstin}</div>}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:3}}>GST Registration</div>
+                      <span style={{
+                        padding:'3px 10px',borderRadius:6,fontSize:11,fontWeight:700,
+                        background:(r.gst_reg_type||'').toLowerCase().includes('unreg')||(r.gst_reg_type||'').toLowerCase().includes('consumer')?T.orangeLight:T.greenLight,
+                        color:(r.gst_reg_type||'').toLowerCase().includes('unreg')||(r.gst_reg_type||'').toLowerCase().includes('consumer')?T.orange:T.green,
+                      }}>{r.gst_reg_type||'Unknown'}</span>
+                      {(r.gst_reg_type||'').toLowerCase().includes('unreg')&&(
+                        <div style={{fontSize:10,color:T.orange,marginTop:4}}>⚠ Unregistered — Reverse Charge. ITC not claimable.</div>
+                      )}
                     </div>
-                  ))}
+                    {[['Place of Supply', r.place_of_supply]].filter(([,v])=>v).map(([k,v])=>(
+                      <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:`1px solid ${T.border}`,fontSize:12}}>
+                        <span style={{color:T.textMuted,fontSize:11}}>{k}</span>
+                        <span style={{color:T.text,fontWeight:500}}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Amount Breakdown — Expense Ledger + TDS waterfall */}
+                  <div style={{background:'#FFFBEB',borderRadius:8,padding:'12px 14px',border:`2px solid ${T.gold}`}}>
+                    <div style={{fontSize:10,fontWeight:800,color:T.gold,textTransform:'uppercase',marginBottom:8,letterSpacing:.5}}>₹ Amount & P&L</div>
+                    <div style={{marginBottom:10,padding:'6px 8px',background:'#fff',borderRadius:6,border:`1px solid ${T.gold}44`}}>
+                      <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>Expense Ledger (P&L Account)</div>
+                      <div style={{fontSize:13,fontWeight:700,color:T.navy}}>{r.expense_ledger||'—'}</div>
+                    </div>
+                    {[
+                      ['Expense Amount',        fmt(r.expense_amount),  T.text,   false],
+                      ...(r.cgst_amount>0?[['+ CGST',                   fmt(r.cgst_amount),  T.orange, false]]:[]),
+                      ...(r.sgst_amount>0?[['+ SGST',                   fmt(r.sgst_amount),  T.orange, false]]:[]),
+                      ...(r.igst_amount>0?[['+ IGST',                   fmt(r.igst_amount),  T.orange, false]]:[]),
+                      ...(r.round_off?[['Round Off',                     `₹${r.round_off}`,  T.textMuted,false]]:[]),
+                      ...(r.tds_amount>0?[['− TDS Deducted (Sec 194C)', fmt(r.tds_amount),  T.red,    true]]:[]),
+                    ].map(([k,v,c,isTds])=>(
+                      <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderBottom:`1px solid ${T.gold}22`,fontSize:12}}>
+                        <span style={{color:isTds?T.red:T.textMuted,fontWeight:isTds?700:400}}>{k}</span>
+                        <span style={{color:c,fontWeight:isTds?700:600,fontFamily:"'DM Mono',monospace"}}>{v}</span>
+                      </div>
+                    ))}
+                    <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderTop:`2px solid ${T.gold}`,marginTop:4}}>
+                      <span style={{fontWeight:800,fontSize:12,color:T.text}}>Net Payable</span>
+                      <span style={{fontFamily:"'DM Mono',monospace",fontWeight:800,fontSize:14,color:T.green}}>
+                        {fmt(Number(r.total_amount||0)-Number(r.tds_amount||0))}
+                      </span>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between',padding:'3px 0',fontSize:11}}>
+                      <span style={{color:T.textMuted}}>Gross Total</span>
+                      <span style={{fontFamily:"'DM Mono',monospace",fontWeight:600,color:T.textMuted}}>{fmt(r.total_amount)}</span>
+                    </div>
+                  </div>
                 </div>
                 {r.gp_number && (
                   <button onClick={()=>navigate(`/admin/accounting/process-issues?search=${r.gp_number}`)}

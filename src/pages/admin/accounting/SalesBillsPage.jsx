@@ -259,90 +259,161 @@ export default function SalesBillsPage() {
               </div>
 
               {isExp && (
-                <div style={{background:'#F8FFFE',borderTop:`1px solid ${T.border}`,padding:'16px 18px 20px'}}>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16,padding:'12px 14px',background:'#fff',borderRadius:8,border:`1px solid ${T.border}`}}>
-                    {[
-                      ['Bill Number',b.bill_number],['Bill Date',fmtDate(b.bill_date)],['Customer',b.customer_name],
-                      ['Customer GSTIN',b.customer_gstin||'—'],['Customer State',b.customer_state||'—'],
-                      ['Fabric',b.fabric_name||'—'],['Design No',b.design_no||'—'],['Batch Name',b.batch_name||'—'],
-                      ['Godown',b.godown||'—'],['Sales Ledger',b.sales_ledger||'—'],
-                      ['Voucher Class',b.voucher_class||'—'],['Place of Supply',b.place_of_supply||'—'],
-                      ['Broker',b.broker_name||'None'],['Comm Rate',b.comm_rate?`${b.comm_rate}%`:'None'],
-                      ['Comm Amount',b.comm_amount?fmt(b.comm_amount):'—'],['Comm Assessed',b.comm_assessed_value?fmt(b.comm_assessed_value):'—'],
-                      ['Qty (Mtrs)',b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—'],['Taka / Pcs',b.total_taka_pcs||'—'],
-                      ['Rate/Mtr',b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—'],['Taxable Value',b.taxable_value?fmt(b.taxable_value):'—'],
-                      ['IGST',b.igst_amount?fmt(b.igst_amount):'—'],['CGST',b.cgst_amount?fmt(b.cgst_amount):'—'],
-                      ['SGST',b.sgst_amount?fmt(b.sgst_amount):'—'],['Round Off',b.round_off!=null?`₹${b.round_off}`:'—'],
-                      ['Total Amount',fmt(b.total_amount)],['Credit Days',b.credit_days||'—'],
-                      ['Bill Ref No',b.bill_ref_number||'—'],['Transporter',b.transporter_name||'—'],
-                      ['LR Number',b.lr_number||'—'],['Destination City',b.destination_city||'—'],
-                      ['e-Way Bill No',b.eway_bill_no||'—'],['IRN',b.irn||'—'],
-                      ['Entered By',b.entered_by||'—'],['Narration',b.narration||'—'],
-                    ].map(([k,v])=>(
-                      <div key={k}>
-                        <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
-                        <div style={{fontSize:12,color:T.text,fontWeight:500,wordBreak:'break-word'}}>{v||'—'}</div>
-                      </div>
-                    ))}
+                <div style={{background:'#F8FFFE',borderTop:`2px solid ${T.teal}`,padding:'0'}}>
+
+                  {/* ── BILL HEADER — bill-level only. Design/Fabric removed (those are line-item fields) ── */}
+                  <div style={{padding:'16px 18px',background:'#fff',borderBottom:`1px solid ${T.border}`}}>
+                    <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',letterSpacing:.6,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+                      📄 Bill Details
+                      <span style={{background:T.tealLight,color:T.teal,borderRadius:4,padding:'2px 8px',fontSize:9,fontWeight:700}}>
+                        {Array.isArray(b.line_items)&&b.line_items.length>1?`${b.line_items.length}-design bill`:'Single design'}
+                      </span>
+                    </div>
+
+                    {/* Row 1: Customer + Identity */}
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:10}}>
+                      {[
+                        ['Bill Number',      b.bill_number,          T.teal],
+                        ['Bill Date',        fmtDate(b.bill_date),   null],
+                        ['Customer',         b.customer_name,        T.navy],
+                        ['Customer GSTIN',   b.customer_gstin||'—',  null],
+                        ['Customer State',   b.customer_state||'—',  null],
+                        ['Place of Supply',  b.place_of_supply||'—', null],
+                        ['Sales Ledger',     b.sales_ledger||'—',    null],
+                        ['Voucher Class',    b.voucher_class||'—',   null],
+                      ].map(([k,v,c])=>(
+                        <div key={k} style={{background:T.bg,borderRadius:6,padding:'7px 10px'}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                          <div style={{fontSize:12,color:c||T.text,fontWeight:c?700:500,wordBreak:'break-word'}}>{v||'—'}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Row 2: Financial summary */}
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8,marginBottom:10,padding:'10px 12px',background:'#F0F9F7',borderRadius:8,border:`1px solid ${T.teal}22`}}>
+                      {[
+                        ['Qty (Mtrs)',    b.quantity_mtrs?fmtMtr(b.quantity_mtrs):'—', T.blue],
+                        ['Taka / Pcs',   b.total_taka_pcs||'—',                       null],
+                        ['Rate / Mtr',   b.rate_per_mtr?`₹${Number(b.rate_per_mtr).toFixed(2)}`:'—', null],
+                        ['Taxable Value',b.taxable_value?fmt(b.taxable_value):'—',     null],
+                        ['GST',          b.igst_amount?fmt(b.igst_amount):(b.cgst_amount?`${fmt(b.cgst_amount)}+${fmt(b.sgst_amount)}`:'—'), T.orange],
+                        ['Total Amount', fmt(b.total_amount),                          T.green],
+                      ].map(([k,v,c])=>(
+                        <div key={k}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                          <div style={{fontSize:13,color:c||T.text,fontWeight:c?700:500,fontFamily:"'DM Mono',monospace"}}>{v||'—'}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Row 3: Broker + Transport + Compliance */}
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+                      {[
+                        ['Broker',           b.broker_name||'No Broker',   b.broker_name?T.gold:T.textFaint],
+                        ['Comm Rate',        b.comm_rate?`${b.comm_rate}%`:'—',         null],
+                        ['Comm Amount',      b.comm_amount?fmt(b.comm_amount):'—',      T.gold],
+                        ['Credit Days',      b.credit_days||'—',                        null],
+                        ['Transporter',      b.transporter_name||'—',                  null],
+                        ['LR Number',        b.lr_number||'—',                          null],
+                        ['Destination City', b.destination_city||'—',                  null],
+                        ['Bill Ref No',      b.bill_ref_number||'—',                   null],
+                        ['e-Way Bill No',    b.eway_bill_no||'—',                       null],
+                        ['IRN',              b.irn?b.irn.slice(0,24)+'…':'—',           null],
+                        ['Entered By',       b.entered_by||'—',                         null],
+                        ['Round Off',        b.round_off!=null?`₹${b.round_off}`:'—',  null],
+                      ].map(([k,v,c])=>(
+                        <div key={k} style={{background:T.bg,borderRadius:6,padding:'6px 10px'}}>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700,textTransform:'uppercase',letterSpacing:.4,marginBottom:2}}>{k}</div>
+                          <div style={{fontSize:11,color:c||T.text,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={String(v||'')}>{v||'—'}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
-                  {b.design_no && <div style={{marginBottom:12}}><OriginPanel designNo={b.design_no} /></div>}
-
-                  {Array.isArray(b.line_items) && b.line_items.length > 0 && (
-                    <div style={{marginBottom:12}}>
-                      <div style={{fontSize:11,fontWeight:700,color:T.text,textTransform:'uppercase',letterSpacing:.5,marginBottom:8,display:'flex',alignItems:'center',gap:8}}>
-                        Line Items
+                  {/* ── LINE ITEMS — each design row expandable to show origin chain ── */}
+                  {Array.isArray(b.line_items) && b.line_items.length > 0 ? (
+                    <div style={{padding:'14px 18px'}}>
+                      <div style={{fontSize:11,fontWeight:800,color:T.text,textTransform:'uppercase',letterSpacing:.5,marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                        🎨 Line Items by Design
                         <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:700,background:T.teal+'22',color:T.teal}}>
                           {b.line_items.length} design{b.line_items.length!==1?'s':''}
                         </span>
+                        <span style={{fontSize:10,color:T.textMuted,fontWeight:400,marginLeft:4}}>↓ click row to see jobworker origin</span>
                       </div>
-                      <div style={{overflowX:'auto',borderRadius:8,border:`1px solid ${T.border}`}}>
-                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:11,background:T.surface}}>
-                          <thead>
-                            <tr style={{background:T.bg,borderBottom:`1px solid ${T.border}`}}>
-                              {['Design No','Batch / Fabric','Item Name','HSN','Godown','Qty (m)','Rate/m','Discount','Amount'].map(h=>(
-                                <th key={h} style={{padding:'7px 10px',textAlign:'left',fontWeight:700,fontSize:10,color:T.textMuted,textTransform:'uppercase',letterSpacing:.4,whiteSpace:'nowrap'}}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {b.line_items.map((li, idx) => (
-                              <tr key={idx} style={{borderBottom:`1px solid ${T.border}`,background:idx%2===0?T.surface:T.bg}}>
-                                <td style={{padding:'7px 10px',fontWeight:700,color:T.purple,fontFamily:"'DM Mono',monospace",fontSize:12}}>{li.design_no||'—'}</td>
-                                <td style={{padding:'7px 10px'}}>
-                                  <div style={{fontWeight:600,fontSize:12,color:T.text}}>{li.batch_name||li.design_no||'—'}</div>
-                                  {li.fabric_name && <div style={{fontSize:10,color:T.textMuted,marginTop:1}}>{li.fabric_name}</div>}
-                                </td>
-                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{li.item_name||li.name||'—'}</td>
-                                <td style={{padding:'7px 10px',fontFamily:"'DM Mono',monospace",color:T.textMuted,fontSize:11}}>{li.hsn_code||'—'}</td>
-                                <td style={{padding:'7px 10px',color:T.textMuted,fontSize:11,whiteSpace:'nowrap'}}>{li.godown||li.godown_name||'—'}</td>
-                                <td style={{padding:'7px 10px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:600}}>{li.qty_mtrs||li.quantity_mtrs?Number(li.qty_mtrs||li.quantity_mtrs||0).toLocaleString('en-IN',{maximumFractionDigits:2})+'m':'—'}</td>
-                                <td style={{padding:'7px 10px',textAlign:'right',color:T.textMuted,fontFamily:"'DM Mono',monospace"}}>{li.rate||li.rate_per_mtr?`₹${Number(li.rate||li.rate_per_mtr||0).toFixed(2)}`:'—'}</td>
-                                <td style={{padding:'7px 10px',textAlign:'right',color:T.textMuted}}>{li.discount_pct>0?`${li.discount_pct}%`:'—'}</td>
-                                <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>{li.item_amount||li.amount?'₹'+Number(li.item_amount||li.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0}):'—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr style={{background:T.bg,borderTop:`2px solid ${T.border}`}}>
-                              <td colSpan={5} style={{padding:'7px 10px',fontWeight:700,fontSize:11,color:T.textMuted}}>TOTAL ({b.line_items.length} lines)</td>
-                              <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{b.quantity_mtrs?Number(b.quantity_mtrs).toLocaleString('en-IN',{maximumFractionDigits:2})+'m':'—'}</td>
-                              <td colSpan={2}/>
-                              <td style={{padding:'7px 10px',textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace"}}>₹{Number(b.total_amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                      <div style={{borderRadius:10,border:`1px solid ${T.border}`,overflow:'hidden'}}>
+                        <div style={{display:'grid',gridTemplateColumns:'90px 1fr 180px 70px 80px 90px 90px 100px',background:T.teal,padding:'8px 12px',gap:0}}>
+                          {['Design No','Batch / Fabric','Item Name','HSN','Godown','Qty (m)','Rate/m','Amount'].map((h,i)=>(
+                            <div key={h} style={{fontSize:9,fontWeight:800,color:'#fff',textTransform:'uppercase',letterSpacing:.5,textAlign:i>=5?'right':'left',padding:'0 4px'}}>{h}</div>
+                          ))}
+                        </div>
+                        {b.line_items.map((li,idx)=>{
+                          const liId=`${b.id}-li-${idx}`;
+                          const isLiOpen=expanded===liId;
+                          const liQty=Number(li.qty_mtrs||li.quantity_mtrs||li.actual_qty_mtrs||0);
+                          const liAmt=Number(li.item_amount||li.amount||0);
+                          const sellingRate=Number(li.rate||li.rate_per_mtr||b.rate_per_mtr||0);
+                          return (
+                            <div key={idx} style={{borderBottom:idx<b.line_items.length-1?`1px solid ${T.border}`:'none'}}>
+                              <div
+                                onClick={()=>setExpanded(isLiOpen?b.id:liId)}
+                                style={{display:'grid',gridTemplateColumns:'90px 1fr 180px 70px 80px 90px 90px 100px',padding:'10px 12px',gap:0,
+                                  background:isLiOpen?T.tealLight:idx%2===0?T.surface:T.bg,
+                                  cursor:'pointer',alignItems:'center',transition:'background .12s'}}
+                                onMouseEnter={e=>{if(!isLiOpen)e.currentTarget.style.background='#F0FFF8'}}
+                                onMouseLeave={e=>{if(!isLiOpen)e.currentTarget.style.background=idx%2===0?T.surface:T.bg}}
+                              >
+                                <div style={{padding:'0 4px'}}>
+                                  <div style={{fontFamily:"'DM Mono',monospace",fontWeight:800,color:T.purple,fontSize:13}}>{li.design_no||'—'}</div>
+                                  <div style={{fontSize:9,color:T.textFaint,marginTop:1}}>↓ origin</div>
+                                </div>
+                                <div style={{padding:'0 6px'}}>
+                                  <div style={{fontWeight:600,fontSize:12,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{li.batch_name||li.design_no||'—'}</div>
+                                  {li.fabric_name&&<div style={{fontSize:10,color:T.textMuted,marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{li.fabric_name}</div>}
+                                </div>
+                                <div style={{padding:'0 4px',fontSize:11,color:T.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{li.item_name||li.name||'—'}</div>
+                                <div style={{padding:'0 4px',fontFamily:"'DM Mono',monospace",color:T.textMuted,fontSize:10}}>{li.hsn_code||'—'}</div>
+                                <div style={{padding:'0 4px',fontSize:10,color:T.textMuted,whiteSpace:'nowrap'}}>{li.godown||li.godown_name||'—'}</div>
+                                <div style={{padding:'0 4px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:600,fontSize:12}}>{liQty>0?`${liQty.toLocaleString('en-IN',{maximumFractionDigits:2})}m`:'—'}</div>
+                                <div style={{padding:'0 4px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontSize:12,color:T.textMuted}}>{sellingRate>0?`₹${sellingRate.toFixed(2)}`:'—'}</div>
+                                <div style={{padding:'0 4px',textAlign:'right',fontWeight:700,color:T.green,fontFamily:"'DM Mono',monospace",fontSize:13}}>{liAmt>0?fmt(liAmt):'—'}</div>
+                              </div>
+                              {isLiOpen&&(
+                                <div style={{padding:'14px 16px 16px',background:'#F0FFF8',borderTop:`1px solid ${T.teal}33`}}>
+                                  <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',letterSpacing:.6,marginBottom:12,display:'flex',alignItems:'center',gap:8}}>
+                                    🔗 Origin Chain — Design {li.design_no||'—'}
+                                    <span style={{fontSize:9,fontWeight:400,color:T.textMuted}}>grey → mill → this sale</span>
+                                  </div>
+                                  <OriginPanel designNo={li.design_no} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <div style={{display:'grid',gridTemplateColumns:'90px 1fr 180px 70px 80px 90px 90px 100px',padding:'10px 12px',gap:0,background:T.bg,borderTop:`2px solid ${T.border}`}}>
+                          <div style={{padding:'0 4px',fontSize:10,fontWeight:800,color:T.text,gridColumn:'1/6'}}>TOTAL ({b.line_items.length} lines)</div>
+                          <div style={{padding:'0 4px',textAlign:'right',fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12}}>{b.quantity_mtrs?Number(b.quantity_mtrs).toLocaleString('en-IN',{maximumFractionDigits:2})+'m':'—'}</div>
+                          <div/>
+                          <div style={{padding:'0 4px',textAlign:'right',fontWeight:800,color:T.green,fontFamily:"'DM Mono',monospace",fontSize:13}}>₹{Number(b.total_amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    b.design_no&&(
+                      <div style={{padding:'14px 18px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',letterSpacing:.6,marginBottom:10}}>🔗 Design Origin Chain — {b.design_no}</div>
+                        <OriginPanel designNo={b.design_no} />
+                      </div>
+                    )
                   )}
 
-                  {b.broker_name && (
-                    <div style={{padding:'10px 12px',background:T.goldLight,borderRadius:8,border:`1px solid ${T.gold}22`,fontSize:12}}>
-                      <span style={{fontWeight:700,color:T.gold}}>Broker: </span>
-                      <span style={{color:T.text}}>{b.broker_name} · {b.comm_rate}% · {b.comm_amount?fmt(b.comm_amount):'comm. not calculated'}</span>
+                  {b.broker_name&&(
+                    <div style={{margin:'0 18px 14px',padding:'10px 12px',background:T.goldLight,borderRadius:8,border:`1px solid ${T.gold}22`,fontSize:12}}>
+                      <span style={{fontWeight:700,color:T.gold}}>🤝 Broker: </span>
+                      <span style={{color:T.text}}>{b.broker_name} · {b.comm_rate}% · {b.comm_amount?fmt(b.comm_amount):'not calculated'}</span>
                     </div>
                   )}
                 </div>
+              )}
               )}
             </div>
           );

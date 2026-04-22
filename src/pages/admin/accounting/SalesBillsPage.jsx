@@ -228,7 +228,7 @@ export default function SalesBillsPage() {
         ) : bills.length===0 ? (
           <div style={{padding:60,textAlign:'center',color:T.textMuted}}>No bills found for selected period</div>
         ) : bills.map((b,i)=>{
-          const isExp = expanded === b.id;
+          const isExp = expanded === b.id || (typeof expanded === 'string' && expanded.startsWith(b.id + '-li-'));
           return (
             <div key={b.id} style={{borderBottom:`1px solid ${T.border}`}}>
               <div
@@ -355,7 +355,7 @@ export default function SalesBillsPage() {
                           return (
                             <div key={idx} style={{borderBottom:idx<b.line_items.length-1?`1px solid ${T.border}`:'none'}}>
                               <div
-                                onClick={()=>setExpanded(isLiOpen?b.id:liId)}
+                                onClick={(e)=>{e.stopPropagation();setExpanded(isLiOpen?b.id:liId);}}
                                 style={{display:'grid',gridTemplateColumns:'90px 1fr 180px 70px 80px 90px 90px 100px',padding:'10px 12px',gap:0,
                                   background:isLiOpen?T.tealLight:idx%2===0?T.surface:T.bg,
                                   cursor:'pointer',alignItems:'center',transition:'background .12s'}}
@@ -413,7 +413,6 @@ export default function SalesBillsPage() {
                     </div>
                   )}
                 </div>
-              )}
               )}
             </div>
           );

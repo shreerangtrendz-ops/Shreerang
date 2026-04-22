@@ -354,8 +354,9 @@ export default function RecFromMillPage() {
                           ['Issued Qty (m)',      r.grey_issued_qty_mtrs ? fmtMtr(r.grey_issued_qty_mtrs) : '—'],
                           ['Recd Qty (m)',        r.grey_recd_qty_mtrs && Number(r.grey_recd_qty_mtrs)>0 ? fmtMtr(r.grey_recd_qty_mtrs) : '—'],
                           ['Short Qty (m)',       r.short_qty_mtrs && Number(r.short_qty_mtrs)>0 ? fmtMtr(r.short_qty_mtrs) : '—'],
-                          ['Grey Rate (Tally)',   r.grey_rate!=null ? `₹${Math.abs(Number(r.grey_rate)).toFixed(2)}/m` : '—'],
-                          ['Grey Amount',         r.grey_amount!=null ? fmt(r.grey_amount) : '—'],
+                          ['Grey Rate (Tally avg)', r.grey_rate!=null ? `₹${Math.abs(Number(r.grey_rate)).toFixed(2)}/m` : '—'],
+                          ['Invoice Rate (costing)', r.grey_purchase_rate ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m` : '—'],
+                          ['Grey Amount',            r.grey_amount!=null ? fmt(r.grey_amount) : '—'],
                           ['Job Rate (UDF)',      r.job_rate!=null ? `₹${Math.abs(Number(r.job_rate)).toFixed(2)}/m` : '—'],
                           ['Job Amount (UDF)',    r.job_amount!=null ? fmt(r.job_amount) : '—'],
                           ['Gross Amount (UDF)',  r.gross_amount!=null ? fmt(r.gross_amount) : '—'],
@@ -365,6 +366,17 @@ export default function RecFromMillPage() {
                             <span style={{color:k==='Grey Lot No (KEY 1)'?T.teal:T.text,fontWeight:600,textAlign:'right',fontFamily:k==='Grey Lot No (KEY 1)'?"'DM Mono',monospace":'inherit'}}>{v||'—'}</span>
                           </div>
                         ))}
+                        {/* Rate variance warning — shown when Tally avg ≠ invoice rate */}
+                        {r.grey_rate && r.grey_purchase_rate && Math.abs(Number(r.grey_rate) - Number(r.grey_purchase_rate)) > 0.05 && (
+                          <div style={{marginTop:8,padding:'7px 10px',background:'#FFF8E8',border:'1px solid #F59E0B44',borderRadius:6,fontSize:11}}>
+                            <span style={{fontWeight:700,color:'#B45309'}}>⚠ Rate Variance: </span>
+                            <span style={{color:'#92400E'}}>
+                              Tally avg (₹{Math.abs(Number(r.grey_rate)).toFixed(2)}/m) ≠ Invoice (₹{Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m)
+                              {' — '}difference of ₹{Math.abs(Number(r.grey_purchase_rate) - Number(r.grey_rate)).toFixed(2)}/m.
+                              {' '}Costing uses invoice rate ✓
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* DESTINATION — Finish Fabric Production Side */}
@@ -423,7 +435,7 @@ export default function RecFromMillPage() {
                       <div style={{background:'#EFF8FF',border:`2px solid ${T.teal}`,borderRadius:8,padding:'12px 14px'}}>
                         <div style={{fontSize:10,fontWeight:800,color:T.teal,textTransform:'uppercase',letterSpacing:.6,marginBottom:8}}>₹ Cost Chain</div>
                         {[
-                          ['Grey Purchase Rate',  r.grey_purchase_rate ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m` : '—'],
+                          ['Grey Rate (invoice ✓)', r.grey_purchase_rate ? `₹${Math.abs(Number(r.grey_purchase_rate)).toFixed(2)}/m` : '—'],
                           ['Grey Cost (Actual)',  r.grey_cost_actual ? fmt(r.grey_cost_actual) : '—'],
                           ['JW Allocated Cost',  r.jw_allocated_cost ? fmt(r.jw_allocated_cost) : '—'],
                           ['JW Allocation %',    r.jw_allocation_pct ? `${Number(r.jw_allocation_pct).toFixed(2)}%` : '—'],

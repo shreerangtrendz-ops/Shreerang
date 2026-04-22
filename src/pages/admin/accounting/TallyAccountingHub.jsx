@@ -233,10 +233,11 @@ export default function TallyAccountingHub() {
   // FY-specific metrics (same logic as v35 + received/outstanding)
   const loadFyMetrics = useCallback(async (fyData) => {
     try {
-      const { data: sales } = await supabase.from('sales_bills')
-        .select('total_amount,quantity_mtrs,igst_amount,cgst_amount,sgst_amount,customer_name,customer_state')
-        .gte('bill_date', fyData.from).lte('bill_date', fyData.to);
+      const { data: sales, count: salesCount } = await supabase.from('sales_bills')
+        .select('total_amount,quantity_mtrs,igst_amount,cgst_amount,sgst_amount,customer_name,customer_state', { count: 'exact' })
+        .gte('bill_date', fyData.from).lte('bill_date', fyData.to).limit(5000);
       const sRows = sales || [];
+      const totalSalesBillCount = salesCount || sRows.length;
       const salesTotal = sRows.reduce((s, r) => s + Number(r.total_amount || 0), 0);
       const salesMtrs = sRows.reduce((s, r) => s + Number(r.quantity_mtrs || 0), 0);
       const igst = sRows.reduce((s, r) => s + Number(r.igst_amount || 0), 0);
@@ -266,15 +267,15 @@ export default function TallyAccountingHub() {
       const grossProfit = salesTotal - purchTotal - jwTotal - cnTotal;
       const netGSTLiability = totalGST - purchGST;
       const uniqueCust = new Set(sRows.map(r => r.customer_name).filter(Boolean)).size;
-      const avgBillSize = sRows.length > 0 ? salesTotal / sRows.length : 0;
+      const avgBillSize = totalSalesBillCount > 0 ? salesTotal / totalSalesBillCount : 0;
       const outstanding = Math.max(0, salesTotal - received - cnTotal);
 
       setFyMetrics({
-        salesTotal, salesMtrs, salesBills: sRows.length,
+        salesTotal, salesMtrs, salesBills: totalSalesBillCount,
         purchTotal, jwTotal, cnTotal, received, outstanding,
         grossProfit, grossMarginPct: salesTotal > 0 ? Math.round((grossProfit / salesTotal) * 100) : 0,
         igst, cgstSgst, totalGST, netGSTLiability, purchGST,
-        interstate, intrastate: sRows.length - interstate,
+        interstate, intrastate: totalSalesBillCount - interstate,
         uniqueCust, avgBillSize,
       });
     } catch (e) { console.error('loadFyMetrics', e); }
@@ -484,21 +485,35 @@ export default function TallyAccountingHub() {
     ]);
   }, [fy]); // eslint-disable-line
 
-  // Trigger sync
+  // Trigger sync — direct n8n API call fails from browser (CORS)
+  // Solution: use n8n webhook URL if available, else show link to open n8n manually
   const triggerSync = async () => {
     setSyncing(true); setSyncResult(null);
     try {
-      await fetch(
-        `https://n8n.shreerangtrendz.com/api/v1/workflows/CU6dMm7DCtSP6rMQ/run`,
-        { method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-N8N-API-KEY': 'n8n_api_45dba335541e42cfa98255662629155c' },
-          body: JSON.stringify({ trigger: 'manual' })
-        }
+      // Try n8n webhook trigger (works if n8n has a webhook node on this workflow)
+      const res = await fetch(
+        'https://n8n.shreerangtrendz.com/webhook/tally-sync-trigger',
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'horizon-hub', triggered_at: new Date().toISOString() }),
+          signal: AbortSignal.timeout(8000) }
       );
-      setSyncResult({ ok: true, msg: `Sync triggered — next batch in ~30s` });
-      setTimeout(() => { loadSyncHealth(); loadPipeline(); }, 35000);
+      if (res.ok || res.status === 200) {
+        setSyncResult({ ok: true, msg: 'Sync triggered via webhook — next batch in ~30s' });
+        setTimeout(() => { loadSyncHealth(); loadPipeline(); }, 35000);
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
     } catch (e) {
-      setSyncResult({ ok: false, msg: 'n8n unreachable. Ask Shrikumar to open n8n UI manually.' });
+      // Fallback: set sync_requested flag in Supabase (n8n polls this)
+      try {
+        await supabase.from('tally_sync_state')
+          .update({ sync_requested: true, sync_requested_at: new Date().toISOString() })
+          .eq('sync_type', 'vouchers');
+        setSyncResult({ ok: true, msg: 'Sync queued via Supabase flag — n8n will pick up on next scheduled run (~2 min). Or open n8n manually.', n8nUrl: 'https://n8n.shreerangtrendz.com' });
+        setTimeout(() => { loadSyncHealth(); loadPipeline(); }, 15000);
+      } catch (e2) {
+        setSyncResult({ ok: false, msg: 'Cannot trigger sync automatically. Click to open n8n and run manually.', n8nUrl: 'https://n8n.shreerangtrendz.com' });
+      }
     }
     setSyncing(false);
   };
@@ -598,7 +613,7 @@ export default function TallyAccountingHub() {
           <div style={{ marginLeft: 'auto', fontSize: 12, padding: '4px 12px', borderRadius: 8,
             background: syncResult.ok ? T.greenLight : T.redLight, color: syncResult.ok ? T.green : T.red,
             fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-            {syncResult.ok ? '✅' : '❌'} {syncResult.msg}
+            {syncResult.ok ? '✅' : '❌'} {syncResult.msg}{syncResult.n8nUrl && (<> — <a href={syncResult.n8nUrl} target='_blank' rel='noreferrer' style={{color:'inherit',fontWeight:700}}>Open n8n →</a></>)}
             <button onClick={() => setSyncResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.muted, fontSize: 14 }}>×</button>
           </div>
         )}

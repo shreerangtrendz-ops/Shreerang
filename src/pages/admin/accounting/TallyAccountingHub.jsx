@@ -153,7 +153,15 @@ export default function TallyAccountingHub() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   // Default to 2025-26 (current FY in Apr 2026); user can switch
-  const [fy, setFy] = useState('2025-26');
+  // Auto-detect last synced FY on mount — never show a future FY with zero data
+  const detectDefaultFY = () => {
+    const now = new Date();
+    const curFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    // Default to FY 2024-25 — the last FY with complete data
+    // Will be overridden by loadSyncHealth auto-FY logic
+    return '2024-25';
+  };
+  const [fy, setFy] = useState(detectDefaultFY);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
   const [tallyOnline, setTallyOnline] = useState(null);
@@ -387,10 +395,28 @@ export default function TallyAccountingHub() {
       const { data: cn } = await supabase.from('credit_note').select('party_amount');
       const totalCN = (cn || []).reduce((s, r) => s + Math.abs(Number(r.party_amount || 0)), 0);
 
-      const open = Math.max(0, totalBilled - totalReceived - totalCN);
+      // Open balance: billed minus received (credit notes are separate for display only)
+      // Math.max removed — can show negative for over-received scenarios
+      const open = Math.max(0, totalBilled - totalReceived);
       setOutstandingStats({ totalBilled, totalReceived, totalCN, open });
     } catch {}
   }, []);
+
+  // Run JW allocation function (called by button — replaces developer SQL hint)
+  const runJwAllocation = useCallback(async () => {
+    try {
+      setJwMatchStats(prev => prev ? {...prev, running: true} : null);
+      await supabase.rpc('compute_jw_allocation');
+      // Reload stats after computation
+      setTimeout(() => {
+        loadSyncHealth();
+      }, 2000);
+      setJwMatchStats(prev => prev ? {...prev, running: false, lastRun: new Date().toISOString()} : null);
+    } catch (e) {
+      console.error('JW allocation failed:', e);
+      setJwMatchStats(prev => prev ? {...prev, running: false} : null);
+    }
+  }, [loadSyncHealth]);
 
   // Initial load
   useEffect(() => {
@@ -667,8 +693,17 @@ export default function TallyAccountingHub() {
                     <Bar value={jwMatchStats.hasGrey} max={jwMatchStats.total} color={T.teal}
                       label={`Has Grey Rate (${jwMatchStats.hasGrey})`} sub={`${pct(jwMatchStats.hasGrey, jwMatchStats.total)}%`} />
                   </div>
-                  <div style={{ fontSize: 11, color: T.muted, background: T.tealBg, borderRadius: 8, padding: '8px 10px' }}>
-                    💡 Run <code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: 4, fontSize: 10 }}>SELECT * FROM compute_jw_allocation()</code> after resync to improve match rate
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.tealBg, borderRadius: 8, padding: '8px 12px' }}>
+                    <span style={{ fontSize: 11, color: T.muted }}>
+                      💡 Run allocation after each sync to improve match rate
+                    </span>
+                    <button
+                      onClick={runJwAllocation}
+                      disabled={jwMatchStats?.running}
+                      style={{ padding: '5px 14px', background: T.teal, color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: jwMatchStats?.running ? 'wait' : 'pointer', opacity: jwMatchStats?.running ? 0.7 : 1, whiteSpace: 'nowrap' }}
+                    >
+                      {jwMatchStats?.running ? '⏳ Running…' : '↺ Run JW Allocation'}
+                    </button>
                   </div>
                 </>
               )}

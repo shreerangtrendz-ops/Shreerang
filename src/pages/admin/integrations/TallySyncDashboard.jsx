@@ -22,14 +22,18 @@ const S = ({ on, warn }) => {
 };
 
 const CARDS = [
+  // ── n8n Voucher Sync (the main accounting sync via SRTPL Tally Sync v35) ──
+  { key:'vouchers',    icon:'', label:'Vouchers (n8n)',  sub:'Sales·Purchase·REC·JW·Finance', stripe:'#2BA898,#0B6E5A', ib:'rgba(43,168,152,.12)', btnC:'#2BA898', badge:'v35',      badgeC:'#2BA898', n8n:true },
+  // ── Direct Tally sync via FRP proxy ──
   { key:'stock',       icon:'', label:'Live Stock',       sub:'Items synced today',       stripe:'#3DBFAE,#0E96A0', ib:'rgba(61,191,174,.12)',  btnC:'#1D8A7C', badge:'LIVE',     badgeC:'#1E9E5A' },
   { key:'purchases',   icon:'', label:'Purchases',        sub:'Bills last 30 days',        stripe:'#2468C8,#0E96A0', ib:'rgba(36,104,200,.10)',  btnC:'#2468C8', badge:'30D',      badgeC:'#2468C8' },
-  { key:'job_bills',   icon:'', label:'Job Bills',        sub:'Job worker bills 30d',      stripe:'#E8A800,#D4780A', ib:'rgba(232,168,0,.10)',   btnC:'#D4920A', badge:'30D',      badgeC:'#D4920A' },
+  { key:'job_bills',   icon:'', label:'Job Bills',        sub:'Job worker bills 30d',      stripe:'#E8A800,#D4780A', ib:'rgba(232,168,0,.10)',   btnC:'#D4920A', badge:'n8n',      badgeC:'#D4920A', n8n:true },
   { key:'customers',   icon:'', label:'Customers',        sub:'Sundry debtors in DB',      stripe:'#1E9E5A,#0E9E6A', ib:'rgba(30,158,90,.10)',   btnC:'#1E9E5A', badge:'DEBTORS',  badgeC:'#1E9E5A' },
   { key:'suppliers',   icon:'', label:'Suppliers',        sub:'Sundry creditors in DB',    stripe:'#C86020,#E87040', ib:'rgba(200,96,32,.10)',   btnC:'#C86020', badge:'CREDITORS',badgeC:'#C86020' },
   { key:'agents',      icon:'', label:'Sales Agents',     sub:'Active field agents',       stripe:'#C9106E,#E01878', ib:'rgba(201,16,110,.10)',  btnC:'#C9106E', badge:'AGENTS',   badgeC:'#C9106E' },
   { key:'outstanding', icon:'', label:'Outstanding Bills',sub:'Bills tracked live',        stripe:'#6E44C8,#8B5CF6', ib:'rgba(110,68,200,.10)',  btnC:'#6E44C8', badge:'LIVE',     badgeC:'#6E44C8' },
 ];
+
 
 const BTN_LABELS = {
   stock:' Sync Stock', purchases:' Sync Purchases', job_bills:' Sync Job Bills',
@@ -282,23 +286,41 @@ export default function TallySyncDashboard() {
   }
 
   /*  sync handlers  */
+  const N8N_WEBHOOK_URL = 'https://n8n.shreerangtrendz.com/webhook/tally-sync-trigger';
+  async function triggerN8nSync(syncType = 'all') {
+    const res = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'tally-sync-hub', sync_type: syncType, triggered_at: new Date().toISOString() }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) throw new Error(`n8n webhook returned ${res.status}`);
+    return await res.json();
+  }
+
   async function handleSync(key) {
     setLoading(p => ({ ...p, [key]:true }));
     try {
-      const fns = {
-        stock:       () => pullStockFromTally(),
-        purchases:   () => pullPurchasesFromTally(),
-        job_bills:   () => pullJobBillsFromTally(),
-        customers:   () => syncCustomersFromTally(),
-        suppliers:   () => syncSuppliersFromTally(),
-        agents:      () => syncAgentsFromTally(),
-        outstanding: () => syncOutstandingFromTally(),
-      };
-      await fns[key]?.();
-      toast({ title:' Sync Complete', description:`${key} synced from Tally Prime.` });
-      await loadData();
+      // vouchers and job_bills route through n8n (the real v35 sync engine)
+      if (key === 'vouchers' || key === 'job_bills') {
+        await triggerN8nSync(key);
+        toast({ title: '✅ n8n Sync Triggered', description: `Voucher sync started — check sync log in ~30s.` });
+        setTimeout(() => loadData(), 35000);
+      } else {
+        const fns = {
+          stock:       () => pullStockFromTally(),
+          purchases:   () => pullPurchasesFromTally(),
+          customers:   () => syncCustomersFromTally(),
+          suppliers:   () => syncSuppliersFromTally(),
+          agents:      () => syncAgentsFromTally(),
+          outstanding: () => syncOutstandingFromTally(),
+        };
+        await fns[key]?.();
+        toast({ title: '✅ Sync Complete', description: `${key} synced from Tally Prime.` });
+        await loadData();
+      }
     } catch(e) {
-      toast({ title:' Sync Failed', description:e.message, variant:'destructive' });
+      toast({ title: '❌ Sync Failed', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(p => ({ ...p, [key]:false }));
     }
@@ -312,23 +334,42 @@ export default function TallySyncDashboard() {
 
   async function handleSyncAll() {
     setSyncingAll(true);
-    setSyncProgress([]);
+    setSyncProgress([{ step: 'n8n Voucher Sync (v35)', status: 'running', message: 'Triggering via webhook…' }]);
     try {
-      const result = await syncAllFromTally('', (progress) => {
-        setSyncProgress(prev => {
-          const existing = prev.findIndex(p => p.step === progress.step);
-          if (existing >= 0) {
-            const updated = [...prev];
-            updated[existing] = progress;
-            return updated;
-          }
-          return [...prev, progress];
-        });
-      });
-      toast({ title: ' Sync All Complete', description: result.summary });
-      await loadData();
+      // PRIMARY: trigger n8n webhook — handles ALL voucher types (Sales, Purchase, REC, JW, Receipts, Payments, Credit Notes)
+      const n8nResult = await triggerN8nSync('all');
+      setSyncProgress(prev => [
+        { step: 'n8n Voucher Sync (v35)', status: 'done', message: n8nResult.message || 'Workflow started' },
+        { step: 'Customers & Party Masters', status: 'running', message: 'Syncing from Tally…' }
+      ]);
+      // SECONDARY: also run direct Tally sync for customers/stock
+      try {
+        await syncCustomersFromTally();
+        setSyncProgress(prev => prev.map(p => p.step.includes('Customers') ? { ...p, status:'done', message:'Customers synced' } : p));
+      } catch(e2) {
+        setSyncProgress(prev => prev.map(p => p.step.includes('Customers') ? { ...p, status:'error', message: e2.message } : p));
+      }
+      try {
+        await syncStockFromTally();
+        setSyncProgress(prev => [...prev, { step: 'Stock Items', status: 'done', message: 'Stock synced' }]);
+      } catch(e3) {
+        setSyncProgress(prev => [...prev, { step: 'Stock Items', status: 'error', message: e3.message }]);
+      }
+      toast({ title: '✅ Full Sync Triggered', description: 'n8n handling all vouchers. Customers & stock synced directly.' });
+      setTimeout(() => loadData(), 35000);
     } catch(e) {
-      toast({ title: ' Sync All Failed', description: e.message, variant: 'destructive' });
+      // Fallback to direct sync if n8n fails
+      setSyncProgress(prev => [
+        ...prev.map(p => p.step.includes('n8n') ? { ...p, status:'error', message: e.message } : p),
+        { step: 'Fallback: Direct Tally Sync', status: 'running', message: 'n8n unreachable, trying direct…' }
+      ]);
+      try {
+        const result = await syncAllFromTally('');
+        toast({ title: '✅ Fallback Sync Complete', description: `n8n offline — used direct sync. ${result.summary || ''}` });
+        await loadData();
+      } catch(e2) {
+        toast({ title: '❌ All Sync Methods Failed', description: 'Check Tally connection and n8n status.', variant: 'destructive' });
+      }
     } finally {
       setSyncingAll(false);
     }

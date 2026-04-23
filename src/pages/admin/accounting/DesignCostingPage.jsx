@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
-import OriginPanel from '../../../components/accounting/OriginPanel';
+import DesignLedgerPanel from '../../../components/accounting/DesignLedgerPanel';
 import SyncHealthBar from '../../../components/accounting/SyncHealthBar';
 
 /* ══════════════════════════════════════════════════════════════════
@@ -77,113 +77,18 @@ function FormulaPanel() {
 
 function DesignLedgerViewer({ rowData }) {
   const designNo = rowData.design_no;
-  const [ledger, setLedger] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      // 1. Fetch Inwards (rec_from_mill)
-      const { data: recs } = await supabase.from('rec_from_mill').select('*').eq('design_no', designNo);
-      
-      // 2. Fetch Outwards (sales_bills)
-      const { data: sales1 } = await supabase.from('sales_bills').select('*').eq('design_no', designNo);
-      const { data: sales2 } = await supabase.from('sales_bills').select('*').contains('line_items', `[{"design_no":"${designNo}"}]`);
-      const { data: sales3 } = await supabase.from('sales_bills').select('*').contains('line_items', `[{"batch_name":"D No.${designNo}"}]`); // Tally specific
-      const { data: sales4 } = await supabase.from('sales_bills').select('*').contains('line_items', `[{"batch_name":"D No-${designNo}"}]`); // Tally specific
-
-      const salesMap = new Map();
-      (sales1||[]).forEach(s => salesMap.set(s.tally_voucher_no, s));
-      (sales2||[]).forEach(s => salesMap.set(s.tally_voucher_no, s));
-      (sales3||[]).forEach(s => salesMap.set(s.tally_voucher_no, s));
-      (sales4||[]).forEach(s => salesMap.set(s.tally_voucher_no, s));
-      const allSales = Array.from(salesMap.values());
-
-      // 3. Fetch Returns (credit_note_items)
-      const { data: cnItems } = await supabase.from('credit_note_items').select('*, credit_note:tally_voucher_no(*)').eq('design_no', designNo);
-
-      const entries = [];
-
-      (recs||[]).forEach(r => {
-        entries.push({
-          date: r.voucher_date,
-          type: 'REC FROM MILL',
-          vch: r.tally_voucher_no,
-          particulars: r.grey_item_name || 'Grey Fabric',
-          mill: r.job_godown || r.mill_name || '',
-          inward: r.finish_qty_mtrs || 0,
-          inwardVal: Math.abs(r.total_batch_cost || 0),
-          outward: null,
-          outwardVal: null,
-          rate: r.cumulative_cost_per_mtr || 0,
-          grey_rate: r.grey_purchase_rate || 0,
-          job_rate: Math.abs(r.job_rate || 0),
-          shortage: r.shortage_pct || 0,
-        });
-      });
-
-      allSales.forEach(s => {
-        let qty = s.quantity_mtrs;
-        let amt = s.total_amount;
-        let rate = s.rate_per_mtr;
-        if (s.line_items && Array.isArray(s.line_items)) {
-           const match = s.line_items.find(l => String(l.design_no) === String(designNo) || l.batch_name === `D No.${designNo}` || l.batch_name === `D No-${designNo}`);
-           if (match) {
-             qty = match.quantity_mtrs || match.qty_mtrs || qty;
-             amt = match.amount || amt;
-             rate = match.rate || rate;
-           }
-        }
-        
-        entries.push({
-          date: s.bill_date,
-          type: 'Sales',
-          vch: s.bill_number || s.tally_voucher_no,
-          particulars: s.customer_name || 'Customer',
-          mill: '',
-          inward: null,
-          inwardVal: null,
-          outward: qty || 0,
-          outwardVal: amt || 0,
-          rate: rate || 0,
-        });
-      });
-
-      (cnItems||[]).forEach(c => {
-        const d = Array.isArray(c.credit_note) ? c.credit_note[0] : c.credit_note;
-        entries.push({
-          date: d?.voucher_date || '',
-          type: 'Credit Note',
-          vch: c.tally_voucher_no,
-          particulars: d?.party_name || 'Customer Return',
-          mill: '',
-          inward: c.qty_mtrs || 0,
-          inwardVal: null, // Return value shouldn't really add to "batch cost" in ledger
-          outward: null,
-          outwardVal: null,
-          rate: c.rate || 0,
-          isReturn: true,
-          cnReturnVal: c.item_amount ? -Math.abs(c.item_amount) : 0
-        });
-      });
-
-      entries.sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
-      setLedger(entries);
-      setLoading(false);
-    }
-    load();
-  }, [designNo]);
-
-  let totInQty=0, totOutQty=0;
+  let totInQty=0, totOutQty=0; // kept as dead vars for safety; no ledger table rendered now
 
   return (
     <div style={{padding:'0 14px 14px',background:'#FAFFFE'}}>
       <div style={{paddingTop:14}}>
-        {/* Origin trail */}
+        {/* Full-lifetime chronological ledger */}
         <div style={{marginBottom:12}}>
-          <OriginPanel designNo={designNo} />
+          <DesignLedgerPanel designNo={designNo} />
         </div>
 
-        {/* Cost waterfall (from parent) */}
+        {/* Cost waterfall (from parent) — single-batch P&L strip */}
         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:12,flexWrap:'wrap',background:T.bg,borderRadius:8,padding:'10px 14px',border:`1px solid ${T.border}`}}>
           <span style={{fontSize:11,fontWeight:700,color:T.navy}}>Cost Flow:</span>
           {[
@@ -201,75 +106,6 @@ function DesignLedgerViewer({ rowData }) {
               <div style={{fontSize:12,fontWeight:f.bold?800:500,color:f.color}}>{f.value}</div>
             </div>
           ))}
-        </div>
-
-        {/* Ledger */}
-        <div style={{marginTop:16}}>
-          {loading ? (
-            <div style={{padding:20,textAlign:'center',color:T.muted,fontSize:12}}>Loading Tally ledger entries...</div>
-          ) : (
-            <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:8,overflow:'hidden'}}>
-              <div style={{background:T.tealLight,padding:'8px 12px',fontWeight:700,fontSize:12,color:T.navy,display:'flex',justifyContent:'space-between'}}>
-                <span>📊 Batch Vouchers — D No.{designNo}</span>
-                <span>{ledger.length} entries</span>
-              </div>
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}>
-                <thead>
-                  <tr style={{borderBottom:`1px solid ${T.border}`,background:'#f8fafa'}}>
-                    <th style={{padding:'6px 8px',textAlign:'left',color:T.muted}}>Date</th>
-                    <th style={{padding:'6px 8px',textAlign:'left',color:T.muted}}>Particulars</th>
-                    <th style={{padding:'6px 8px',textAlign:'left',color:T.muted}}>Vch Type</th>
-                    <th style={{padding:'6px 8px',textAlign:'left',color:T.muted}}>Vch No.</th>
-                    <th style={{padding:'6px 8px',textAlign:'right',color:T.muted}}>Inward Qty</th>
-                    <th style={{padding:'6px 8px',textAlign:'right',color:T.muted}}>Inward Val</th>
-                    <th style={{padding:'6px 8px',textAlign:'right',color:T.muted}}>Outward Qty</th>
-                    <th style={{padding:'6px 8px',textAlign:'right',color:T.muted}}>Outward Val</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledger.map((e,idx) => {
-                    const isRec = e.type === 'REC FROM MILL';
-                    const isCN = e.type === 'Credit Note';
-                    if(e.inward) totInQty += e.inward;
-                    if(e.outward) totOutQty += e.outward;
-
-                    return (
-                      <tr key={idx} style={{borderBottom:`1px solid #f0f0f0`}}>
-                        <td style={{padding:'6px 8px',color:T.text,whiteSpace:'nowrap'}}>{fmtD(e.date)}</td>
-                        <td style={{padding:'6px 8px',fontWeight:500,color:isRec?T.navy:T.text}}>
-                          {e.particulars}
-                          {e.mill && <div style={{fontSize:9,color:T.muted}}>Mill: {e.mill}</div>}
-                          {isRec && <div style={{fontSize:9,color:T.blue}}>Grey: {fmtR(e.grey_rate)} | Job: {fmtR(e.job_rate)} | Shtg: {e.shortage}%</div>}
-                        </td>
-                        <td style={{padding:'6px 8px'}}>
-                          <span style={{fontSize:9,padding:'2px 6px',borderRadius:4,background:isRec?'#E0F2FE':isCN?'#FCE7F3':'#DCFCE7',color:isRec?'#0369A1':isCN?'#9D174D':'#166534',fontWeight:700,whiteSpace:'nowrap'}}>{e.type}</span>
-                        </td>
-                        <td style={{padding:'6px 8px',color:T.muted}}>{e.vch}</td>
-                        <td style={{padding:'6px 8px',textAlign:'right',color:T.green,fontWeight:e.inward?600:400}}>{e.inward?fmtQ(e.inward):'—'}</td>
-                        <td style={{padding:'6px 8px',textAlign:'right',color:isCN?T.red:T.text}}>{isCN?'-'+fmt(Math.abs(e.cnReturnVal)):(e.inwardVal!=null?fmt(e.inwardVal):'—')}</td>
-                        <td style={{padding:'6px 8px',textAlign:'right',color:T.orange,fontWeight:e.outward?600:400}}>{e.outward?fmtQ(e.outward):'—'}</td>
-                        <td style={{padding:'6px 8px',textAlign:'right'}}>{e.outwardVal!=null?fmt(e.outwardVal):'—'}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr style={{background:'#F3F4F6',fontWeight:700}}>
-                    <td colSpan={4} style={{padding:'8px',textAlign:'right',color:T.navy}}>TOTAL:</td>
-                    <td style={{padding:'8px',textAlign:'right',color:T.green}}>{fmtQ(totInQty)}</td>
-                    <td style={{padding:'8px',textAlign:'right'}}></td>
-                    <td style={{padding:'8px',textAlign:'right',color:T.orange}}>{fmtQ(totOutQty)}</td>
-                    <td style={{padding:'8px',textAlign:'right'}}></td>
-                  </tr>
-                  <tr style={{background:'#FAFFFE',fontWeight:800,fontSize:13}}>
-                    <td colSpan={4} style={{padding:'10px 8px',textAlign:'right',color:T.navy}}>CLOSING STOCK (Unsold):</td>
-                    <td colSpan={4} style={{padding:'10px 8px',textAlign:'left',color:T.teal}}>{fmtQ(totInQty - totOutQty)}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div style={{background:T.bg,padding:'10px',borderTop:`1px solid ${T.border}`,fontSize:10,color:T.muted}}>
-                * Ledger calculates design-level inward/outward flow chronologically. Match this view with Tally Batch Vouchers (Alt+G &gt; Batch Vouchers).
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

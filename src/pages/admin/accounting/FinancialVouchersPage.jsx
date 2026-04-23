@@ -8,7 +8,9 @@ const FY_YEARS = [2022, 2023, 2024, 2025, 2026];
 function getCurrentFY() {
   const now = new Date();
   const yr = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  return { from: `${yr}-04-01`, to: `${yr + 1}-03-31` };
+  // Cap at 2024 — sync data ends at Aug 2024
+  const safeFY = Math.min(yr, 2024);
+  return { from: `${safeFY}-04-01`, to: `${safeFY + 1}-03-31` };
 }
 
 const fmt = n => '₹' + Math.round(Number(n||0)).toLocaleString('en-IN');

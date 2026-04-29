@@ -53,3 +53,7 @@ desktop.ini
 *.tmp
 *.temp
 build_output.txt
+
+# Image sync script — OAuth token cache & run log
+scripts/.drive-token.json
+scripts/sync.log

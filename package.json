@@ -7,7 +7,9 @@
     "dev": "vite --host :: --port 3000",
     "build": "node tools/generate-llms.js || true && vite build",
     "preview": "vite preview --host :: --port 3000",
-    "lint": "eslint . --quiet"
+    "lint": "eslint . --quiet",
+    "sync-images": "node scripts/sync-drive-to-bunny.mjs",
+    "sync-images:dry": "node -e \"process.env.DRY_RUN='1';import('child_process').then(cp=>cp.spawn('node',['scripts/sync-drive-to-bunny.mjs'],{stdio:'inherit',env:process.env}))\""
   },
   "dependencies": {
     "@emotion/is-prop-valid": "^1.4.0",

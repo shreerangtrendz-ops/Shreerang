@@ -1,4 +1,4 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -12,6 +12,7 @@ import ErrorLogger from '@/lib/errorLogger';
 import ComingSoonPage from '@/components/admin/ComingSoonPage';
 // Ã¢â€â‚¬Ã¢â€â‚¬ Public Pages Ã¢â€â‚¬Ã¢â€â‚¬
 import HomePage from '@/pages/HomePage';
+import HomePagePreview from '@/pages/HomePage.NEW';
 import ShopPage from '@/pages/ShopPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import CartPage from '@/pages/CartPage';
@@ -161,6 +162,7 @@ const App = () => {
                   {/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â PUBLIC ROUTES Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */}
                   <Route element={<CustomerLayout />}>
                     <Route path="/" element={<HomePage />} />
+          <Route path="/home-preview" element={<HomePagePreview />} />
                     <Route path="/shop" element={<ShopPage />} />
                     <Route path="/products/:slug" element={<ProductDetailPage />} />
                     <Route path="/cart" element={<CartPage />} />

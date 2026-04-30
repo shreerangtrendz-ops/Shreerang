@@ -115,6 +115,7 @@ import FinancialVouchersPage from '@/pages/admin/accounting/FinancialVouchersPag
 import JobWorkExpensesPage from '@/pages/admin/accounting/JobWorkExpensesPage';
 import TallyAccountingHub from '@/pages/admin/accounting/TallyAccountingHub';
 import OutstandingReceivableV2 from '@/pages/reports/OutstandingReceivableV2';
+import OutstandingReceivableV3 from '@/pages/reports/OutstandingReceivableV3';
 import SmartOutstandingPage from '@/pages/admin/SmartOutstandingPage';
 import OutstandingPayableV2 from '@/pages/reports/OutstandingPayableV2';
 import DesignCostingPage from '@/pages/admin/accounting/DesignCostingPage';
@@ -240,6 +241,7 @@ const App = () => {
                     <Route path="payment-reminders" element={<PaymentRemindersPage />} />
                     <Route path="outstanding-receivable" element={<OutstandingReceivable />} />
                     <Route path="outstanding-receivable-v2" element={<OutstandingReceivableV2 />} />
+                    <Route path="outstanding-receivable-v3" element={<OutstandingReceivableV3 />} />
                     <Route path="smart-outstanding" element={<SmartOutstandingPage />} />
                     <Route path="outstanding-payable" element={<OutstandingPayable />} />
                     <Route path="outstanding-payable-v2" element={<OutstandingPayableV2 />} />
